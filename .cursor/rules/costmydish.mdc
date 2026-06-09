@@ -1,0 +1,564 @@
+---
+alwaysApply: true
+---
+## 1. PACKAGE VERSIONS
+
+- expo: ~54.0.0
+- expo-asset: ~11.0.4
+- expo-constants: ~17.0.8
+- expo-file-system: ~18.0.11
+- expo-font: ~13.3.1
+- expo-linking: ~7.0.5
+- expo-router: ~4.0.17
+- expo-status-bar: ~2.2.3
+- expo-system-ui: ~4.0.9
+- react: 19.0.0
+- react-native: 0.79.4
+- react-native-safe-area-context: 5.4.0
+- react-native-screens: ~4.11.1
+
+When adding new Expo packages always use `npx expo install <package>` — never `npm install` for Expo packages, as it resolves the correct version for SDK 54 automatically.
+
+---
+
+## 2. TECH STACK
+
+- Framework: Expo SDK 54 managed workflow
+- Language: JavaScript ES2022+ — NO TypeScript, NO .ts/.tsx files ever
+- Navigation: Expo Router v4 file-based routing
+- Database: Supabase PostgreSQL
+- Auth: Supabase Auth
+- Realtime: Supabase Realtime
+- Storage: Supabase Storage
+- Payments: RevenueCat
+- State: Zustand
+- Forms: React Hook Form
+- UI: Custom components only — no third party UI libraries
+- Styling: React Native StyleSheet API
+- Icons: Expo Vector Icons Ionicons
+
+---
+
+## 3. PROJECT STRUCTURE
+
+```
+costmydish/
+├── app/
+│   ├── (auth)/
+│   │   ├── welcome.jsx
+│   │   ├── login.jsx
+│   │   └── signup.jsx
+│   ├── (tabs)/
+│   │   ├── _layout.jsx
+│   │   ├── index.jsx              # Dashboard
+│   │   ├── recipes.jsx
+│   │   ├── ingredients.jsx
+│   │   └── settings.jsx
+│   ├── recipe/
+│   │   ├── [id].jsx               # Recipe detail
+│   │   ├── create.jsx
+│   │   └── edit/[id].jsx
+│   ├── ingredient/
+│   │   ├── create.jsx
+│   │   └── edit/[id].jsx
+│   ├── paywall.jsx
+│   └── _layout.jsx
+├── components/
+│   ├── ui/
+│   │   ├── Button.jsx
+│   │   ├── Input.jsx
+│   │   ├── Card.jsx
+│   │   ├── Badge.jsx
+│   │   ├── Modal.jsx
+│   │   └── EmptyState.jsx
+│   ├── recipe/
+│   │   ├── RecipeCard.jsx
+│   │   ├── RecipeCostSummary.jsx
+│   │   └── IngredientRow.jsx
+│   ├── ingredient/
+│   │   └── IngredientCard.jsx
+│   └── paywall/
+│       └── PaywallModal.jsx
+├── lib/
+│   ├── supabase.js
+│   ├── revenuecat.js
+│   ├── units.js                   # Unit conversion engine
+│   └── calculations.js            # Cost calculation logic
+├── stores/
+│   ├── authStore.js
+│   ├── ingredientStore.js
+│   ├── recipeStore.js
+│   └── settingsStore.js
+├── hooks/
+│   ├── useIngredients.js
+│   ├── useRecipes.js
+│   ├── useRecipeCost.js
+│   └── useSubscription.js
+├── constants/
+│   ├── theme.js
+│   ├── units.js
+│   └── currencies.js
+└── utils/
+    ├── format.js
+    ├── csv.js
+    └── pdf.js
+```
+
+---
+
+## 4. DATABASE SCHEMA
+
+### Tables (summary):
+- yield_units — system lookup for recipe yield/batch units (serving, piece, slice, etc.)
+- selling_units — system lookup for selling format units
+- profiles — extends Supabase auth.users — full_name, subscription_tier, revenuecat_user_id, onboarding_completed
+- user_settings — currency, currency_symbol, default_food_cost_percent, unit_system per user
+- ingredients — user ingredient library — name, purchase_price, purchase_quantity, purchase_unit (measurement_unit enum), waste_percent, notes, is_archived
+- ingredient_categories — name, color — optional categorization for ingredients
+- ingredient_price_history — auto-recorded on price change via trigger — old_price, new_price, change_source
+- recipes — name, description, category, batch_size, batch_unit_id (FK → yield_units), target_food_cost_percent, is_archived, is_sample — NOTE: no selling_price column; selling prices live in recipe_selling_formats
+- recipe_ingredients — junction: recipe_id, ingredient_id, quantity, unit (measurement_unit)
+- recipe_selling_formats — one or more selling formats per recipe — name, selling_unit_id (FK → selling_units), unit_quantity, selling_price, is_default
+- invoice_scans — V2 only
+- invoice_scan_items — V2 only
+
+### Enums:
+- measurement_unit — kg, g, lb, oz, l, ml, fl_oz, cup, tbsp, tsp, gallon, piece, dozen, pack, other
+- subscription_tier — free, hobbyist, pro
+- recipe_category — starter, main, dessert, beverage, bread, sauce, snack, other
+
+### Rules:
+- Row Level Security always enabled on all tables
+- Users only ever see their own data
+- New user profile and settings auto created via trigger on signup
+- Ingredient price changes auto tracked via trigger
+- Never disable RLS
+- Never use service role key in client code
+
+---
+
+### Detailed Column Schema
+
+#### Table `yield_units`
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | Primary |
+| `name` | `text` | Unique |
+| `label` | `text` | |
+| `is_system` | `bool` | |
+| `sort_order` | `int4` | |
+| `created_at` | `timestamptz` | Nullable |
+
+#### Table `selling_units`
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | Primary |
+| `name` | `text` | Unique |
+| `label` | `text` | |
+| `is_system` | `bool` | |
+| `sort_order` | `int4` | |
+| `created_at` | `timestamptz` | Nullable |
+
+#### Table `profiles`
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | Primary |
+| `full_name` | `text` | Nullable |
+| `avatar_url` | `text` | Nullable |
+| `subscription_tier` | `subscription_tier` | |
+| `subscription_expires_at` | `timestamptz` | Nullable |
+| `revenuecat_user_id` | `text` | Nullable, Unique |
+| `onboarding_completed` | `bool` | |
+| `created_at` | `timestamptz` | Nullable |
+| `updated_at` | `timestamptz` | Nullable |
+
+#### Table `user_settings`
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | Primary |
+| `user_id` | `uuid` | Unique |
+| `currency` | `text` | |
+| `currency_symbol` | `text` | |
+| `default_food_cost_percent` | `numeric` | |
+| `unit_system` | `text` | |
+| `created_at` | `timestamptz` | Nullable |
+| `updated_at` | `timestamptz` | Nullable |
+
+#### Table `ingredient_categories`
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | Primary |
+| `user_id` | `uuid` | |
+| `name` | `text` | |
+| `color` | `text` | |
+| `created_at` | `timestamptz` | Nullable |
+
+#### Table `ingredients`
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | Primary |
+| `user_id` | `uuid` | |
+| `category_id` | `uuid` | Nullable |
+| `name` | `text` | |
+| `purchase_price` | `numeric` | |
+| `purchase_quantity` | `numeric` | |
+| `purchase_unit` | `measurement_unit` | |
+| `waste_percent` | `numeric` | |
+| `notes` | `text` | Nullable |
+| `is_archived` | `bool` | |
+| `created_at` | `timestamptz` | Nullable |
+| `updated_at` | `timestamptz` | Nullable |
+
+#### Table `ingredient_price_history`
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | Primary |
+| `ingredient_id` | `uuid` | |
+| `old_price` | `numeric` | |
+| `new_price` | `numeric` | |
+| `changed_at` | `timestamptz` | Nullable |
+| `change_source` | `text` | |
+
+#### Table `recipes`
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | Primary |
+| `user_id` | `uuid` | |
+| `name` | `text` | |
+| `description` | `text` | Nullable |
+| `category` | `recipe_category` | |
+| `batch_size` | `numeric` | |
+| `batch_unit_id` | `uuid` | FK → yield_units |
+| `target_food_cost_percent` | `numeric` | |
+| `image_url` | `text` | Nullable |
+| `is_archived` | `bool` | |
+| `is_sample` | `bool` | |
+| `created_at` | `timestamptz` | Nullable |
+| `updated_at` | `timestamptz` | Nullable |
+
+#### Table `recipe_ingredients`
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | Primary |
+| `recipe_id` | `uuid` | |
+| `ingredient_id` | `uuid` | |
+| `quantity` | `numeric` | |
+| `unit` | `measurement_unit` | |
+| `notes` | `text` | Nullable |
+| `created_at` | `timestamptz` | Nullable |
+| `updated_at` | `timestamptz` | Nullable |
+
+#### Table `recipe_selling_formats`
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | Primary |
+| `recipe_id` | `uuid` | |
+| `name` | `text` | |
+| `selling_unit_id` | `uuid` | FK → selling_units |
+| `unit_quantity` | `numeric` | |
+| `selling_price` | `numeric` | |
+| `is_default` | `bool` | |
+| `created_at` | `timestamptz` | Nullable |
+| `updated_at` | `timestamptz` | Nullable |
+
+---
+
+## 5. UNIT CONVERSION RULES
+
+Units are grouped into three families:
+
+**Weight:** kg, g, lb, oz — all interconvertible
+**Volume:** l, ml, fl_oz, cup, tbsp, tsp, gallon — all interconvertible
+**Count:** piece, dozen, pack, other — no conversion
+
+Rules:
+- Weight to weight: always convertible
+- Volume to volume: always convertible
+- Weight to volume: NOT convertible — show error to user
+- Count to anything: NOT convertible — must use same unit
+- If user tries to mix incompatible units — show clear error message
+
+Calculation flow:
+- Convert purchase unit to base unit (grams or ml)
+- Convert recipe quantity unit to base unit
+- Calculate cost per base unit from purchase price
+- Multiply by recipe quantity in base units
+- Apply waste percentage on top
+
+---
+
+## 6. COST CALCULATION LOGIC
+
+All calculations happen in calculations.js — never in component code.
+
+Formulas:
+- ingredient_cost = (recipe_quantity / purchase_quantity) × purchase_price × unit_conversion × (1 + waste_percent / 100)
+- total_recipe_cost = sum of all ingredient costs
+- cost_per_serving = total_recipe_cost / batch_size
+- recommended_price = cost_per_serving / (target_food_cost_percent / 100)
+- actual_food_cost_percent = (cost_per_serving / selling_price) × 100
+- gross_profit = selling_price − cost_per_serving
+- gross_margin_percent = (gross_profit / selling_price) × 100
+
+Margin color coding:
+- Green — actual food cost % is at or below target
+- Yellow — actual food cost % is within 5% above target
+- Red — actual food cost % is more than 5% above target
+
+---
+
+## 7. APP FLOW
+
+### Onboarding (first time only):
+1. Welcome screen — app name, tagline, Get Started button
+2. Sign up screen — email and password
+3. Supabase trigger auto creates profile and user_settings
+4. Redirect to Dashboard
+5. Dashboard shows pre-loaded sample recipe — Chocolate Chip Cookies
+6. User sees cost calculation immediately — this is the magic moment
+
+### Returning user:
+1. App opens — check Supabase session
+2. Session exists — go to Dashboard
+3. No session — go to Welcome screen
+
+### Add Ingredient flow:
+1. Ingredients tab
+2. Tap plus button
+3. Enter name, purchase price, purchase quantity, purchase unit
+4. Optional — select category, add waste percent, add notes
+5. Save
+6. Return to ingredient list
+
+### Create Recipe flow:
+1. Recipes tab
+2. Tap plus button
+3. Enter recipe name, category, batch size, batch unit, target food cost %
+4. Optional — enter selling price to see actual margin
+5. Add ingredients section — tap Add Ingredient
+6. Select ingredient from library
+7. Enter quantity used and unit
+8. Real time cost preview updates as ingredients are added
+9. Save recipe
+10. Redirect to recipe detail screen showing full cost breakdown
+
+### Update Ingredient Price flow:
+1. Ingredients tab
+2. Tap ingredient
+3. Edit price
+4. Save
+5. All recipes containing that ingredient automatically update costs via Supabase realtime
+
+### View Recipe Results flow:
+1. Recipes tab
+2. Tap recipe card
+3. Recipe detail screen shows:
+   - Total recipe cost
+   - Cost per serving
+   - Recommended selling price
+   - Actual food cost % (if selling price set)
+   - Gross margin % (if selling price set)
+   - Margin status badge — green yellow or red
+   - Full ingredient cost breakdown list
+
+### Export PDF flow (Pro only):
+1. Recipe detail screen
+2. Tap Export button
+3. If not Pro — show paywall
+4. If Pro — generate PDF
+5. Share sheet opens
+
+### CSV Import flow (Pro only):
+1. Ingredients tab
+2. Tap Import button
+3. If not Pro — show paywall
+4. If Pro — file picker opens
+5. Select CSV file
+6. Column mapping screen
+7. Review imported ingredients
+8. Confirm — all ingredients imported
+
+---
+
+## 8. SUBSCRIPTION AND PAYWALL
+
+### Free limits:
+- Maximum 5 recipes
+- Maximum 20 ingredients
+- No PDF export
+- No CSV import
+- No cloud sync — local only
+
+### Hobbyist $4.99/month:
+- Unlimited recipes
+- Unlimited ingredients
+- Cloud sync across devices
+
+### Pro $19/month:
+- Everything in Hobbyist
+- PDF export
+- CSV import
+- Price history charts
+- Wholesale quote generation
+
+### Paywall trigger points:
+- User tries to create 6th recipe — show paywall
+- User tries to add 21st ingredient — show paywall
+- User taps PDF export button — show paywall
+- User taps CSV import button — show paywall
+
+### useSubscription hook behavior:
+- Reads subscription_tier from profiles table
+- Exposes isFree, isHobbyist, isPro booleans
+- Exposes canCreateRecipe(count), canAddIngredient(count), canExportPDF, canImportCSV
+- Used everywhere to gate features — never hardcode tier checks in screens
+
+### RevenueCat flow:
+- User subscribes in app
+- RevenueCat processes payment via App Store or Play Store
+- RevenueCat webhook fires to Supabase Edge Function
+- Edge Function updates profiles.subscription_tier
+- Never update subscription_tier manually anywhere else
+
+---
+
+## 9. CODING STANDARDS
+
+### Language:
+- JavaScript only — never suggest TypeScript
+- ES2022+ — use optional chaining, nullish coalescing, destructuring
+- Async/await always — never .then() chains
+- const and let only — never var
+
+### Components:
+- Functional components only — never class components
+- Default export for screens
+- Named exports for reusable components
+- One component per file
+
+### Error handling:
+- Every async operation in try/catch
+- Always show user friendly error message — never raw Supabase errors
+- Always have loading state for async operations
+- Always have error state for async operations
+
+### Lists:
+- Always use FlatList for lists — never ScrollView with .map()
+
+### Performance:
+- React.memo for list item components
+- useMemo for cost calculations
+- useCallback for functions passed as props
+
+### Naming:
+- Components and screens — PascalCase
+- Functions, variables, hooks — camelCase
+- Constants — UPPER_SNAKE_CASE
+- Files — PascalCase for components, camelCase for everything else
+
+---
+
+## 10. THEME
+
+### Colors:
+- primary: #2D6A4F — deep green
+- primaryLight: #52B788 — light green
+- primaryDark: #1B4332 — dark green
+- accent: #F4A261 — warm orange
+- background: #FAFAF8 — warm white
+- surface: #FFFFFF
+- surfaceAlt: #F5F5F0
+- text: #1A1A1A
+- textSecondary: #6B7280
+- textTertiary: #9CA3AF
+- border: #E5E7EB
+- success: #10B981
+- warning: #F59E0B
+- error: #EF4444
+- marginGood: #10B981
+- marginWarning: #F59E0B
+- marginDanger: #EF4444
+
+### Spacing scale:
+- xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48
+
+### Border radius:
+- sm: 6, md: 10, lg: 16, xl: 24, full: 9999
+
+### Font sizes:
+- xs: 11, sm: 13, base: 15, md: 17, lg: 20, xl: 24, xxl: 30
+
+### Design rules:
+- Minimum touch target height 44px on all interactive elements
+- Clean and minimal — users are not tech people
+- Clear visual hierarchy on every screen
+- Empty states always have a helpful call to action button
+- Loading indicator on every async operation
+
+---
+
+## 11. SAMPLE ONBOARDING DATA
+
+Pre-load on first login so user sees the app working immediately.
+
+### Sample ingredients to pre-load:
+- All Purpose Flour — $2.50 per 1 kg
+- Butter — $8.00 per 1 kg
+- Eggs — $0.30 per 1 piece
+- Sugar — $1.80 per 1 kg
+- Chocolate Chips — $12.00 per 1 kg
+- Vanilla Extract — $15.00 per 1 l
+- Baking Powder — $5.00 per 1 kg
+- Salt — $1.00 per 1 kg
+- Milk — $1.20 per 1 l
+
+### Sample recipe to pre-load:
+- Name: Chocolate Chip Cookies
+- Category: dessert
+- Batch size: 24 pieces
+- Target food cost: 30%
+- Selling price: $2.50 per cookie
+- Mark is_sample as true
+- Ingredients: Flour 250g, Butter 150g, Eggs 2 pieces, Sugar 100g, Chocolate Chips 150g, Vanilla Extract 5ml, Baking Powder 5g, Salt 3g
+
+---
+
+## 12. ENVIRONMENT VARIABLES
+
+Required in .env file:
+- EXPO_PUBLIC_SUPABASE_URL
+- EXPO_PUBLIC_SUPABASE_ANON_KEY
+- EXPO_PUBLIC_REVENUECAT_IOS_KEY
+- EXPO_PUBLIC_REVENUECAT_ANDROID_KEY
+
+Never commit .env to git. Always use EXPO_PUBLIC_ prefix for client side variables.
+
+---
+
+## 13. V2 FEATURES — DO NOT BUILD IN V1
+
+- AI invoice scanning — photo to auto update ingredient prices
+- Price history charts — ingredient cost trends over time
+- Nutrition tracking — calories and macros per serving
+- Allergen tracking — flag common allergens per recipe
+- Team collaboration — share recipes with staff
+- Wholesale quote generation — bulk pricing calculator
+- POS integration — connect to Square or Toast
+- Multi-language support
+
+---
+
+## 14. KEY REMINDERS
+
+- JavaScript only — never TypeScript
+- Never store payment data in Supabase — RevenueCat owns all payment data
+- Always handle empty state — new users have zero data
+- Unit conversion is the most critical feature — always test edge cases
+- Never calculate costs inside component code — always use calculations.js
+- Pre-load sample data on first login — empty state kills apps
+- RLS always on — never disable
+- FlatList for all lists — never map inside ScrollView
+- All currency formatted using user currency from user_settings
+- RevenueCat webhook updates subscription_tier — never update it manually
+
+---
