@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,6 +20,7 @@ import { PRIVACY_POLICY_URL, TERMS_URL } from '../../constants/legal';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const { user, signOut, deleteAccount, fetchProfile } = useAuthStore();
   const { settings, updateSettings } = useSettingsStore();
   const { tier, isFree, isHobbyist } = useSubscription();
@@ -174,6 +176,13 @@ export default function SettingsScreen() {
                 <Text style={[styles.tierText, { color: tierColor }]}>{tierLabel}</Text>
               </View>
             </View>
+            <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => router.push('/change-password')}>
+              <View style={styles.rowLeft}>
+                <Ionicons name="lock-closed-outline" size={18} color={COLORS.textSecondary} />
+                <Text style={styles.rowLabel}>Change password</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+            </TouchableOpacity>
           </View>
         </View>
 

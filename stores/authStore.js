@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
+import { RESET_PASSWORD_REDIRECT_URL } from '../constants/auth';
 import useSettingsStore from './settingsStore';
 
 const useAuthStore = create((set, get) => ({
@@ -45,12 +46,27 @@ const useAuthStore = create((set, get) => ({
       options: { data: { full_name: fullName } },
     });
     if (error) throw error;
-    if (data.user) {
-      set({ user: data.user });
-      await get().fetchProfile(data.user.id);
-      await useSettingsStore.getState().applyDeviceCurrency(data.user.id);
+
+    let user = data.user;
+    let session = data.session;
+
+    // No confirmation email flow — sign in immediately when signup doesn't return a session
+    if (user && !session) {
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (signInError) throw signInError;
+      user = signInData.user;
+      session = signInData.session;
     }
-    return data;
+
+    if (user) {
+      set({ user });
+      await get().fetchProfile(user.id);
+      await useSettingsStore.getState().applyDeviceCurrency(user.id);
+    }
+    return { ...data, user, session };
   },
 
   signIn: async ({ email, password }) => {
@@ -63,6 +79,27 @@ const useAuthStore = create((set, get) => ({
     return data;
   },
 
+  resetPassword: async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: RESET_PASSWORD_REDIRECT_URL,
+    });
+    if (error) throw error;
+  },
+
+  changePassword: async ({ currentPassword, newPassword }) => {
+    const email = get().user?.email;
+    if (!email) throw new Error('You must be signed in to change your password.');
+
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    });
+    if (verifyError) throw new Error('Current password is incorrect.');
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+  },
+
   signOut: async () => {
     await supabase.auth.signOut();
     set({ user: null, profile: null });
@@ -70,10 +107,8 @@ const useAuthStore = create((set, get) => ({
 
   deleteAccount: async () => {
     try {
-      // RPC deletes all user data + auth.users row
       const { error } = await supabase.rpc('delete_user_account');
       if (error) throw error;
-      // Clear local auth state immediately (signOut may fail since user no longer exists in auth.users)
       try { await supabase.auth.signOut(); } catch (_) { /* already deleted */ }
       set({ user: null, profile: null });
       return { error: null };

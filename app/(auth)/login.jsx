@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -52,6 +52,10 @@ export default function LoginScreen() {
             )}
           />
 
+          <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')} style={styles.forgotBtn}>
+            <Text style={styles.link}>Forgot password?</Text>
+          </TouchableOpacity>
+
           <Button title="Sign In" onPress={handleSubmit(onSubmit)} loading={isSubmitting} size="lg" style={styles.submitBtn} />
 
           <View style={styles.footer}>
@@ -71,6 +75,7 @@ const styles = StyleSheet.create({
   title: { fontSize: FONT_SIZE.xl, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.xs },
   subtitle: { fontSize: FONT_SIZE.base, color: COLORS.textSecondary },
   submitBtn: { marginTop: SPACING.sm },
+  forgotBtn: { alignSelf: 'flex-end', marginBottom: SPACING.sm, minHeight: 44, justifyContent: 'center' },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: SPACING.lg },
   footerText: { fontSize: FONT_SIZE.base, color: COLORS.textSecondary },
   link: { fontSize: FONT_SIZE.base, color: COLORS.primary, fontWeight: '600' },

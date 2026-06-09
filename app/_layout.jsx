@@ -17,7 +17,6 @@ function AuthGuard() {
   const { fetchSettings, applyDeviceCurrency } = useSettingsStore();
   const { fetchSellingUnits } = useRecipeStore();
 
-  // Init RevenueCat once on app start
   useEffect(() => {
     initRevenueCat();
     attachCustomerInfoListener((entitled) => {
@@ -87,6 +86,7 @@ function AuthGuard() {
       <Stack.Screen name="ingredient/create" />
       <Stack.Screen name="ingredient/edit/[id]" />
       <Stack.Screen name="ingredient/price-history/[id]" />
+      <Stack.Screen name="change-password" />
       <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
     </Stack>
   );

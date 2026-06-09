@@ -18,6 +18,7 @@ export default function SignupScreen() {
   const onSubmit = async ({ fullName, email, password }) => {
     try {
       await signUp({ email, password, fullName });
+      router.replace('/(tabs)');
     } catch (error) {
       Alert.alert('Sign Up Failed', error.message ?? 'Something went wrong. Please try again.');
     }
