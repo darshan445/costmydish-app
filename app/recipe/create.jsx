@@ -48,9 +48,9 @@ export default function CreateRecipeScreen() {
 
   // Local state
   const [recipeIngredients, setRecipeIngredients] = useState([]);
-  const [sellingFormats, setSellingFormats] = useState([
-    { id: newFmtId(), selling_unit_name: sellingUnitOptions[0]?.value ?? 'piece', unit_quantity: '1', selling_price: '' },
-  ]);
+  const [sellingFormats, setSellingFormats] = useState([]);
+  const [ingredientError, setIngredientError] = useState(false);
+  const [sellingFormatError, setSellingFormatError] = useState(false);
 
   // Modal / sheet state
   const [showCatPicker, setShowCatPicker] = useState(false);
@@ -60,8 +60,9 @@ export default function CreateRecipeScreen() {
   const [ingSearch, setIngSearch] = useState('');
   const [ingSheetStep, setIngSheetStep] = useState('search'); // 'search' | 'config'
   const [ingSheetIngredient, setIngSheetIngredient] = useState(null);
-  const [ingSheetQty, setIngSheetQty] = useState('1');
+  const [ingSheetQty, setIngSheetQty] = useState('');
   const [ingSheetUnit, setIngSheetUnit] = useState('');
+  const [ingQtyError, setIngQtyError] = useState('');
   const [editingIngId, setEditingIngId] = useState(null);
 
   // Selling format bottom sheet
@@ -69,6 +70,7 @@ export default function CreateRecipeScreen() {
   const [fmtSheetUnit, setFmtSheetUnit] = useState(sellingUnitOptions[0]?.value ?? 'piece');
   const [fmtSheetQty, setFmtSheetQty] = useState('1');
   const [fmtSheetPrice, setFmtSheetPrice] = useState('');
+  const [fmtPriceError, setFmtPriceError] = useState('');
   const [editingFmtId, setEditingFmtId] = useState(null);
 
   const { control, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm({
@@ -116,10 +118,12 @@ export default function CreateRecipeScreen() {
   const openAddIngSheet = () => {
     setIngSheetStep('search');
     setIngSheetIngredient(null);
-    setIngSheetQty('1');
+    setIngSheetQty('');
     setIngSheetUnit('');
+    setIngQtyError('');
     setEditingIngId(null);
     setIngSearch('');
+    setIngredientError(false);
     setShowIngSheet(true);
   };
 
@@ -129,6 +133,7 @@ export default function CreateRecipeScreen() {
     setIngSheetQty(String(ri.quantity));
     setIngSheetUnit(ri.unit);
     setEditingIngId(ri.ingredient_id);
+    setIngQtyError('');
     setShowIngSheet(true);
   };
 
@@ -136,22 +141,30 @@ export default function CreateRecipeScreen() {
     setIngSheetIngredient(ing);
     setIngSheetUnit(ing.purchase_unit);
     setIngSheetQty('');
+    setIngQtyError('');
     setIngSheetStep('config');
   };
 
   const handleIngSheetConfirm = () => {
     if (!ingSheetIngredient) return;
-    const qty = ingSheetQty || '1';
+    const qty = parseFloat(ingSheetQty);
+    if (!ingSheetQty.trim() || Number.isNaN(qty) || qty <= 0) {
+      setIngQtyError('Enter a quantity');
+      return;
+    }
+    setIngQtyError('');
+    const qtyStr = String(qty);
     if (editingIngId) {
       setRecipeIngredients((prev) =>
-        prev.map((r) => r.ingredient_id === editingIngId ? { ...r, quantity: qty, unit: ingSheetUnit } : r)
+        prev.map((r) => r.ingredient_id === editingIngId ? { ...r, quantity: qtyStr, unit: ingSheetUnit } : r)
       );
     } else {
       setRecipeIngredients((prev) => [
         ...prev,
-        { ingredient_id: ingSheetIngredient.id, ingredient: ingSheetIngredient, quantity: qty, unit: ingSheetUnit },
+        { ingredient_id: ingSheetIngredient.id, ingredient: ingSheetIngredient, quantity: qtyStr, unit: ingSheetUnit },
       ]);
     }
+    setIngredientError(false);
     setShowIngSheet(false);
   };
 
@@ -161,6 +174,7 @@ export default function CreateRecipeScreen() {
     setIngSheetStep('search');
     setIngSheetIngredient(null);
     setEditingIngId(null);
+    setIngQtyError('');
   };
 
   const removeIngredient = (ingredientId) => {
@@ -168,17 +182,6 @@ export default function CreateRecipeScreen() {
   };
 
   // ── Selling format helpers ─────────────────────────────────────────────────
-
-  const updateFormat = (id, field, value) => {
-    setSellingFormats((prev) => prev.map((f) => f.id === id ? { ...f, [field]: value } : f));
-  };
-
-  const addFormat = () => {
-    setSellingFormats((prev) => [
-      ...prev,
-      { id: newFmtId(), selling_unit_name: sellingUnitOptions[0]?.value ?? 'piece', unit_quantity: '1', selling_price: '' },
-    ]);
-  };
 
   const autoFormatName = (unitLabel, qty) => {
     const q = parseFloat(qty) || 1;
@@ -190,7 +193,9 @@ export default function CreateRecipeScreen() {
     setFmtSheetUnit(sellingUnitOptions[0]?.value ?? 'piece');
     setFmtSheetQty('1');
     setFmtSheetPrice('');
+    setFmtPriceError('');
     setEditingFmtId(null);
+    setSellingFormatError(false);
     setShowFmtSheet(true);
   };
 
@@ -203,6 +208,12 @@ export default function CreateRecipeScreen() {
   };
 
   const handleFmtSheetConfirm = () => {
+    const price = parseFloat(fmtSheetPrice);
+    if (!fmtSheetPrice.trim() || Number.isNaN(price) || price <= 0) {
+      setFmtPriceError('Enter a selling price');
+      return;
+    }
+    setFmtPriceError('');
     if (editingFmtId) {
       setSellingFormats((prev) => prev.map((f) =>
         f.id === editingFmtId
@@ -215,6 +226,7 @@ export default function CreateRecipeScreen() {
         { id: newFmtId(), selling_unit_name: fmtSheetUnit, unit_quantity: fmtSheetQty, selling_price: fmtSheetPrice },
       ]);
     }
+    setSellingFormatError(false);
     setShowFmtSheet(false);
   };
 
@@ -225,18 +237,21 @@ export default function CreateRecipeScreen() {
   // ── Submit ─────────────────────────────────────────────────────────────────
 
   const onSubmit = async (data) => {
-    if (recipeIngredients.length === 0) {
-      Alert.alert('No ingredients', 'Add at least one ingredient before saving.');
-      return;
-    }
+    const hasIngredients = recipeIngredients.length > 0;
+    const pricedFormats = sellingFormats.filter((f) => parseFloat(f.selling_price) > 0);
+    const hasSellingFormat = pricedFormats.length > 0;
 
+    setIngredientError(!hasIngredients);
+    setSellingFormatError(!hasSellingFormat);
+
+    if (!hasIngredients || !hasSellingFormat) return;
     const submitIngredients = recipeIngredients.map((ri) => ({
       ingredient_id: ri.ingredient_id,
       quantity: parseFloat(ri.quantity) || 0,
       unit: ri.unit,
     }));
 
-    const namedFormats = sellingFormats.map((fmt) => {
+    const namedFormats = pricedFormats.map((fmt) => {
       const unitLabel = sellingUnitOptions.find((u) => u.value === fmt.selling_unit_name)?.label ?? fmt.selling_unit_name;
       return { ...fmt, name: autoFormatName(unitLabel, fmt.unit_quantity) };
     });
@@ -333,45 +348,49 @@ export default function CreateRecipeScreen() {
           </View>
 
           {/* INGREDIENTS */}
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionLabel}>INGREDIENTS</Text>
-          </View>
-          <View style={styles.card}>
-            {recipeIngredients.map((ri, idx) => {
-              const usage = getIngredientUsageSummary(ri.ingredient, ri.quantity, ri.unit, symbol);
-              return (
-              <View key={ri.ingredient_id}>
-                {idx > 0 && <View style={styles.ingRowDivider} />}
-                <TouchableOpacity
-                  style={styles.ingRow}
-                  onPress={() => openEditIngSheet(ri)}
-                  activeOpacity={0.75}
-                >
-                  <View style={styles.ingRowLeft}>
-                    <Text style={styles.ingName} numberOfLines={1}>{ri.ingredient?.name}</Text>
-                    {usage ? (
-                      <View style={styles.ingUsageWrap}>
-                        <Text style={styles.ingUsageLine}>{usage.usageLine}</Text>
-                        {usage.convertedLine ? (
-                          <Text style={styles.ingConvertHint}>{usage.convertedLine}</Text>
+          <Text style={styles.sectionLabel}>INGREDIENTS</Text>
+          <View style={[styles.card, ingredientError && styles.cardError]}>
+            {recipeIngredients.length === 0 ? (
+              <Text style={[styles.emptySectionHint, ingredientError && styles.emptySectionHintError]}>
+                Add ingredients for this recipe.
+              </Text>
+            ) : (
+              recipeIngredients.map((ri, idx) => {
+                const usage = getIngredientUsageSummary(ri.ingredient, ri.quantity, ri.unit, symbol);
+                return (
+                  <View key={ri.ingredient_id}>
+                    {idx > 0 && <View style={styles.ingRowDivider} />}
+                    <TouchableOpacity
+                      style={styles.ingRow}
+                      onPress={() => openEditIngSheet(ri)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.ingRowLeft}>
+                        <Text style={styles.ingName} numberOfLines={1}>{ri.ingredient?.name}</Text>
+                        {usage ? (
+                          <View style={styles.ingUsageWrap}>
+                            <Text style={styles.ingUsageLine}>{usage.usageLine}</Text>
+                            {usage.convertedLine ? (
+                              <Text style={styles.ingConvertHint}>{usage.convertedLine}</Text>
+                            ) : null}
+                          </View>
                         ) : null}
                       </View>
-                    ) : null}
+                      <View style={styles.ingMeta}>
+                        <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => removeIngredient(ri.ingredient_id)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        style={{ marginLeft: SPACING.xs }}
+                      >
+                        <Ionicons name="close" size={16} color={COLORS.textTertiary} />
+                      </TouchableOpacity>
+                    </TouchableOpacity>
                   </View>
-                  <View style={styles.ingMeta}>
-                    <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => removeIngredient(ri.ingredient_id)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    style={{ marginLeft: SPACING.xs }}
-                  >
-                    <Ionicons name="close" size={16} color={COLORS.textTertiary} />
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              </View>
-            );
-            })}
+                );
+              })
+            )}
 
             <TouchableOpacity
               style={styles.addIngBtn}
@@ -385,45 +404,41 @@ export default function CreateRecipeScreen() {
 
           {/* SELLING FORMATS */}
           <Text style={styles.sectionLabel}>SELLING FORMATS</Text>
-          <View style={styles.card}>
-            {sellingFormats.map((fmt, idx) => {
-              const unitLabel = sellingUnitOptions.find((u) => u.value === fmt.selling_unit_name)?.label ?? fmt.selling_unit_name;
-              const autoName = autoFormatName(unitLabel, fmt.unit_quantity);
-              const price = parseFloat(fmt.selling_price);
-              return (
-                <View key={fmt.id}>
-                  {idx > 0 && <View style={styles.fmtDivider} />}
-                  <TouchableOpacity style={styles.fmtSummaryRow} onPress={() => openEditFmtSheet(fmt)} activeOpacity={0.75}>
-                    <View style={styles.fmtSummaryLeft}>
-                      <Text style={styles.fmtAutoLabel}>{autoName}</Text>
-                      {price > 0 ? (
+          <View style={[styles.card, sellingFormatError && styles.cardError]}>
+            {sellingFormats.length === 0 ? (
+              <Text style={[styles.emptySectionHint, sellingFormatError && styles.emptySectionHintError]}>
+                Add at least one selling format with a price. This is required to calculate food cost and margins.
+              </Text>
+            ) : (
+              sellingFormats.map((fmt, idx) => {
+                const unitLabel = sellingUnitOptions.find((u) => u.value === fmt.selling_unit_name)?.label ?? fmt.selling_unit_name;
+                const autoName = autoFormatName(unitLabel, fmt.unit_quantity);
+                const price = parseFloat(fmt.selling_price);
+                return (
+                  <View key={fmt.id}>
+                    {idx > 0 && <View style={styles.fmtDivider} />}
+                    <TouchableOpacity style={styles.fmtSummaryRow} onPress={() => openEditFmtSheet(fmt)} activeOpacity={0.75}>
+                      <View style={styles.fmtSummaryLeft}>
+                        <Text style={styles.fmtAutoLabel}>{autoName}</Text>
                         <Text style={styles.fmtPriceDot}>{symbol}{price.toFixed(2)}</Text>
-                      ) : (
-                        <Text style={styles.fmtPricePlaceholder}>Set price</Text>
-                      )}
-                    </View>
-                    <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} style={{ marginLeft: SPACING.xs }} />
-                    <TouchableOpacity
-                      onPress={() => {
-                        if (sellingFormats.length === 1) {
-                          Alert.alert('Cannot remove', 'You need at least one selling format.');
-                          return;
-                        }
-                        removeFormat(fmt.id);
-                      }}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      style={{ marginLeft: SPACING.sm }}
-                    >
-                      <Ionicons name="trash-outline" size={15} color={COLORS.error} />
+                      </View>
+                      <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} style={{ marginLeft: SPACING.xs }} />
+                      <TouchableOpacity
+                        onPress={() => removeFormat(fmt.id)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        style={{ marginLeft: SPACING.sm }}
+                      >
+                        <Ionicons name="trash-outline" size={15} color={COLORS.error} />
+                      </TouchableOpacity>
                     </TouchableOpacity>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
+                  </View>
+                );
+              })
+            )}
 
-            <TouchableOpacity style={styles.addFormatBtn} onPress={openAddFmtSheet} activeOpacity={0.7}>
-              <Ionicons name="add" size={16} color={COLORS.primary} />
-              <Text style={styles.addFormatText}>Add selling format</Text>
+            <TouchableOpacity style={styles.addIngBtn} onPress={openAddFmtSheet} activeOpacity={0.7}>
+              <Ionicons name="add" size={18} color={COLORS.primary} />
+              <Text style={styles.addIngText}>Add selling format</Text>
             </TouchableOpacity>
           </View>
 
@@ -566,17 +581,18 @@ export default function CreateRecipeScreen() {
             <View style={[styles.twoCol, { marginTop: SPACING.md }]}>
               <View style={{ width: 88 }}>
                 <Text style={styles.sheetLabel}>Quantity</Text>
-                <View style={styles.inputBox}>
+                <View style={[styles.inputBox, ingQtyError ? styles.inputBoxError : null]}>
                   <TextInput
                     style={[styles.textInput, { textAlign: 'center' }]}
                     value={ingSheetQty}
-                    onChangeText={setIngSheetQty}
+                    onChangeText={(v) => { setIngSheetQty(v); setIngQtyError(''); }}
                     keyboardType="numeric"
-                    placeholder="1"
+                    placeholder="Qty"
                     placeholderTextColor={COLORS.textTertiary}
                     autoFocus={editingIngId === null}
                   />
                 </View>
+                {ingQtyError ? <Text style={styles.errorText}>{ingQtyError}</Text> : null}
                 {(() => {
                   const usage = getIngredientUsageSummary(ingSheetIngredient, ingSheetQty, ingSheetUnit, symbol);
                   if (!usage) return null;
@@ -656,17 +672,18 @@ export default function CreateRecipeScreen() {
           <View style={{ width: SPACING.sm }} />
           <View style={{ flex: 1 }}>
             <Text style={styles.sheetLabel}>Selling price</Text>
-            <View style={[styles.inputBox, styles.priceBox]}>
+            <View style={[styles.inputBox, styles.priceBox, fmtPriceError ? styles.inputBoxError : null]}>
               <Text style={styles.currencyPrefix}>{symbol}</Text>
               <TextInput
                 style={[styles.textInput, { flex: 1 }]}
                 value={fmtSheetPrice}
-                onChangeText={setFmtSheetPrice}
+                onChangeText={(v) => { setFmtSheetPrice(v); setFmtPriceError(''); }}
                 keyboardType="numeric"
                 placeholder="0.00"
                 placeholderTextColor={COLORS.textTertiary}
               />
             </View>
+            {fmtPriceError ? <Text style={styles.errorText}>{fmtPriceError}</Text> : null}
           </View>
         </View>
 
@@ -763,12 +780,6 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
     marginBottom: SPACING.sm,
   },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: SPACING.md,
-  },
   card: {
     backgroundColor: COLORS.surface,
     borderRadius: RADIUS.lg,
@@ -777,6 +788,16 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     ...SHADOW.sm,
   },
+  cardError: { borderColor: COLORS.error },
+  emptySectionHint: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
+  },
+  emptySectionHintError: { color: COLORS.error },
   previewFormatName: {
     fontSize: FONT_SIZE.sm,
     fontWeight: '700',
@@ -824,7 +845,6 @@ const styles = StyleSheet.create({
   fmtSummaryLeft: { flex: 1, gap: 2 },
   fmtAutoLabel: { fontSize: FONT_SIZE.sm, fontWeight: '600', color: COLORS.text },
   fmtPriceDot: { fontSize: FONT_SIZE.sm, fontWeight: '700', color: COLORS.primary },
-  fmtPricePlaceholder: { fontSize: FONT_SIZE.xs, color: COLORS.textTertiary, fontWeight: '400' },
 
   // Shared sheet styles
   sheetLabel: { fontSize: FONT_SIZE.sm, fontWeight: '600', color: COLORS.text, marginBottom: SPACING.xs },
@@ -856,19 +876,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
-  addFormatBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.xs,
-    paddingVertical: SPACING.sm,
-    marginTop: SPACING.sm,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-  },
-  addFormatText: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, fontWeight: '500' },
   // Live cost preview
   previewCard: {
     backgroundColor: COLORS.surface,

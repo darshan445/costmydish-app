@@ -125,8 +125,6 @@ export default function EditIngredientScreen() {
     } catch (_) {
       // silently proceed
     }
-
-    router.back();
   };
 
   const handleDelete = async () => {
@@ -358,7 +356,7 @@ export default function EditIngredientScreen() {
       {/* Recipe impact modal */}
       <Modal
         visible={showImpactModal}
-        onClose={() => { setShowImpactModal(false); router.back(); }}
+        onClose={() => setShowImpactModal(false)}
         title="Price Updated"
       >
         {impactData && (
@@ -395,7 +393,7 @@ export default function EditIngredientScreen() {
 
             <Button
               title="Got it"
-              onPress={() => { setShowImpactModal(false); router.back(); }}
+              onPress={() => setShowImpactModal(false)}
               size="lg"
               style={styles.impactBtn}
             />

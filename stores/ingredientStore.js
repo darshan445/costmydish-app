@@ -2,6 +2,14 @@ import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import useAuthStore from './authStore';
 
+function sortIngredientsNewestFirst(list) {
+  return [...list].sort((a, b) => {
+    const aTime = new Date(a.created_at ?? 0).getTime();
+    const bTime = new Date(b.created_at ?? 0).getTime();
+    return bTime - aTime;
+  });
+}
+
 const useIngredientStore = create((set, get) => ({
   ingredients: [],
   loading: false,
@@ -14,7 +22,7 @@ const useIngredientStore = create((set, get) => ({
         .from('ingredients')
         .select('*')
         .eq('is_archived', false)
-        .order('name', { ascending: true });
+        .order('created_at', { ascending: false });
       if (error) throw error;
       set({ ingredients: data ?? [] });
     } catch (error) {
@@ -35,7 +43,9 @@ const useIngredientStore = create((set, get) => ({
         .select()
         .single();
       if (error) throw error;
-      set((state) => ({ ingredients: [...state.ingredients, data].sort((a, b) => a.name.localeCompare(b.name)) }));
+      set((state) => ({
+        ingredients: sortIngredientsNewestFirst([...state.ingredients, data]),
+      }));
       return { data, error: null };
     } catch (error) {
       console.error('Add ingredient error:', error);
