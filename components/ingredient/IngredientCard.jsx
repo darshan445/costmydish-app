@@ -14,7 +14,7 @@ export const IngredientCard = memo(function IngredientCard({ ingredient, currenc
       <TouchableOpacity style={styles.main} onPress={onPress} activeOpacity={0.7}>
         <View style={styles.info}>
           <Text style={styles.name} numberOfLines={1}>{ingredient.name}</Text>
-          <Text style={styles.price}>
+          <Text style={styles.price} numberOfLines={2}>
             {formatCurrency(ingredient.purchase_price, currencySymbol)} per {ingredient.purchase_quantity} {unit}
           </Text>
           {ingredient.waste_percent > 0 && (
@@ -24,6 +24,7 @@ export const IngredientCard = memo(function IngredientCard({ ingredient, currenc
         <View style={styles.unitBadge}>
           <Text style={styles.unitText}>{unit}</Text>
         </View>
+        <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} style={styles.chevron} />
       </TouchableOpacity>
 
       {onDelete && (
@@ -41,19 +42,26 @@ export const IngredientCard = memo(function IngredientCard({ ingredient, currenc
 
 const styles = StyleSheet.create({
   card: { marginBottom: SPACING.sm, flexDirection: 'row', alignItems: 'center' },
-  main: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: SPACING.md, paddingRight: SPACING.sm },
-  info: { flex: 1 },
+  main: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
+    paddingRight: SPACING.sm,
+    minHeight: 44,
+  },
+  info: { flex: 1, marginRight: SPACING.sm },
   name: { fontSize: FONT_SIZE.base, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
-  price: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary },
+  price: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, lineHeight: 18 },
   waste: { fontSize: FONT_SIZE.xs, color: COLORS.warning, marginTop: 2 },
   unitBadge: {
     backgroundColor: COLORS.surfaceAlt,
     borderRadius: 8,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
-    marginLeft: SPACING.sm,
   },
   unitText: { fontSize: FONT_SIZE.sm, fontWeight: '600', color: COLORS.textSecondary },
+  chevron: { marginLeft: SPACING.xs },
   deleteBtn: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,

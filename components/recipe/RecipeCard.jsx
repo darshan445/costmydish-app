@@ -3,7 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
-import { COLORS, FONT_SIZE, SPACING } from '../../constants/theme';
+import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 import { formatCurrency, formatPercent, formatCategory } from '../../utils/format';
 
 const MARGIN_VARIANT = { good: 'good', warning: 'warning', danger: 'danger' };
@@ -32,6 +32,7 @@ function getProfitDisplay(costSummary, currencySymbol) {
     text: isRange
       ? `${formatCurrency(min, currencySymbol)} – ${formatCurrency(max, currencySymbol)}`
       : formatCurrency(min, currencySymbol),
+    isRange,
     color,
   };
 }
@@ -53,32 +54,41 @@ export const RecipeCard = memo(function RecipeCard({ recipe, costSummary, curren
           ) : null}
         </View>
 
-        <View style={styles.metrics}>
-          <View style={styles.metric}>
+        <View style={styles.metricsRow}>
+          <View style={styles.metricHalf}>
             <Text style={styles.metricLabel}>Total cost</Text>
             <Text style={styles.metricValue}>{formatCurrency(costSummary?.total_recipe_cost, currencySymbol)}</Text>
           </View>
           {costSummary?.actual_food_cost_percent != null && (
             <>
               <View style={styles.metricDivider} />
-              <View style={styles.metric}>
+              <View style={styles.metricHalf}>
                 <Text style={styles.metricLabel}>Food cost</Text>
                 <Text style={styles.metricValue}>{formatPercent(costSummary.actual_food_cost_percent)}</Text>
               </View>
             </>
           )}
-          {profitDisplay != null && (
-            <>
-              <View style={styles.metricDivider} />
-              <View style={styles.metric}>
-                <Text style={styles.metricLabel}>Profit</Text>
-                <Text style={[styles.metricValue, { color: profitDisplay.color }]} numberOfLines={1}>
-                  {profitDisplay.text}
-                </Text>
-              </View>
-            </>
-          )}
         </View>
+
+        {profitDisplay != null && (
+          <View style={[
+            styles.profitRow,
+            profitDisplay.isRange && styles.profitRowRange,
+            profitDisplay.color === COLORS.success && styles.profitRowGood,
+            profitDisplay.color === COLORS.error && styles.profitRowBad,
+          ]}>
+            <Text style={styles.profitLabel}>
+              {profitDisplay.isRange ? 'Profit range' : 'Profit'}
+            </Text>
+            <Text style={[
+              styles.profitValue,
+              { color: profitDisplay.color },
+              profitDisplay.isRange && styles.profitValueRange,
+            ]}>
+              {profitDisplay.text}
+            </Text>
+          </View>
+        )}
 
         {costSummary?.total_recipe_cost > 0 && (
           <View style={styles.footer}>
@@ -93,6 +103,7 @@ export const RecipeCard = memo(function RecipeCard({ recipe, costSummary, curren
                 variant="neutral"
               />
             )}
+            <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
           </View>
         )}
       </TouchableOpacity>
@@ -113,17 +124,61 @@ export const RecipeCard = memo(function RecipeCard({ recipe, costSummary, curren
 const styles = StyleSheet.create({
   card: { marginBottom: SPACING.sm, flexDirection: 'row', alignItems: 'stretch', padding: 0, overflow: 'hidden' },
   body: { flex: 1, padding: SPACING.md },
-  header: { marginBottom: SPACING.md },
+  header: { marginBottom: SPACING.sm },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: 2 },
   name: { flex: 1, fontSize: FONT_SIZE.md, fontWeight: '700', color: COLORS.text },
   sampleBadge: { marginLeft: SPACING.xs },
   category: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary },
-  metrics: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.sm },
-  metric: { flex: 1, alignItems: 'center' },
+  metricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  metricHalf: { flex: 1, alignItems: 'center', paddingHorizontal: SPACING.xs },
   metricLabel: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginBottom: 2 },
-  metricValue: { fontSize: FONT_SIZE.sm, fontWeight: '600', color: COLORS.text },
+  metricValue: { fontSize: FONT_SIZE.sm, fontWeight: '700', color: COLORS.text },
   metricDivider: { width: 1, height: 28, backgroundColor: COLORS.border },
-  footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: SPACING.sm, borderTopWidth: 1, borderTopColor: COLORS.border },
+  profitRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  profitRowRange: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: SPACING.xs,
+  },
+  profitRowGood: { backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0' },
+  profitRowBad: { backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' },
+  profitLabel: { fontSize: FONT_SIZE.xs, fontWeight: '600', color: COLORS.textSecondary },
+  profitValue: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '800',
+    color: COLORS.text,
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  profitValueRange: {
+    fontSize: FONT_SIZE.base,
+    textAlign: 'left',
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
   deleteBtn: {
     paddingHorizontal: SPACING.md,
     borderLeftWidth: 1,

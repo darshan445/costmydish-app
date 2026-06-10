@@ -2,13 +2,14 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import {
-  Alert, KeyboardAvoidingView, Platform,
-  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
+  Alert,
+  StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../../components/ui/Button';
 import { Modal } from '../../../components/ui/Modal';
+import { KeyboardFormLayout } from '../../../components/ui/KeyboardFormLayout';
 import { ConfirmModal } from '../../../components/ui/ConfirmModal';
 import useIngredientStore from '../../../stores/ingredientStore';
 import useRecipeStore from '../../../stores/recipeStore';
@@ -17,20 +18,15 @@ import { supabase } from '../../../lib/supabase';
 import { formatPercent } from '../../../utils/format';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from '../../../constants/theme';
 import { useSubscription } from '../../../hooks/useSubscription';
-
-const UNIT_GROUPS = [
-  { label: 'WEIGHT', units: [{ value: 'kg', label: 'kg' }, { value: 'g', label: 'g' }, { value: 'lb', label: 'lb' }, { value: 'oz', label: 'oz' }] },
-  { label: 'VOLUME', units: [{ value: 'l', label: 'L' }, { value: 'ml', label: 'ml' }, { value: 'fl_oz', label: 'fl oz' }, { value: 'cup', label: 'cup' }, { value: 'tbsp', label: 'tbsp' }, { value: 'tsp', label: 'tsp' }] },
-  { label: 'COUNT', units: [{ value: 'piece', label: 'piece' }, { value: 'each', label: 'each' }] },
-];
+import { useUnitSystem } from '../../../hooks/useUnitSystem';
+import { formatUnitLabel } from '../../../constants/units';
 
 function computeCostHint(price, qty, unit, symbol) {
   const q = parseFloat(qty) || 1;
   const p = parseFloat(price);
   const displayPrice = p > 0 ? p : 120;
   const prefix = p > 0 ? '' : 'e.g. ';
-  const unitDisplay = unit === 'fl_oz' ? 'fl oz' : unit;
-  return `${prefix}Bought ${q} ${unitDisplay} for ${symbol}${displayPrice}`;
+  return `${prefix}Bought ${q} ${formatUnitLabel(unit)} for ${symbol}${displayPrice}`;
 }
 
 export default function EditIngredientScreen() {
@@ -42,6 +38,7 @@ export default function EditIngredientScreen() {
   const symbol = getCurrencySymbol();
 
   const { canViewPriceHistory } = useSubscription();
+  const { unitGroups, defaultPurchaseUnit } = useUnitSystem();
   const [showUnitPicker, setShowUnitPicker] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [impactData, setImpactData] = useState(null);
@@ -54,7 +51,7 @@ export default function EditIngredientScreen() {
       name: '',
       purchase_price: '',
       purchase_quantity: '1',
-      purchase_unit: 'kg',
+      purchase_unit: defaultPurchaseUnit,
       waste_percent: '0',
       notes: '',
     },
@@ -142,18 +139,24 @@ export default function EditIngredientScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edit ingredient</Text>
-          <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.headerBtn}>
-            <Ionicons name="trash-outline" size={22} color={COLORS.error} />
-          </TouchableOpacity>
-        </View>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Edit ingredient</Text>
+        <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.headerBtn}>
+          <Ionicons name="trash-outline" size={22} color={COLORS.error} />
+        </TouchableOpacity>
+      </View>
 
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardFormLayout
+        contentContainerStyle={styles.scroll}
+        footer={(
+          <View style={styles.stickyFooter}>
+            <Button title="Save changes" onPress={handleSubmit(onSubmit)} loading={isSubmitting} size="lg" />
+          </View>
+        )}
+      >
 
           {/* Name */}
           <Controller control={control} name="name" rules={{ required: 'Name is required' }}
@@ -231,7 +234,7 @@ export default function EditIngredientScreen() {
                       onPress={() => setShowUnitPicker(true)}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.unitText}>{value}</Text>
+                      <Text style={styles.unitText}>{formatUnitLabel(value)}</Text>
                       <Ionicons name="chevron-down" size={12} color={COLORS.textSecondary} />
                     </TouchableOpacity>
                   </View>
@@ -310,17 +313,11 @@ export default function EditIngredientScreen() {
               </View>
             )} />
 
-        </ScrollView>
-
-        <View style={styles.stickyFooter}>
-          <Button title="Save changes" onPress={handleSubmit(onSubmit)} loading={isSubmitting} size="lg" />
-        </View>
-      </KeyboardAvoidingView>
+      </KeyboardFormLayout>
 
       {/* Unit Picker Modal */}
       <Modal visible={showUnitPicker} onClose={() => setShowUnitPicker(false)} title="Select unit">
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {UNIT_GROUPS.map((group) => (
+          {unitGroups.map((group) => (
             <View key={group.label} style={styles.unitGroup}>
               <Text style={styles.unitGroupLabel}>{group.label}</Text>
               <View style={styles.unitChipRow}>
@@ -339,7 +336,6 @@ export default function EditIngredientScreen() {
               </View>
             </View>
           ))}
-        </ScrollView>
       </Modal>
 
       <ConfirmModal

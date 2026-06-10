@@ -9,6 +9,7 @@ export function RecipeCostSummary({
   totalCost,
   recommendedPrice = null,
   actualFoodCostPercent = null,
+  foodCostPercents = null,
   marginStatus = null,
   currencySymbol = '$',
   sellingFormatLabel = null,
@@ -29,6 +30,27 @@ export function RecipeCostSummary({
       displayIsRange = true;
       rangeMin = min;
       rangeMax = max;
+    }
+  }
+
+  const resolvedFoodCostPercents = (foodCostPercents ?? [])
+    .filter((v) => v != null && !Number.isNaN(v));
+  const fcps = resolvedFoodCostPercents.length > 0
+    ? resolvedFoodCostPercents
+    : (actualFoodCostPercent != null ? [actualFoodCostPercent] : []);
+
+  let displayFcp = null;
+  let fcpIsRange = false;
+  let fcpMin = null;
+  let fcpMax = null;
+
+  if (fcps.length > 0) {
+    fcpMin = Math.min(...fcps);
+    fcpMax = Math.max(...fcps);
+    if (fcps.length === 1 || Math.abs(fcpMax - fcpMin) < 0.05) {
+      displayFcp = fcpMin;
+    } else {
+      fcpIsRange = true;
     }
   }
 
@@ -54,29 +76,45 @@ export function RecipeCostSummary({
       )}
 
       {showBanner && (
-        <View style={[styles.profitBanner, { borderColor: bannerBorderColor }]}>
-          <Text style={styles.profitBannerLabel}>Profit</Text>
-          <Text style={[styles.profitBannerValue, { color: bannerValueColor }]}>
+        <View style={[
+          styles.profitBanner,
+          { borderColor: bannerBorderColor },
+          displayIsRange && styles.profitBannerStacked,
+        ]}>
+          <Text style={styles.profitBannerLabel}>
+            {displayIsRange ? 'Profit range' : 'Profit'}
+          </Text>
+          <Text style={[
+            styles.profitBannerValue,
+            { color: bannerValueColor },
+            displayIsRange && styles.profitBannerValueStacked,
+          ]}>
             {displayIsRange
               ? `${formatCurrency(rangeMin, currencySymbol)} – ${formatCurrency(rangeMax, currencySymbol)}`
-              : formatCurrency(displayProfit, currencySymbol)
-            }
+              : formatCurrency(displayProfit, currencySymbol)}
           </Text>
         </View>
       )}
 
-      {actualFoodCostPercent != null && (
+      {(displayFcp != null || fcpIsRange) && (
         <>
           <View style={styles.divider} />
           <View style={styles.row}>
             <View>
               <Text style={styles.rowLabel}>Food Cost %</Text>
-              {sellingFormatLabel != null && (
+              {!fcpIsRange && sellingFormatLabel != null && (
                 <Text style={styles.rowSubLabel}>based on {sellingFormatLabel}</Text>
+              )}
+              {fcpIsRange && (
+                <Text style={styles.rowSubLabel}>across selling formats</Text>
               )}
             </View>
             <View style={styles.rowRight}>
-              <Text style={styles.rowValue}>{formatPercent(actualFoodCostPercent)}</Text>
+              <Text style={styles.rowValue}>
+                {fcpIsRange
+                  ? `${formatPercent(fcpMin)} – ${formatPercent(fcpMax)}`
+                  : formatPercent(displayFcp)}
+              </Text>
               {marginStatus && (
                 <Badge label={MARGIN_LABELS[marginStatus]} variant={marginStatus} style={styles.badge} />
               )}
@@ -151,11 +189,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: SPACING.sm,
     backgroundColor: '#F0FDF4',
     borderRadius: RADIUS.md,
     borderWidth: 1.5,
     padding: SPACING.md,
     marginTop: SPACING.sm,
+  },
+  profitBannerStacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
   },
   profitBannerLabel: {
     fontSize: FONT_SIZE.sm,
@@ -165,6 +208,12 @@ const styles = StyleSheet.create({
   profitBannerValue: {
     fontSize: FONT_SIZE.xl,
     fontWeight: '800',
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  profitBannerValueStacked: {
+    fontSize: FONT_SIZE.lg,
+    textAlign: 'left',
   },
   badge: {
     marginLeft: SPACING.xs,

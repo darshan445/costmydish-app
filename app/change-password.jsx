@@ -2,12 +2,13 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import {
-  Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View,
+  Alert, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { KeyboardFormLayout } from '../components/ui/KeyboardFormLayout';
 import useAuthStore from '../stores/authStore';
 import { COLORS, FONT_SIZE, SPACING } from '../constants/theme';
 
@@ -36,14 +37,13 @@ export default function ChangePasswordScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-          </TouchableOpacity>
-        </View>
+      <View style={styles.topBar}>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+        </TouchableOpacity>
+      </View>
 
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardFormLayout contentContainerStyle={styles.scroll}>
           <View style={styles.header}>
             <Text style={styles.title}>Change password</Text>
             <Text style={styles.subtitle}>Enter your current password, then choose a new one.</Text>
@@ -115,8 +115,7 @@ export default function ChangePasswordScreen() {
             size="lg"
             style={styles.submitBtn}
           />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardFormLayout>
     </SafeAreaView>
   );
 }

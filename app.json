@@ -21,7 +21,8 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#1B4332"
       },
-      "package": "com.ddarsh.costmydish"
+      "package": "com.ddarsh.costmydish",
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "bundler": "metro",

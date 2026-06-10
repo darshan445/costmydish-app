@@ -16,6 +16,7 @@ import { useSubscription } from '../../hooks/useSubscription';
 import { identifyRevenueCatUser, openManageSubscriptions, restorePurchases } from '../../lib/revenuecat';
 import useSubscriptionStore from '../../stores/subscriptionStore';
 import { CURRENCIES } from '../../constants/currencies';
+import { UNIT_SYSTEMS } from '../../constants/units';
 import { PRIVACY_POLICY_URL, TERMS_URL } from '../../constants/legal';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
@@ -29,6 +30,7 @@ export default function SettingsScreen() {
   const ingredients = useIngredientStore((s) => s.ingredients);
 
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  const [showUnitSystemModal, setShowUnitSystemModal] = useState(false);
   const [showCurrencyWarning, setShowCurrencyWarning] = useState(false);
   const [pendingCurrency, setPendingCurrency] = useState(null);
   const [showFoodCostModal, setShowFoodCostModal] = useState(false);
@@ -77,6 +79,17 @@ export default function SettingsScreen() {
     setPendingCurrency(null);
     setShowCurrencyModal(true);
   };
+
+  const handleSelectUnitSystem = async (system) => {
+    if (system.value === settings.unit_system) {
+      setShowUnitSystemModal(false);
+      return;
+    }
+    setShowUnitSystemModal(false);
+    await updateSettings(user.id, { unit_system: system.value });
+  };
+
+  const unitSystemLabel = UNIT_SYSTEMS.find((s) => s.value === settings.unit_system)?.label ?? 'Metric';
 
   const handleSaveFoodCost = async () => {
     const val = parseFloat(foodCostInput);
@@ -309,6 +322,19 @@ export default function SettingsScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.row, styles.rowBorder]}
+              onPress={() => setShowUnitSystemModal(true)}
+            >
+              <View style={styles.rowLeft}>
+                <Ionicons name="scale-outline" size={18} color={COLORS.textSecondary} />
+                <Text style={styles.rowLabel}>Unit system</Text>
+              </View>
+              <View style={styles.rowRight}>
+                <Text style={styles.rowValue}>{unitSystemLabel}</Text>
+                <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.row, styles.rowBorder]}
               onPress={() => { setFoodCostInput(String(settings.default_food_cost_percent)); setFoodCostError(''); setShowFoodCostModal(true); }}
             >
               <View style={styles.rowLeft}>
@@ -369,7 +395,6 @@ export default function SettingsScreen() {
 
       {/* Currency picker */}
       <Modal visible={showCurrencyModal} onClose={() => setShowCurrencyModal(false)} title="Select Currency">
-        <ScrollView style={{ maxHeight: 320 }}>
           {CURRENCIES.map((c) => (
             <TouchableOpacity
               key={c.code}
@@ -381,7 +406,19 @@ export default function SettingsScreen() {
               {settings.currency === c.code && <Ionicons name="checkmark" size={18} color={COLORS.primary} />}
             </TouchableOpacity>
           ))}
-        </ScrollView>
+      </Modal>
+
+      <Modal visible={showUnitSystemModal} onClose={() => setShowUnitSystemModal(false)} title="Select unit system">
+        {UNIT_SYSTEMS.map((system) => (
+          <TouchableOpacity
+            key={system.value}
+            style={[styles.currencyRow, settings.unit_system === system.value && styles.currencySelected]}
+            onPress={() => handleSelectUnitSystem(system)}
+          >
+            <Text style={styles.currencyLabel}>{system.label}</Text>
+            {settings.unit_system === system.value && <Ionicons name="checkmark" size={18} color={COLORS.primary} />}
+          </TouchableOpacity>
+        ))}
       </Modal>
 
       <ConfirmModal

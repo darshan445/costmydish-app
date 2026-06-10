@@ -108,11 +108,24 @@ function getRegionFromTimezone() {
   }
 }
 
-function getDeviceRegion() {
+export function getDeviceRegion() {
   return getRegionFromExpoLocalization()
     ?? getRegionFromIntl()
     ?? getRegionFromTimezone()
     ?? 'US';
+}
+
+const REGION_UNIT_SYSTEM = {
+  US: 'imperial',
+  IN: 'metric',
+  GB: 'metric',
+  AU: 'metric',
+  CA: 'metric',
+};
+
+export function getUnitSystemFromDeviceLocale() {
+  const region = getDeviceRegion();
+  return REGION_UNIT_SYSTEM[region] ?? 'metric';
 }
 
 /**

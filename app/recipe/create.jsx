@@ -3,12 +3,13 @@ import { useState, useMemo, useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import {
   Alert, FlatList,
-  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
+  StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
+import { KeyboardFormLayout } from '../../components/ui/KeyboardFormLayout';
 import { useRecipes } from '../../hooks/useRecipes';
 import { useIngredients } from '../../hooks/useIngredients';
 import { useRecipeCost } from '../../hooks/useRecipeCost';
@@ -17,7 +18,8 @@ import useSettingsStore from '../../stores/settingsStore';
 import { formatCurrency, formatPercent } from '../../utils/format';
 import { getIngredientUsageSummary } from '../../utils/unitDisplay';
 import { calculateSellingFormatMetrics } from '../../lib/calculations';
-import { ALL_UNITS, RECIPE_CATEGORIES, UNIT_FAMILIES } from '../../constants/units';
+import { useUnitSystem } from '../../hooks/useUnitSystem';
+import { RECIPE_CATEGORIES } from '../../constants/units';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from '../../constants/theme';
 
 let _fmtId = 0;
@@ -31,6 +33,7 @@ export default function CreateRecipeScreen() {
   const settings = useSettingsStore((s) => s.settings);
   const getCurrencySymbol = useSettingsStore((s) => s.getCurrencySymbol);
   const symbol = getCurrencySymbol();
+  const { getCompatibleUnits } = useUnitSystem();
 
   // Selling unit options — use sellingUnits from store or a sensible fallback
   const sellingUnitOptions = sellingUnits.length > 0
@@ -107,12 +110,9 @@ export default function CreateRecipeScreen() {
     [ingredients, ingSearch, addedIds]
   );
 
-  const getCompatibleUnits = (ing) => {
+  const getCompatibleUnitsForIng = (ing) => {
     if (!ing) return [];
-    const family = Object.keys(UNIT_FAMILIES).find((f) => UNIT_FAMILIES[f].includes(ing.purchase_unit));
-    return family
-      ? ALL_UNITS.filter((u) => UNIT_FAMILIES[family].includes(u.value))
-      : ALL_UNITS.filter((u) => u.value === ing.purchase_unit);
+    return getCompatibleUnits(ing.purchase_unit);
   };
 
   const openAddIngSheet = () => {
@@ -131,7 +131,11 @@ export default function CreateRecipeScreen() {
     setIngSheetStep('config');
     setIngSheetIngredient(ri.ingredient);
     setIngSheetQty(String(ri.quantity));
-    setIngSheetUnit(ri.unit);
+    const compatible = getCompatibleUnits(ri.ingredient.purchase_unit);
+    const unit = compatible.find((u) => u.value === ri.unit)?.value
+      ?? compatible[0]?.value
+      ?? ri.unit;
+    setIngSheetUnit(unit);
     setEditingIngId(ri.ingredient_id);
     setIngQtyError('');
     setShowIngSheet(true);
@@ -139,7 +143,11 @@ export default function CreateRecipeScreen() {
 
   const handleIngSelect = (ing) => {
     setIngSheetIngredient(ing);
-    setIngSheetUnit(ing.purchase_unit);
+    const compatible = getCompatibleUnits(ing.purchase_unit);
+    const defaultUnit = compatible.find((u) => u.value === ing.purchase_unit)?.value
+      ?? compatible[0]?.value
+      ?? ing.purchase_unit;
+    setIngSheetUnit(defaultUnit);
     setIngSheetQty('');
     setIngQtyError('');
     setIngSheetStep('config');
@@ -281,13 +289,15 @@ export default function CreateRecipeScreen() {
           <View style={{ width: 24 }} />
         </View>
 
-        <ScrollView
-          ref={scrollRef}
+        <KeyboardFormLayout
+          scrollRef={scrollRef}
           contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-          automaticallyAdjustKeyboardInsets
-          showsVerticalScrollIndicator={false}
-          onLayout={handleScrollLayout}
+          scrollProps={{ onLayout: handleScrollLayout }}
+          footer={(
+            <View style={styles.stickyFooter}>
+              <Button title="Save recipe" onPress={handleSubmit(onSubmit)} loading={isSubmitting} size="lg" />
+            </View>
+          )}
         >
 
           {/* Recipe name */}
@@ -497,11 +507,7 @@ export default function CreateRecipeScreen() {
             </>
           )}
 
-        </ScrollView>
-
-        <View style={styles.stickyFooter}>
-          <Button title="Save recipe" onPress={handleSubmit(onSubmit)} loading={isSubmitting} size="lg" />
-        </View>
+        </KeyboardFormLayout>
 
       {/* Category picker */}
       <Modal visible={showCatPicker} onClose={() => setShowCatPicker(false)} title="Category">
@@ -527,6 +533,7 @@ export default function CreateRecipeScreen() {
         visible={showIngSheet}
         onClose={handleIngSheetClose}
         title={ingSheetStep === 'search' ? 'Add ingredient' : (ingSheetIngredient?.name ?? 'Configure')}
+        scrollable={ingSheetStep !== 'search'}
       >
         {ingSheetStep === 'search' ? (
           <>
@@ -609,7 +616,7 @@ export default function CreateRecipeScreen() {
               <View style={{ flex: 1, marginLeft: SPACING.sm }}>
                 <Text style={styles.sheetLabel}>Unit</Text>
                 <View style={styles.chipWrap}>
-                  {getCompatibleUnits(ingSheetIngredient).map((u) => (
+                  {getCompatibleUnitsForIng(ingSheetIngredient).map((u) => (
                     <TouchableOpacity
                       key={u.value}
                       style={[styles.chip, ingSheetUnit === u.value && styles.chipActive]}

@@ -1,10 +1,11 @@
 import { useRouter } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { SignupLegalNotice } from '../../components/ui/LegalLinks';
+import { KeyboardFormLayout } from '../../components/ui/KeyboardFormLayout';
 import useAuthStore from '../../stores/authStore';
 import { COLORS, FONT_SIZE, SPACING } from '../../constants/theme';
 
@@ -26,8 +27,7 @@ export default function SignupScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardFormLayout contentContainerStyle={styles.scroll}>
           <View style={styles.header}>
             <Text style={styles.title}>Create your account</Text>
             <Text style={styles.subtitle}>Start costing your recipes for free</Text>
@@ -71,8 +71,7 @@ export default function SignupScreen() {
             <Text style={styles.footerText}>Already have an account? </Text>
             <Text style={styles.link} onPress={() => router.replace('/(auth)/login')}>Sign in</Text>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardFormLayout>
     </SafeAreaView>
   );
 }

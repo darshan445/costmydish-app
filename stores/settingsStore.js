@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { DEFAULT_CURRENCY } from '../constants/currencies';
-import { getCurrencyFromDeviceLocale } from '../utils/localeCurrency';
+import { getCurrencyFromDeviceLocale, getUnitSystemFromDeviceLocale } from '../utils/localeCurrency';
 
 const useSettingsStore = create((set, get) => ({
   settings: {
@@ -9,6 +9,7 @@ const useSettingsStore = create((set, get) => ({
     currency_symbol: DEFAULT_CURRENCY.symbol,
     default_food_cost_percent: 30,
     default_batch_size: 1,
+    unit_system: 'metric',
   },
   loading: false,
 
@@ -21,7 +22,15 @@ const useSettingsStore = create((set, get) => ({
         .eq('user_id', userId)
         .single();
       // PGRST116 = no rows found — just keep defaults, don't crash
-      if (!error && data) set({ settings: data });
+      if (!error && data) {
+        set({
+          settings: {
+            ...get().settings,
+            ...data,
+            unit_system: data.unit_system ?? 'metric',
+          },
+        });
+      }
     } catch (error) {
       console.error('Fetch settings error:', error);
     } finally {
@@ -29,10 +38,18 @@ const useSettingsStore = create((set, get) => ({
     }
   },
 
-  applyDeviceCurrency: async (userId) => {
+  applyDeviceLocaleSettings: async (userId) => {
     const { code, symbol } = getCurrencyFromDeviceLocale();
-    return get().updateSettings(userId, { currency: code, currency_symbol: symbol });
+    const unit_system = getUnitSystemFromDeviceLocale();
+    return get().updateSettings(userId, {
+      currency: code,
+      currency_symbol: symbol,
+      unit_system,
+    });
   },
+
+  /** @deprecated use applyDeviceLocaleSettings */
+  applyDeviceCurrency: async (userId) => get().applyDeviceLocaleSettings(userId),
 
   updateSettings: async (userId, updates) => {
     set({ loading: true });

@@ -68,12 +68,16 @@ export default function RecipeDetailScreen() {
         fcp: metrics.foodCostPercent,
         profitPerFormat: metrics.profit,
         marginStatus: metrics.marginStatus,
-        recommendedPrice: metrics.recommendedPrice,
         recommendedBundlePrice: metrics.recommendedBundlePrice,
       };
     });
 
   const defaultFormatMetrics = formatMetrics.find((f) => f.is_default) ?? formatMetrics[0] ?? null;
+  const worstFormatMetrics = formatMetrics.reduce(
+    (worst, fm) => ((fm.fcp ?? 0) > (worst?.fcp ?? -Infinity) ? fm : worst),
+    null,
+  );
+  const foodCostPercents = formatMetrics.map((fm) => fm.fcp).filter((v) => v != null);
 
   const handleDelete = async () => {
     await deleteRecipe(id);
@@ -157,8 +161,8 @@ export default function RecipeDetailScreen() {
                 ? totalCost / (recipe.target_food_cost_percent / 100)
                 : null
             )}
-            actualFoodCostPercent={defaultFormatMetrics?.fcp ?? null}
-            marginStatus={defaultFormatMetrics?.marginStatus ?? null}
+            foodCostPercents={foodCostPercents}
+            marginStatus={worstFormatMetrics?.marginStatus ?? defaultFormatMetrics?.marginStatus ?? null}
             currencySymbol={symbol}
             formatProfits={formatMetrics.length > 0 ? formatMetrics.map((fm) => fm.profitPerFormat) : null}
             allFormatsOnTarget={

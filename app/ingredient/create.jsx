@@ -1,24 +1,21 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import {
-  Alert, KeyboardAvoidingView, Platform,
-  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
+  Alert,
+  StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
+import { KeyboardFormLayout } from '../../components/ui/KeyboardFormLayout';
 import { PaywallModal } from '../../components/paywall/PaywallModal';
 import useIngredientStore from '../../stores/ingredientStore';
 import useSettingsStore from '../../stores/settingsStore';
 import { useSubscription } from '../../hooks/useSubscription';
+import { useUnitSystem } from '../../hooks/useUnitSystem';
+import { formatUnitLabel } from '../../constants/units';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from '../../constants/theme';
-
-const UNIT_GROUPS = [
-  { label: 'WEIGHT', units: [{ value: 'kg', label: 'kg' }, { value: 'g', label: 'g' }, { value: 'lb', label: 'lb' }, { value: 'oz', label: 'oz' }] },
-  { label: 'VOLUME', units: [{ value: 'l', label: 'L' }, { value: 'ml', label: 'ml' }, { value: 'fl_oz', label: 'fl oz' }, { value: 'cup', label: 'cup' }, { value: 'tbsp', label: 'tbsp' }, { value: 'tsp', label: 'tsp' }] },
-  { label: 'COUNT', units: [{ value: 'piece', label: 'piece' }, { value: 'each', label: 'each' }] },
-];
 
 let _draftId = 0;
 function newDraftId() {
@@ -26,13 +23,13 @@ function newDraftId() {
   return `draft-${_draftId}`;
 }
 
-function createEmptyCard() {
+function createEmptyCard(defaultUnit) {
   return {
     draftId: newDraftId(),
     name: '',
     purchase_price: '',
     purchase_quantity: '1',
-    purchase_unit: 'kg',
+    purchase_unit: defaultUnit,
     waste_percent: '0',
     notes: '',
     showOptional: false,
@@ -43,8 +40,7 @@ function computeCostHint(price, qty, unit, symbol) {
   const q = parseFloat(qty) || 1;
   const p = parseFloat(price);
   if (!price?.trim() || Number.isNaN(p) || p <= 0) return null;
-  const unitDisplay = unit === 'fl_oz' ? 'fl oz' : unit;
-  return `Bought ${q} ${unitDisplay} for ${symbol}${p.toFixed(2)}`;
+  return `Bought ${q} ${formatUnitLabel(unit)} for ${symbol}${p.toFixed(2)}`;
 }
 
 function isCardFilled(card) {
@@ -176,7 +172,7 @@ function IngredientDraftCard({
             onPress={onOpenUnitPicker}
             activeOpacity={0.7}
           >
-            <Text style={styles.unitText} numberOfLines={1}>{card.purchase_unit}</Text>
+            <Text style={styles.unitText} numberOfLines={1}>{formatUnitLabel(card.purchase_unit)}</Text>
             <Ionicons name="chevron-down" size={12} color={COLORS.textSecondary} />
           </TouchableOpacity>
         </View>
@@ -241,9 +237,10 @@ export default function CreateIngredientScreen() {
   const { addIngredient, ingredients } = useIngredientStore();
   const getCurrencySymbol = useSettingsStore((s) => s.getCurrencySymbol);
   const { canAddIngredient } = useSubscription();
+  const { unitGroups, defaultPurchaseUnit } = useUnitSystem();
   const symbol = getCurrencySymbol();
 
-  const [cards, setCards] = useState([createEmptyCard()]);
+  const [cards, setCards] = useState(() => [createEmptyCard(defaultPurchaseUnit)]);
   const [cardErrors, setCardErrors] = useState({});
   const [unitPickerDraftId, setUnitPickerDraftId] = useState(null);
   const [showPaywall, setShowPaywall] = useState(false);
@@ -267,7 +264,7 @@ export default function CreateIngredientScreen() {
   };
 
   const addCard = () => {
-    setCards((prev) => [...prev, createEmptyCard()]);
+    setCards((prev) => [...prev, createEmptyCard(defaultPurchaseUnit)]);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
@@ -344,24 +341,37 @@ export default function CreateIngredientScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Add ingredients</Text>
-            <Text style={styles.headerSub}>Fill in each card, tap + for more</Text>
-          </View>
-          <View style={{ width: 24 }} />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Add ingredients</Text>
+          <Text style={styles.headerSub}>Fill in each card, tap + for more</Text>
         </View>
+        <View style={{ width: 24 }} />
+      </View>
 
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+      <KeyboardFormLayout
+        scrollRef={scrollRef}
+        contentContainerStyle={styles.scroll}
+        footer={(
+          <View style={styles.stickyFooter}>
+            <Button
+              title={
+                saving
+                  ? 'Saving…'
+                  : filledCount > 1
+                    ? `Save ${filledCount} ingredients`
+                    : 'Save ingredient'
+              }
+              onPress={saveAll}
+              loading={saving}
+              size="lg"
+            />
+          </View>
+        )}
+      >
           {cards.map((card, index) => (
             <IngredientDraftCard
               key={card.draftId}
@@ -382,31 +392,14 @@ export default function CreateIngredientScreen() {
             </View>
             <Text style={styles.addCardText}>Add another ingredient</Text>
           </TouchableOpacity>
-        </ScrollView>
-
-        <View style={styles.stickyFooter}>
-          <Button
-            title={
-              saving
-                ? 'Saving…'
-                : filledCount > 1
-                  ? `Save ${filledCount} ingredients`
-                  : 'Save ingredient'
-            }
-            onPress={saveAll}
-            loading={saving}
-            size="lg"
-          />
-        </View>
-      </KeyboardAvoidingView>
+      </KeyboardFormLayout>
 
       <Modal
         visible={unitPickerDraftId != null}
         onClose={() => setUnitPickerDraftId(null)}
         title="Select unit"
       >
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {UNIT_GROUPS.map((group) => (
+          {unitGroups.map((group) => (
             <View key={group.label} style={styles.unitGroup}>
               <Text style={styles.unitGroupLabel}>{group.label}</Text>
               <View style={styles.unitChipRow}>
@@ -428,7 +421,6 @@ export default function CreateIngredientScreen() {
               </View>
             </View>
           ))}
-        </ScrollView>
       </Modal>
 
       <PaywallModal visible={showPaywall} onClose={() => setShowPaywall(false)} reason="ingredient" />

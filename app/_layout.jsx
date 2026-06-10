@@ -1,6 +1,6 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { initRevenueCat, identifyRevenueCatUser, resetRevenueCatUser, attachCustomerInfoListener } from '../lib/revenuecat';
@@ -10,11 +10,11 @@ import useRecipeStore from '../stores/recipeStore';
 import useSubscriptionStore from '../stores/subscriptionStore';
 import { COLORS } from '../constants/theme';
 
-function AuthGuard() {
+function AuthBootstrap() {
   const router = useRouter();
   const segments = useSegments();
   const { user, loading, initialized, initialize, setUser, fetchProfile } = useAuthStore();
-  const { fetchSettings, applyDeviceCurrency } = useSettingsStore();
+  const { fetchSettings, applyDeviceLocaleSettings } = useSettingsStore();
   const { fetchSellingUnits } = useRecipeStore();
 
   useEffect(() => {
@@ -38,7 +38,7 @@ function AuthGuard() {
         setUser(session.user);
         await fetchProfile(session.user.id);
         if (event === 'SIGNED_UP') {
-          await applyDeviceCurrency(session.user.id);
+          await applyDeviceLocaleSettings(session.user.id);
         }
         await fetchSettings(session.user.id);
         fetchSellingUnits();
@@ -56,7 +56,7 @@ function AuthGuard() {
   }, []);
 
   useEffect(() => {
-    if (!initialized) return;
+    if (!initialized || loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
@@ -65,37 +65,46 @@ function AuthGuard() {
     } else if (user && inAuthGroup) {
       router.replace('/(tabs)');
     }
-  }, [user, initialized, segments]);
+  }, [user, initialized, loading, segments, router]);
 
-  if (loading) {
+  if (!initialized || loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
+      <View style={styles.bootOverlay} pointerEvents="none">
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
 
-  return (
-    <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="recipe/[id]" />
-      <Stack.Screen name="recipe/create" />
-      <Stack.Screen name="recipe/edit/[id]" />
-      <Stack.Screen name="ingredient/create" />
-      <Stack.Screen name="ingredient/edit/[id]" />
-      <Stack.Screen name="ingredient/price-history/[id]" />
-      <Stack.Screen name="change-password" />
-      <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
-    </Stack>
-  );
+  return null;
 }
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <AuthGuard />
+      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="recipe/[id]" />
+        <Stack.Screen name="recipe/create" />
+        <Stack.Screen name="recipe/edit/[id]" />
+        <Stack.Screen name="ingredient/create" />
+        <Stack.Screen name="ingredient/edit/[id]" />
+        <Stack.Screen name="ingredient/price-history/[id]" />
+        <Stack.Screen name="change-password" />
+        <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
+      </Stack>
+      <AuthBootstrap />
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  bootOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    zIndex: 999,
+  },
+});

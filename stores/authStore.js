@@ -64,7 +64,7 @@ const useAuthStore = create((set, get) => ({
     if (user) {
       set({ user });
       await get().fetchProfile(user.id);
-      await useSettingsStore.getState().applyDeviceCurrency(user.id);
+      await useSettingsStore.getState().applyDeviceLocaleSettings(user.id);
     }
     return { ...data, user, session };
   },
