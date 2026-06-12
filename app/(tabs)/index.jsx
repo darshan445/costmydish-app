@@ -9,7 +9,8 @@ import { useRecipes } from '../../hooks/useRecipes';
 import { useIngredients } from '../../hooks/useIngredients';
 import useAuthStore from '../../stores/authStore';
 import useSettingsStore from '../../stores/settingsStore';
-import { formatPercent } from '../../utils/format';
+import { formatFoodCostPercent } from '../../utils/format';
+import { normalizeFoodCostPercent } from '../../lib/calculations';
 import { NO_INGREDIENTS_MSG } from '../../constants/messages';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
@@ -108,7 +109,8 @@ export default function DashboardScreen() {
                   const displayFcp = summary?.format_count > 1
                     ? summary?.worst_food_cost_percent
                     : summary?.actual_food_cost_percent;
-                  const diff = (displayFcp ?? 0) - (r.target_food_cost_percent ?? 0);
+                  const diff = (normalizeFoodCostPercent(displayFcp) ?? 0)
+                    - (normalizeFoodCostPercent(r.target_food_cost_percent) ?? 0);
                   return (
                     <TouchableOpacity
                       key={r.id}
@@ -128,11 +130,13 @@ export default function DashboardScreen() {
                       <View style={styles.attentionRight}>
                         <View style={styles.dangerBadge}>
                           <Text style={styles.dangerBadgeText}>
-                            {formatPercent(displayFcp)} food cost
+                            {formatFoodCostPercent(displayFcp)} food cost
                           </Text>
                         </View>
                         {diff > 0 && (
-                          <Text style={styles.attentionDiff}>+{diff.toFixed(1)}% over</Text>
+                          <Text style={styles.attentionDiff}>
+                            +{formatFoodCostPercent(diff).replace('%', '')}% over
+                          </Text>
                         )}
                       </View>
                       <Ionicons name="chevron-forward" size={16} color={COLORS.error} style={styles.attentionChevron} />

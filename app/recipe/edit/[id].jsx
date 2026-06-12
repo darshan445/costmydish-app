@@ -16,11 +16,12 @@ import { useRecipeCost } from '../../../hooks/useRecipeCost';
 import { useIngredients } from '../../../hooks/useIngredients';
 import useRecipeStore from '../../../stores/recipeStore';
 import useSettingsStore from '../../../stores/settingsStore';
-import { formatCurrency, formatPercent } from '../../../utils/format';
+import { formatCurrency, formatFoodCostPercent } from '../../../utils/format';
+import { formatSellingFormatName, labelPerSellingUnit } from '../../../utils/sellingFormat';
 import { getIngredientUsageSummary } from '../../../utils/unitDisplay';
 import { calculateSellingFormatMetrics } from '../../../lib/calculations';
 import { useUnitSystem } from '../../../hooks/useUnitSystem';
-import { RECIPE_CATEGORIES } from '../../../constants/units';
+import { formatUnitLabel, RECIPE_CATEGORIES } from '../../../constants/units';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from '../../../constants/theme';
 
 let _editFmtId = 0;
@@ -199,11 +200,7 @@ export default function EditRecipeScreen() {
     ]);
   };
 
-  const autoFormatName = (unitLabel, qty) => {
-    const q = parseFloat(qty) || 1;
-    const label = unitLabel ? unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1) : 'Unit';
-    return q === 1 ? `1 ${label}` : `${label} of ${q}`;
-  };
+  // ── Selling format helpers ─────────────────────────────────────────────────
 
   const openAddFmtSheet = () => {
     setFmtSheetUnit(sellingUnitOptions[0]?.value ?? 'piece');
@@ -255,7 +252,7 @@ export default function EditRecipeScreen() {
 
     const namedFormats = sellingFormats.map((fmt) => {
       const unitLabel = sellingUnitOptions.find((u) => u.value === fmt.selling_unit_name)?.label ?? fmt.selling_unit_name;
-      return { ...fmt, name: autoFormatName(unitLabel, fmt.unit_quantity) };
+      return { ...fmt, name: formatSellingFormatName(unitLabel, fmt.unit_quantity) };
     });
 
     const { error } = await updateRecipe(
@@ -435,12 +432,7 @@ export default function EditRecipeScreen() {
                   <View style={styles.ingRowLeft}>
                     <Text style={styles.ingName} numberOfLines={1}>{ri.ingredient?.name ?? ri.ingredient_id}</Text>
                     {usage ? (
-                      <View style={styles.ingUsageWrap}>
-                        <Text style={styles.ingUsageLine}>{usage.usageLine}</Text>
-                        {usage.convertedLine ? (
-                          <Text style={styles.ingConvertHint}>{usage.convertedLine}</Text>
-                        ) : null}
-                      </View>
+                      <Text style={styles.ingUsageLine}>{usage.usageLine}</Text>
                     ) : null}
                   </View>
                   <View style={styles.ingMeta}>
@@ -479,7 +471,7 @@ export default function EditRecipeScreen() {
           <View style={styles.card}>
             {sellingFormats.map((fmt, idx) => {
               const unitLabel = sellingUnitOptions.find((u) => u.value === fmt.selling_unit_name)?.label ?? fmt.selling_unit_name;
-              const autoName = autoFormatName(unitLabel, fmt.unit_quantity);
+              const autoName = formatSellingFormatName(unitLabel, fmt.unit_quantity);
               const price = parseFloat(fmt.selling_price);
               return (
                 <View key={fmt.id}>
@@ -488,9 +480,12 @@ export default function EditRecipeScreen() {
                     <View style={styles.fmtSummaryLeft}>
                       <Text style={styles.fmtAutoLabel}>{autoName}</Text>
                       {price > 0 ? (
-                        <Text style={styles.fmtPriceDot}>{symbol}{price.toFixed(2)}</Text>
+                        <>
+                          <Text style={styles.fmtPriceLabel}>{labelPerSellingUnit('Selling price per', unitLabel)}</Text>
+                          <Text style={styles.fmtPriceDot}>{symbol}{price.toFixed(2)}</Text>
+                        </>
                       ) : (
-                        <Text style={styles.fmtPricePlaceholder}>Set price</Text>
+                        <Text style={styles.fmtPricePlaceholder}>{labelPerSellingUnit('Set selling price per', unitLabel)}</Text>
                       )}
                     </View>
                     <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} style={{ marginLeft: SPACING.xs }} />
@@ -532,7 +527,7 @@ export default function EditRecipeScreen() {
                   const price = parseFloat(fmt.selling_price);
                   if (!price) return null;
                   const unitLabel = sellingUnitOptions.find((u) => u.value === fmt.selling_unit_name)?.label ?? fmt.selling_unit_name;
-                  const fmtLabel = fmt.name || autoFormatName(unitLabel, fmt.unit_quantity);
+                  const fmtLabel = formatSellingFormatName(unitLabel, fmt.unit_quantity);
                   const metrics = calculateSellingFormatMetrics({
                     totalRecipeCost: totalCost,
                     unitQuantity: fmt.unit_quantity,
@@ -540,31 +535,42 @@ export default function EditRecipeScreen() {
                     targetFoodCostPercent: targetPct,
                   });
                   const fcp = metrics.foodCostPercent ?? 0;
-                  const color = fcp <= targetPct ? COLORS.success
-                    : fcp <= targetPct + 5 ? COLORS.warning
-                    : COLORS.error;
+                  const color = metrics.marginStatus === 'good' ? COLORS.success
+                    : metrics.marginStatus === 'warning' ? COLORS.warning
+                    : metrics.marginStatus === 'danger' ? COLORS.error
+                    : COLORS.text;
 
+                  const qty = (metrics.quantityMade ?? parseFloat(fmt.unit_quantity)) || 1;
                   return (
                     <View key={fmt.id}>
                       <View style={styles.previewDivider} />
                       <Text style={styles.previewFormatName}>{fmtLabel}</Text>
                       <View style={styles.previewRow}>
-                        <Text style={styles.previewLabel}>Cost per unit</Text>
+                        <Text style={styles.previewLabel}>{labelPerSellingUnit('Cost per', unitLabel)}</Text>
                         <Text style={styles.previewValue}>{formatCurrency(metrics.costPerUnit, symbol)}</Text>
                       </View>
                       <View style={styles.previewRow}>
-                        <Text style={styles.previewLabel}>Selling price per unit</Text>
+                        <Text style={styles.previewLabel}>{labelPerSellingUnit('Selling price per', unitLabel)}</Text>
                         <Text style={styles.previewValue}>{formatCurrency(price, symbol)}</Text>
                       </View>
                       <View style={styles.previewRow}>
                         <Text style={styles.previewLabel}>Food cost %</Text>
                         <Text style={[styles.previewValue, { color, fontWeight: '700' }]}>
-                          {formatPercent(fcp)}
+                          {formatFoodCostPercent(fcp)}
                         </Text>
                       </View>
                       <View style={styles.previewRow}>
-                        <Text style={styles.previewLabel}>Profit</Text>
+                        <Text style={styles.previewLabel}>{labelPerSellingUnit('Profit per', unitLabel)}</Text>
                         <Text style={styles.previewValue}>{formatCurrency(metrics.profit, symbol)}</Text>
+                      </View>
+                      <View style={styles.previewRow}>
+                        <Text style={styles.previewLabel}>Total batch profit</Text>
+                        <Text style={styles.previewValue}>
+                          {formatCurrency(metrics.batchProfit, symbol)}
+                          <Text style={styles.previewHint}>
+                            {` (${qty} × ${formatCurrency(metrics.profit, symbol)})`}
+                          </Text>
+                        </Text>
                       </View>
                     </View>
                   );
@@ -630,7 +636,7 @@ export default function EditRecipeScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.listRowText}>{item.name}</Text>
                       <Text style={styles.listRowSub}>
-                        {symbol}{item.purchase_price} / {item.purchase_quantity} {item.purchase_unit}
+                        {symbol}{item.purchase_price} / {item.purchase_quantity} {formatUnitLabel(item.purchase_unit)}
                       </Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
@@ -648,7 +654,7 @@ export default function EditRecipeScreen() {
           <>
             {ingSheetIngredient && (
               <Text style={styles.sheetSub}>
-                Purchased: {symbol}{ingSheetIngredient.purchase_price} / {ingSheetIngredient.purchase_quantity} {ingSheetIngredient.purchase_unit}
+                Purchased: {symbol}{ingSheetIngredient.purchase_price} / {ingSheetIngredient.purchase_quantity} {formatUnitLabel(ingSheetIngredient.purchase_unit)}
               </Text>
             )}
             <View style={[styles.twoCol, { marginTop: SPACING.md }]}>
@@ -743,7 +749,7 @@ export default function EditRecipeScreen() {
           </View>
           <View style={{ width: SPACING.sm }} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.sheetLabel}>Selling price</Text>
+            <Text style={styles.sheetLabel}>{labelPerSellingUnit('Selling price per', sellingUnitOptions.find((u) => u.value === fmtSheetUnit)?.label ?? fmtSheetUnit)}</Text>
             <View style={[styles.inputBox, styles.priceBox]}>
               <Text style={styles.currencyPrefix}>{symbol}</Text>
               <TextInput
@@ -760,7 +766,7 @@ export default function EditRecipeScreen() {
 
         {(() => {
           const unitLabel = sellingUnitOptions.find((u) => u.value === fmtSheetUnit)?.label ?? fmtSheetUnit;
-          const autoName = autoFormatName(unitLabel, fmtSheetQty);
+          const autoName = formatSellingFormatName(unitLabel, fmtSheetQty);
           const qty = parseFloat(fmtSheetQty) || 1;
           const fmtMetrics = totalCost > 0
             ? calculateSellingFormatMetrics({
@@ -775,7 +781,7 @@ export default function EditRecipeScreen() {
               <Text style={styles.formatMetaName} numberOfLines={2}>{autoName}</Text>
               {fmtMetrics?.recommendedPrice != null && (
                 <Text style={styles.formatMetaSuggested}>
-                  Suggested price per unit: {symbol}{fmtMetrics.recommendedPrice.toFixed(2)}
+                  Suggested min price per {unitLabel.toLowerCase()}: {symbol}{fmtMetrics.recommendedPrice.toFixed(2)}
                 </Text>
               )}
             </View>
@@ -877,9 +883,7 @@ const styles = StyleSheet.create({
   },
   ingRowLeft: { flex: 1, marginRight: SPACING.sm },
   ingName: { fontSize: FONT_SIZE.sm, color: COLORS.text, fontWeight: '500' },
-  ingUsageWrap: { marginTop: 2, gap: 1 },
-  ingUsageLine: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary },
-  ingConvertHint: { fontSize: FONT_SIZE.xs, color: COLORS.primary, fontWeight: '500' },
+  ingUsageLine: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginTop: 2 },
   ingMeta: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
   emptyIng: { paddingVertical: SPACING.md, alignItems: 'center' },
   emptyIngText: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary },
@@ -907,6 +911,7 @@ const styles = StyleSheet.create({
   },
   fmtSummaryLeft: { flex: 1, gap: 2 },
   fmtAutoLabel: { fontSize: FONT_SIZE.sm, fontWeight: '600', color: COLORS.text },
+  fmtPriceLabel: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary },
   fmtPriceDot: { fontSize: FONT_SIZE.sm, fontWeight: '700', color: COLORS.primary },
   fmtPricePlaceholder: { fontSize: FONT_SIZE.xs, color: COLORS.textTertiary, fontWeight: '400' },
 
@@ -970,6 +975,7 @@ const styles = StyleSheet.create({
   },
   previewLabel: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, flex: 1 },
   previewValue: { fontSize: FONT_SIZE.sm, color: COLORS.text, fontWeight: '600', textAlign: 'right' },
+  previewHint: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, fontWeight: '400' },
   previewDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: SPACING.sm },
 
   // Sticky cost strip + footer

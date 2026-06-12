@@ -117,8 +117,20 @@ const useRecipeStore = create((set, get) => ({
         }
 
         const formatProfits = allFormatMetrics
-          .map((m) => m.profit)
+          .map((m) => m.batchProfit)
           .filter((p) => p != null);
+
+        const foodCostPercents = allFormatMetrics
+          .map((m) => m.foodCostPercent)
+          .filter((v) => v != null && !Number.isNaN(v));
+
+        const worstMarginStatus = allFormatMetrics.some((m) => m.marginStatus === 'danger')
+          ? 'danger'
+          : allFormatMetrics.some((m) => m.marginStatus === 'warning')
+            ? 'warning'
+            : allFormatMetrics.length > 0 && allFormatMetrics.every((m) => m.marginStatus === 'good')
+              ? 'good'
+              : null;
 
         costSummaries[raw.id] = {
           total_recipe_cost: totalCost,
@@ -127,12 +139,14 @@ const useRecipeStore = create((set, get) => ({
           actual_food_cost_percent: defaultMetrics.foodCostPercent,
           worst_food_cost_percent: worstFcp,
           worst_format_price: worstFormatPrice,
+          food_cost_percents: foodCostPercents,
           has_danger_format: allFormatMetrics.some((m) => m.marginStatus === 'danger'),
-          gross_profit: defaultMetrics.profit,
+          gross_profit: defaultMetrics.batchProfit,
           format_profits: formatProfits,
           all_formats_on_target: allFormatMetrics.length > 0
             && allFormatMetrics.every((m) => m.marginStatus === 'good' && (m.profit ?? 0) >= 0),
           marginStatus: overallMarginStatus,
+          worst_margin_status: worstMarginStatus,
           target_food_cost_percent: raw.target_food_cost_percent,
           format_count: pricedFormats.length,
         };

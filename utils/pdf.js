@@ -1,4 +1,6 @@
 // PDF export — Pro feature, V1 stub (requires expo-print and expo-sharing)
+import { formatFoodCostPercent } from './format';
+
 export function generateRecipePDFHTML({ recipe, ingredientCosts, metrics, currencySymbol = '$' }) {
   const rows = ingredientCosts
     .map(
@@ -37,7 +39,7 @@ export function generateRecipePDFHTML({ recipe, ingredientCosts, metrics, curren
         <div class="summary-row total"><span>Total Recipe Cost</span><span>${currencySymbol}${metrics.totalCost?.toFixed(2)}</span></div>
         ${metrics.costPerUnit != null ? `<div class="summary-row"><span>Cost per Unit</span><span>${currencySymbol}${metrics.costPerUnit?.toFixed(2)}</span></div>` : ''}
         ${metrics.recommendedPrice ? `<div class="summary-row"><span>Recommended Price / Unit</span><span>${currencySymbol}${metrics.recommendedPrice?.toFixed(2)}</span></div>` : ''}
-        ${metrics.foodCostPercent != null ? `<div class="summary-row"><span>Food Cost %</span><span>${metrics.foodCostPercent?.toFixed(1)}%</span></div>` : ''}
+        ${metrics.foodCostPercent != null ? `<div class="summary-row"><span>Food Cost %</span><span>${formatFoodCostPercent(metrics.foodCostPercent)}</span></div>` : ''}
         ${metrics.profit != null ? `<div class="summary-row"><span>Profit</span><span>${currencySymbol}${metrics.profit?.toFixed(2)}</span></div>` : ''}
       </div>
     </body>

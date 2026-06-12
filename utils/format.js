@@ -17,6 +17,19 @@ export function formatPercent(value) {
 }
 
 /**
+ * Formats food cost % for display — value should already be normalized in calculations.js.
+ * Strips trailing zeros only (30% not 30.00%, 30.01% unchanged).
+ */
+export function formatFoodCostPercent(value) {
+  if (value == null || isNaN(value)) return '—';
+  const num = Number(value);
+  const whole = Math.round(num * 100);
+  const normalized = whole / 100;
+  const s = normalized.toFixed(2).replace(/\.?0+$/, '');
+  return `${s}%`;
+}
+
+/**
  * Formats a recipe category enum value for display.
  * 'main_course' → 'Main course', 'sauce_condiment' → 'Sauce condiment'
  */

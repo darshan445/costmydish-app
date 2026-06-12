@@ -17,8 +17,12 @@ import { useSubscription } from '../../hooks/useSubscription';
 import useRecipeStore from '../../stores/recipeStore';
 import useSettingsStore from '../../stores/settingsStore';
 import { COLORS, FONT_SIZE, SPACING, RADIUS } from '../../constants/theme';
-import { formatCategory, formatCurrency, formatPercent } from '../../utils/format';
+import { formatCategory, formatCurrency, formatFoodCostPercent } from '../../utils/format';
+import { formatSellingFormatName, labelPerSellingUnit } from '../../utils/sellingFormat';
+import { formatUnitLabel } from '../../constants/units';
 import { Skeleton } from '../../components/ui/Skeleton';
+
+const MARGIN_LABELS = { good: 'On Target', warning: 'Slightly Over', danger: 'Over Budget' };
 
 export default function RecipeDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -67,8 +71,10 @@ export default function RecipeDetailScreen() {
         costPerUnit: metrics.costPerUnit,
         fcp: metrics.foodCostPercent,
         profitPerFormat: metrics.profit,
+        batchProfit: metrics.batchProfit,
+        quantityMade: metrics.quantityMade,
+        recommendedPrice: metrics.recommendedPrice,
         marginStatus: metrics.marginStatus,
-        recommendedBundlePrice: metrics.recommendedBundlePrice,
       };
     });
 
@@ -153,18 +159,13 @@ export default function RecipeDetailScreen() {
             </View>
           </View>
         ) : (
-          /* Base metrics: total cost, cost per unit, recommended price, batch profit range */
+          /* Base metrics: total cost, batch profit range, food cost % */
           <RecipeCostSummary
             totalCost={totalCost}
-            recommendedPrice={defaultFormatMetrics?.recommendedBundlePrice ?? (
-              totalCost > 0 && recipe.target_food_cost_percent > 0
-                ? totalCost / (recipe.target_food_cost_percent / 100)
-                : null
-            )}
             foodCostPercents={foodCostPercents}
             marginStatus={worstFormatMetrics?.marginStatus ?? defaultFormatMetrics?.marginStatus ?? null}
             currencySymbol={symbol}
-            formatProfits={formatMetrics.length > 0 ? formatMetrics.map((fm) => fm.profitPerFormat) : null}
+            formatProfits={formatMetrics.length > 0 ? formatMetrics.map((fm) => fm.batchProfit) : null}
             allFormatsOnTarget={
               formatMetrics.length > 0 &&
               formatMetrics.every((fm) => fm.marginStatus === 'good' && fm.profitPerFormat >= 0)
@@ -177,18 +178,27 @@ export default function RecipeDetailScreen() {
           <>
             <Text style={styles.sectionTitle}>Selling Analysis</Text>
             {formatMetrics.map((fm) => {
-              const MARGIN_LABELS = { good: 'On Target', warning: 'Slightly Over', danger: 'Over Budget' };
+              const unitLabel = formatUnitLabel(fm.selling_unit_name ?? 'piece');
+              const qty = (fm.quantityMade ?? parseFloat(fm.unit_quantity)) || 1;
               const profitColor = fm.profitPerFormat < 0
                 ? COLORS.error
                 : fm.marginStatus === 'danger'
                   ? COLORS.textSecondary
                   : COLORS.success;
+              const fcpColor = fm.marginStatus === 'good' ? COLORS.success
+                : fm.marginStatus === 'warning' ? COLORS.warning
+                : COLORS.error;
+
               return (
                 <View key={fm.id} style={styles.formatCard}>
-                  {/* Header row: format name + selling price */}
                   <View style={styles.formatCardHeader}>
-                    <Text style={styles.formatCardName}>{fm.name}</Text>
-                    <Text style={styles.formatCardPrice}>{symbol}{fm.price.toFixed(2)}</Text>
+                    <Text style={styles.formatCardName}>
+                      {formatSellingFormatName(unitLabel, fm.unit_quantity)}
+                    </Text>
+                    <View style={styles.formatCardPriceBlock}>
+                      <Text style={styles.formatCardPriceLabel}>{labelPerSellingUnit('Selling price per', unitLabel)}</Text>
+                      <Text style={styles.formatCardPrice}>{formatCurrency(fm.price, symbol)}</Text>
+                    </View>
                   </View>
 
                   <View style={styles.formatMetricsRow}>
@@ -198,22 +208,37 @@ export default function RecipeDetailScreen() {
                     </View>
                     <View style={styles.formatMetricDivider} />
                     <View style={styles.formatMetric}>
-                      <Text style={styles.formatMetricLabel}>Profit</Text>
-                      <Text style={[styles.formatMetricValue, { color: profitColor }]}>
+                      <Text style={styles.formatMetricLabel}>Food cost</Text>
+                      <Text style={[styles.formatMetricValue, { color: fcpColor }]}>
+                        {formatFoodCostPercent(fm.fcp)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.formatDetailBlock}>
+                    <View style={styles.formatDetailRow}>
+                      <Text style={styles.formatDetailLabel}>Profit per {unitLabel}:</Text>
+                      <Text style={[styles.formatDetailValue, { color: profitColor }]}>
                         {formatCurrency(fm.profitPerFormat, symbol)}
                       </Text>
                     </View>
-                    <View style={styles.formatMetricDivider} />
-                    <View style={styles.formatMetric}>
-                      <Text style={styles.formatMetricLabel}>Food cost</Text>
-                      <Text style={[styles.formatMetricValue, {
-                        color: fm.marginStatus === 'good' ? COLORS.success
-                          : fm.marginStatus === 'warning' ? COLORS.warning
-                          : COLORS.error,
-                      }]}>
-                        {formatPercent(fm.fcp)}
+                    <View style={styles.formatDetailRow}>
+                      <Text style={styles.formatDetailLabel}>Total batch profit:</Text>
+                      <Text style={styles.formatDetailValue}>
+                        {formatCurrency(fm.batchProfit, symbol)}
+                        <Text style={styles.formatDetailHint}>
+                          {` (${qty} × ${formatCurrency(fm.profitPerFormat, symbol)})`}
+                        </Text>
                       </Text>
                     </View>
+                    {fm.recommendedPrice != null && (
+                      <View style={styles.formatDetailRow}>
+                        <Text style={styles.formatDetailLabel}>Suggested min price:</Text>
+                        <Text style={styles.formatDetailValuePrimary}>
+                          {formatCurrency(fm.recommendedPrice, symbol)}
+                        </Text>
+                      </View>
+                    )}
                   </View>
 
                   <View style={styles.formatCardFooter}>
@@ -314,7 +339,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.sm,
   },
-  formatCardName: { fontSize: FONT_SIZE.base, fontWeight: '700', color: COLORS.text },
+  formatCardName: { fontSize: FONT_SIZE.base, fontWeight: '700', color: COLORS.text, flex: 1 },
+  formatCardPriceBlock: { alignItems: 'flex-end' },
+  formatCardPriceLabel: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginBottom: 2 },
   formatCardPrice: { fontSize: FONT_SIZE.md, fontWeight: '800', color: COLORS.primary },
   formatMetricsRow: {
     flexDirection: 'row',
@@ -327,6 +354,40 @@ const styles = StyleSheet.create({
   formatMetricLabel: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginBottom: 2 },
   formatMetricValue: { fontSize: FONT_SIZE.sm, fontWeight: '700', color: COLORS.text },
   formatMetricDivider: { width: 1, backgroundColor: COLORS.border, marginVertical: SPACING.xs },
+  formatDetailBlock: {
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+    paddingTop: SPACING.xs,
+  },
+  formatDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+  },
+  formatDetailLabel: {
+    flex: 1,
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+  },
+  formatDetailValue: {
+    flexShrink: 1,
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '700',
+    color: COLORS.text,
+    textAlign: 'right',
+  },
+  formatDetailHint: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '500',
+    color: COLORS.textTertiary,
+  },
+  formatDetailValuePrimary: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '800',
+    color: COLORS.primary,
+    textAlign: 'right',
+  },
   formatCardFooter: {
     flexDirection: 'row',
     alignItems: 'center',

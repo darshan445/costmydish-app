@@ -41,6 +41,7 @@ export default function ForgotPasswordScreen() {
       </View>
 
       <KeyboardFormLayout contentContainerStyle={styles.scroll}>
+          <View style={styles.form}>
           <View style={styles.header}>
             <Text style={styles.title}>Forgot password?</Text>
             <Text style={styles.subtitle}>
@@ -90,6 +91,7 @@ export default function ForgotPasswordScreen() {
           <TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={styles.backToLogin}>
             <Text style={styles.link}>Back to sign in</Text>
           </TouchableOpacity>
+          </View>
       </KeyboardFormLayout>
     </SafeAreaView>
   );
@@ -101,10 +103,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
   },
-  scroll: { flexGrow: 1, paddingHorizontal: SPACING.xl, paddingBottom: SPACING.xl },
-  header: { marginBottom: SPACING.xl },
-  title: { fontSize: FONT_SIZE.xl, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.xs },
-  subtitle: { fontSize: FONT_SIZE.base, color: COLORS.textSecondary, lineHeight: 22 },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.xl,
+    justifyContent: 'center',
+  },
+  form: { width: '100%' },
+  header: { marginBottom: SPACING.xl, alignItems: 'center' },
+  title: { fontSize: FONT_SIZE.xl, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.xs, textAlign: 'center' },
+  subtitle: { fontSize: FONT_SIZE.base, color: COLORS.textSecondary, lineHeight: 22, textAlign: 'center' },
   submitBtn: { marginTop: SPACING.sm },
   errorBanner: {
     fontSize: FONT_SIZE.sm,

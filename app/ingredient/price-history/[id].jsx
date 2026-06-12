@@ -9,6 +9,7 @@ import { supabase } from '../../../lib/supabase';
 import useIngredientStore from '../../../stores/ingredientStore';
 import useSettingsStore from '../../../stores/settingsStore';
 import { useSubscription } from '../../../hooks/useSubscription';
+import { formatUnitLabel } from '../../../constants/units';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../../constants/theme';
 
 function formatDate(dateStr) {
@@ -172,7 +173,7 @@ export default function PriceHistoryScreen() {
         <View style={styles.currentBanner}>
           <Text style={styles.currentLabel}>Current price</Text>
           <Text style={styles.currentPrice}>
-            {symbol}{Number(ingredient.purchase_price).toFixed(2)} / {ingredient.purchase_quantity} {ingredient.purchase_unit}
+            {symbol}{Number(ingredient.purchase_price).toFixed(2)} / {ingredient.purchase_quantity} {formatUnitLabel(ingredient.purchase_unit)}
           </Text>
         </View>
       )}

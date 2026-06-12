@@ -4,10 +4,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../ui/Card';
 import { COLORS, FONT_SIZE, SPACING } from '../../constants/theme';
 import { formatCurrency } from '../../utils/format';
-import { UNIT_LABELS } from '../../constants/units';
+import { formatUnitLabel } from '../../constants/units';
 
 export const IngredientCard = memo(function IngredientCard({ ingredient, currencySymbol, onPress, onDelete }) {
-  const unit = UNIT_LABELS[ingredient.purchase_unit] ?? ingredient.purchase_unit;
+  const unit = formatUnitLabel(ingredient.purchase_unit);
 
   return (
     <Card padding="none" style={styles.card}>

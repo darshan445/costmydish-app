@@ -26,6 +26,7 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardFormLayout contentContainerStyle={styles.scroll}>
+          <View style={styles.form}>
           <View style={styles.header}>
             <Text style={styles.title}>Welcome back</Text>
             <Text style={styles.subtitle}>Sign in to your account</Text>
@@ -48,7 +49,7 @@ export default function LoginScreen() {
             name="password"
             rules={{ required: 'Password is required' }}
             render={({ field: { onChange, value } }) => (
-              <Input label="Password" value={value} onChangeText={onChange} placeholder="Your password" secureTextEntry autoCapitalize="none" error={errors.password?.message} />
+              <Input label="Password" value={value} onChangeText={onChange} placeholder="Your password" secureTextEntry showPasswordToggle autoCapitalize="none" error={errors.password?.message} />
             )}
           />
 
@@ -62,6 +63,7 @@ export default function LoginScreen() {
             <Text style={styles.footerText}>Don't have an account? </Text>
             <Text style={styles.link} onPress={() => router.replace('/(auth)/signup')}>Sign up</Text>
           </View>
+          </View>
       </KeyboardFormLayout>
     </SafeAreaView>
   );
@@ -69,10 +71,16 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  scroll: { flexGrow: 1, paddingHorizontal: SPACING.xl, paddingTop: SPACING.xl },
-  header: { marginBottom: SPACING.xl },
-  title: { fontSize: FONT_SIZE.xl, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.xs },
-  subtitle: { fontSize: FONT_SIZE.base, color: COLORS.textSecondary },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.xl,
+    justifyContent: 'center',
+  },
+  form: { width: '100%' },
+  header: { marginBottom: SPACING.xl, alignItems: 'center' },
+  title: { fontSize: FONT_SIZE.xl, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.xs, textAlign: 'center' },
+  subtitle: { fontSize: FONT_SIZE.base, color: COLORS.textSecondary, textAlign: 'center' },
   submitBtn: { marginTop: SPACING.sm },
   forgotBtn: { alignSelf: 'flex-end', marginBottom: SPACING.sm, minHeight: 44, justifyContent: 'center' },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: SPACING.lg },

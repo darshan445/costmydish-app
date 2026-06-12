@@ -15,7 +15,7 @@ import useIngredientStore from '../../../stores/ingredientStore';
 import useRecipeStore from '../../../stores/recipeStore';
 import useSettingsStore from '../../../stores/settingsStore';
 import { supabase } from '../../../lib/supabase';
-import { formatPercent } from '../../../utils/format';
+import { formatFoodCostPercent } from '../../../utils/format';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from '../../../constants/theme';
 import { useSubscription } from '../../../hooks/useSubscription';
 import { useUnitSystem } from '../../../hooks/useUnitSystem';
@@ -358,7 +358,7 @@ export default function EditIngredientScreen() {
         {impactData && (
           <View>
             <Text style={styles.impactSummary}>
-              {impactData.ingredientName} updated to {symbol}{impactData.newPrice} / {impactData.quantity} {impactData.unit}
+              {impactData.ingredientName} updated to {symbol}{impactData.newPrice} / {impactData.quantity} {formatUnitLabel(impactData.unit)}
             </Text>
 
             <View style={styles.impactDivider} />
@@ -374,7 +374,7 @@ export default function EditIngredientScreen() {
               const color = isOver ? COLORS.error : isWarn ? COLORS.warning : isGood ? COLORS.success : COLORS.textSecondary;
               const icon = isOver ? '⬆' : isGood ? '✓' : '~';
               const label = r.actualPercent != null
-                ? `${formatPercent(r.actualPercent)} ${isOver ? 'over target' : isGood ? 'still on target' : 'near target'}`
+                ? `${formatFoodCostPercent(r.actualPercent)} ${isOver ? 'over target' : isGood ? 'still on target' : 'near target'}`
                 : 'no selling price set';
 
               return (

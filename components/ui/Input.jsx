@@ -1,4 +1,6 @@
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 export function Input({
@@ -11,6 +13,7 @@ export function Input({
   keyboardType = 'default',
   autoCapitalize = 'sentences',
   secureTextEntry = false,
+  showPasswordToggle = false,
   multiline = false,
   numberOfLines,
   editable = true,
@@ -18,6 +21,26 @@ export function Input({
   style,
   inputStyle,
 }) {
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const hidePassword = secureTextEntry && !passwordVisible;
+
+  const passwordToggle = showPasswordToggle && secureTextEntry ? (
+    <TouchableOpacity
+      onPress={() => setPasswordVisible((visible) => !visible)}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      accessibilityLabel={passwordVisible ? 'Hide password' : 'Show password'}
+      style={styles.toggleBtn}
+    >
+      <Ionicons
+        name={passwordVisible ? 'eye-off-outline' : 'eye-outline'}
+        size={20}
+        color={COLORS.textSecondary}
+      />
+    </TouchableOpacity>
+  ) : null;
+
+  const trailing = rightElement ?? passwordToggle;
+
   return (
     <View style={[styles.container, style]}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
@@ -30,12 +53,12 @@ export function Input({
           placeholderTextColor={COLORS.textTertiary}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
-          secureTextEntry={secureTextEntry}
+          secureTextEntry={hidePassword}
           multiline={multiline}
           numberOfLines={numberOfLines}
           editable={editable}
         />
-        {rightElement ? <View style={styles.rightElement}>{rightElement}</View> : null}
+        {trailing ? <View style={styles.rightElement}>{trailing}</View> : null}
       </View>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
       {hint && !error ? <Text style={styles.hintText}>{hint}</Text> : null}
@@ -82,6 +105,12 @@ const styles = StyleSheet.create({
   },
   rightElement: {
     paddingRight: SPACING.sm,
+  },
+  toggleBtn: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorText: {
     fontSize: FONT_SIZE.xs,

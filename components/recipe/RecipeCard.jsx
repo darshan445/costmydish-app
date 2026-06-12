@@ -4,9 +4,29 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
-import { formatCurrency, formatPercent, formatCategory } from '../../utils/format';
+import { formatCurrency, formatFoodCostPercent, formatPercent, formatCategory } from '../../utils/format';
 
-const MARGIN_VARIANT = { good: 'good', warning: 'warning', danger: 'danger' };
+const MARGIN_LABELS = { good: 'On Target', warning: 'Slightly Over', danger: 'Over Budget' };
+
+function getFoodCostDisplay(costSummary) {
+  const fcps = costSummary?.food_cost_percents?.filter((v) => v != null && !Number.isNaN(v)) ?? [];
+  const resolved = fcps.length > 0
+    ? fcps
+    : (costSummary?.actual_food_cost_percent != null ? [costSummary.actual_food_cost_percent] : []);
+
+  if (resolved.length === 0) return null;
+
+  const min = Math.min(...resolved);
+  const max = Math.max(...resolved);
+  const isRange = resolved.length > 1 && Math.abs(max - min) >= 0.01;
+
+  return {
+    text: isRange
+      ? `${formatFoodCostPercent(min)} – ${formatFoodCostPercent(max)}`
+      : formatFoodCostPercent(min),
+    isRange,
+  };
+}
 
 function getProfitDisplay(costSummary, currencySymbol) {
   const profits = costSummary?.format_profits?.length > 0
@@ -20,12 +40,15 @@ function getProfitDisplay(costSummary, currencySymbol) {
   const min = Math.min(...profits);
   const max = Math.max(...profits);
   const isRange = profits.length > 1 && Math.abs(max - min) >= 0.01;
+  const status = costSummary?.worst_margin_status;
 
   let color = COLORS.text;
-  if (max < 0) {
+  if (max < 0 || status === 'danger') {
     color = COLORS.error;
-  } else if (costSummary?.all_formats_on_target) {
+  } else if (costSummary?.all_formats_on_target || status === 'good') {
     color = COLORS.success;
+  } else if (status === 'warning') {
+    color = COLORS.warning;
   }
 
   return {
@@ -34,12 +57,28 @@ function getProfitDisplay(costSummary, currencySymbol) {
       : formatCurrency(min, currencySymbol),
     isRange,
     color,
+    status,
   };
 }
 
+function getStatusBadge(costSummary) {
+  const status = costSummary?.worst_margin_status;
+  if (!status || costSummary?.format_count < 1) return null;
+  return { label: MARGIN_LABELS[status], variant: status };
+}
+
 export const RecipeCard = memo(function RecipeCard({ recipe, costSummary, currencySymbol, onPress, onDelete }) {
-  const marginVariant = MARGIN_VARIANT[costSummary?.marginStatus] ?? 'neutral';
+  const foodCostDisplay = getFoodCostDisplay(costSummary);
   const profitDisplay = getProfitDisplay(costSummary, currencySymbol);
+  const statusBadge = getStatusBadge(costSummary);
+
+  const profitRowStyle = profitDisplay?.status === 'danger'
+    ? styles.profitRowBad
+    : profitDisplay?.status === 'warning'
+      ? styles.profitRowWarn
+      : costSummary?.all_formats_on_target
+        ? styles.profitRowGood
+        : null;
 
   return (
     <Card padding="none" style={styles.card}>
@@ -59,12 +98,22 @@ export const RecipeCard = memo(function RecipeCard({ recipe, costSummary, curren
             <Text style={styles.metricLabel}>Total cost</Text>
             <Text style={styles.metricValue}>{formatCurrency(costSummary?.total_recipe_cost, currencySymbol)}</Text>
           </View>
-          {costSummary?.actual_food_cost_percent != null && (
+          {foodCostDisplay != null && (
             <>
               <View style={styles.metricDivider} />
-              <View style={styles.metricHalf}>
-                <Text style={styles.metricLabel}>Food cost</Text>
-                <Text style={styles.metricValue}>{formatPercent(costSummary.actual_food_cost_percent)}</Text>
+              <View style={[styles.metricHalf, foodCostDisplay.isRange && styles.metricHalfStacked]}>
+                <Text style={styles.metricLabel}>
+                  {foodCostDisplay.isRange ? 'Food cost range' : 'Food cost'}
+                </Text>
+                <Text style={[
+                  styles.metricValue,
+                  foodCostDisplay.isRange && styles.metricValueRange,
+                  costSummary?.worst_margin_status === 'danger' && styles.metricValueDanger,
+                  costSummary?.worst_margin_status === 'warning' && styles.metricValueWarning,
+                  costSummary?.worst_margin_status === 'good' && styles.metricValueGood,
+                ]}>
+                  {foodCostDisplay.text}
+                </Text>
               </View>
             </>
           )}
@@ -74,11 +123,10 @@ export const RecipeCard = memo(function RecipeCard({ recipe, costSummary, curren
           <View style={[
             styles.profitRow,
             profitDisplay.isRange && styles.profitRowRange,
-            profitDisplay.color === COLORS.success && styles.profitRowGood,
-            profitDisplay.color === COLORS.error && styles.profitRowBad,
+            profitRowStyle,
           ]}>
             <Text style={styles.profitLabel}>
-              {profitDisplay.isRange ? 'Profit range' : 'Profit'}
+              {profitDisplay.isRange ? 'Batch profit range' : 'Batch profit'}
             </Text>
             <Text style={[
               styles.profitValue,
@@ -92,17 +140,21 @@ export const RecipeCard = memo(function RecipeCard({ recipe, costSummary, curren
 
         {costSummary?.total_recipe_cost > 0 && (
           <View style={styles.footer}>
-            {costSummary.format_count >= 1 ? (
-              <Badge
-                label={`${costSummary.format_count} selling format${costSummary.format_count === 1 ? '' : 's'}`}
-                variant={marginVariant}
-              />
-            ) : (
-              <Badge
-                label={`${formatPercent(costSummary.target_food_cost_percent ?? recipe.target_food_cost_percent)} target`}
-                variant="neutral"
-              />
-            )}
+            <View style={styles.footerLeft}>
+              {statusBadge ? (
+                <Badge label={statusBadge.label} variant={statusBadge.variant} />
+              ) : (
+                <Badge
+                  label={`${formatPercent(costSummary.target_food_cost_percent ?? recipe.target_food_cost_percent)} target`}
+                  variant="neutral"
+                />
+              )}
+              {costSummary.format_count > 1 && (
+                <Text style={styles.formatCount}>
+                  {costSummary.format_count} formats
+                </Text>
+              )}
+            </View>
             <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
           </View>
         )}
@@ -138,8 +190,13 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   metricHalf: { flex: 1, alignItems: 'center', paddingHorizontal: SPACING.xs },
-  metricLabel: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginBottom: 2 },
-  metricValue: { fontSize: FONT_SIZE.sm, fontWeight: '700', color: COLORS.text },
+  metricHalfStacked: { paddingHorizontal: SPACING.sm },
+  metricLabel: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginBottom: 2, textAlign: 'center' },
+  metricValue: { fontSize: FONT_SIZE.sm, fontWeight: '700', color: COLORS.text, textAlign: 'center' },
+  metricValueRange: { fontSize: FONT_SIZE.sm, lineHeight: 18 },
+  metricValueGood: { color: COLORS.success },
+  metricValueWarning: { color: COLORS.warning },
+  metricValueDanger: { color: COLORS.error },
   metricDivider: { width: 1, height: 28, backgroundColor: COLORS.border },
   profitRow: {
     flexDirection: 'row',
@@ -159,6 +216,7 @@ const styles = StyleSheet.create({
   },
   profitRowGood: { backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0' },
   profitRowBad: { backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' },
+  profitRowWarn: { backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A' },
   profitLabel: { fontSize: FONT_SIZE.xs, fontWeight: '600', color: COLORS.textSecondary },
   profitValue: {
     fontSize: FONT_SIZE.sm,
@@ -178,6 +236,18 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.sm,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+  },
+  footerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    flex: 1,
+    flexWrap: 'wrap',
+  },
+  formatCount: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.textTertiary,
+    fontWeight: '500',
   },
   deleteBtn: {
     paddingHorizontal: SPACING.md,

@@ -20,6 +20,8 @@ export const UNIT_LABELS = {
   piece: 'piece',
   each: 'each',
   dozen: 'dozen',
+  pack: 'pack',
+  other: 'other',
 };
 
 const METRIC_WEIGHT = [
@@ -113,7 +115,8 @@ export function getDefaultPurchaseUnit(unitSystem) {
 }
 
 export function formatUnitLabel(unit) {
-  return UNIT_LABELS[unit] ?? unit;
+  if (!unit) return '';
+  return UNIT_LABELS[unit] ?? String(unit).replace(/_/g, ' ');
 }
 
 export function getUnitFamily(unit) {

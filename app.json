@@ -14,14 +14,14 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ddarsh.costmydish"
+      "bundleIdentifier": "com.costmydish.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#1B4332"
       },
-      "package": "com.ddarsh.costmydish",
+      "package": "com.costmydish.app",
       "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
@@ -33,6 +33,12 @@
       "expo-system-ui",
       "expo-asset",
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "cfe85e25-1857-4621-a720-ada15d7b1aec"
+      }
+    }
   }
 }

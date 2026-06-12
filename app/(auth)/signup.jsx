@@ -28,6 +28,7 @@ export default function SignupScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardFormLayout contentContainerStyle={styles.scroll}>
+          <View style={styles.form}>
           <View style={styles.header}>
             <Text style={styles.title}>Create your account</Text>
             <Text style={styles.subtitle}>Start costing your recipes for free</Text>
@@ -59,7 +60,7 @@ export default function SignupScreen() {
             name="password"
             rules={{ required: 'Password is required', minLength: { value: 6, message: 'At least 6 characters' } }}
             render={({ field: { onChange, value } }) => (
-              <Input label="Password" value={value} onChangeText={onChange} placeholder="Min. 6 characters" secureTextEntry autoCapitalize="none" error={errors.password?.message} />
+              <Input label="Password" value={value} onChangeText={onChange} placeholder="Min. 6 characters" secureTextEntry showPasswordToggle autoCapitalize="none" error={errors.password?.message} />
             )}
           />
 
@@ -71,6 +72,7 @@ export default function SignupScreen() {
             <Text style={styles.footerText}>Already have an account? </Text>
             <Text style={styles.link} onPress={() => router.replace('/(auth)/login')}>Sign in</Text>
           </View>
+          </View>
       </KeyboardFormLayout>
     </SafeAreaView>
   );
@@ -78,10 +80,16 @@ export default function SignupScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  scroll: { flexGrow: 1, paddingHorizontal: SPACING.xl, paddingTop: SPACING.xl },
-  header: { marginBottom: SPACING.xl },
-  title: { fontSize: FONT_SIZE.xl, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.xs },
-  subtitle: { fontSize: FONT_SIZE.base, color: COLORS.textSecondary },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.xl,
+    justifyContent: 'center',
+  },
+  form: { width: '100%' },
+  header: { marginBottom: SPACING.xl, alignItems: 'center' },
+  title: { fontSize: FONT_SIZE.xl, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.xs, textAlign: 'center' },
+  subtitle: { fontSize: FONT_SIZE.base, color: COLORS.textSecondary, textAlign: 'center' },
   submitBtn: { marginTop: SPACING.md },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: SPACING.lg },
   footerText: { fontSize: FONT_SIZE.base, color: COLORS.textSecondary },
