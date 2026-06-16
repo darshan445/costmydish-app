@@ -40,6 +40,7 @@ export default function SettingsScreen() {
   const [foodCostInput, setFoodCostInput] = useState(String(settings.default_food_cost_percent));
   const [foodCostError, setFoodCostError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [managing, setManaging] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -145,10 +146,23 @@ export default function SettingsScreen() {
 
   const handleDeleteAccount = async () => {
     setDeleting(true);
-    const { error } = await deleteAccount();
-    setDeleting(false);
-    if (error) {
-      setShowDeleteConfirm(false);
+    try {
+      const { error } = await deleteAccount();
+      if (error) {
+        setShowDeleteConfirm(false);
+      }
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await signOut();
+      setShowSignOutConfirm(false);
+    } finally {
+      setSigningOut(false);
     }
   };
 
@@ -451,12 +465,13 @@ export default function SettingsScreen() {
       <ConfirmModal
         visible={showSignOutConfirm}
         onClose={() => setShowSignOutConfirm(false)}
-        onConfirm={signOut}
+        onConfirm={handleSignOut}
         title="Sign Out"
         message="You'll need to sign in again to access your recipes and ingredients."
         confirmLabel="Sign Out"
         cancelLabel="Stay Signed In"
         variant="danger"
+        loading={signingOut}
       />
 
       {/* Delete account confirm */}

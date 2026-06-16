@@ -1,8 +1,18 @@
-import { StyleSheet, Text, View } from 'react-native';
-import { Modal } from './Modal';
-import { Button } from './Button';
-import { COLORS, FONT_SIZE, SPACING } from '../../constants/theme';
+import {
+  ActivityIndicator,
+  Modal as RNModal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
+/**
+ * Lightweight confirm dialog — does not use the swipeable Modal sheet.
+ * Backdrop and action buttons are separate siblings so Android never steals the first tap.
+ */
 export function ConfirmModal({
   visible,
   onClose,
@@ -14,38 +24,93 @@ export function ConfirmModal({
   variant = 'danger',
   loading = false,
 }) {
+  if (!visible) return null;
+
+  const isDanger = variant === 'danger';
+
   return (
-    <Modal visible={visible} onClose={onClose}>
-      <View style={styles.iconRow}>
-        <View style={[styles.iconCircle, variant === 'danger' ? styles.iconDanger : styles.iconPrimary]}>
-          <Text style={styles.iconEmoji}>{variant === 'danger' ? '⚠️' : '❓'}</Text>
+    <RNModal
+      visible
+      transparent
+      animationType="fade"
+      onRequestClose={loading ? undefined : onClose}
+      statusBarTranslucent
+    >
+      <View style={styles.root}>
+        <Pressable
+          style={styles.backdropPressable}
+          onPress={loading ? undefined : onClose}
+          disabled={loading}
+          accessibilityRole="button"
+          accessibilityLabel="Close dialog"
+        >
+          <View style={styles.backdrop} />
+        </Pressable>
+
+        <View style={styles.sheet}>
+          <View style={styles.iconRow}>
+            <View style={[styles.iconCircle, isDanger ? styles.iconDanger : styles.iconPrimary]}>
+              <Text style={styles.iconEmoji}>{isDanger ? '⚠️' : '❓'}</Text>
+            </View>
+          </View>
+
+          <Text style={styles.title}>{title}</Text>
+          {message ? <Text style={styles.message}>{message}</Text> : null}
+
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.confirmBtn, isDanger ? styles.confirmDanger : styles.confirmPrimary]}
+              onPress={onConfirm}
+              disabled={loading}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.confirmText}>{confirmLabel}</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={onClose}
+              disabled={loading}
+              activeOpacity={0.6}
+              accessibilityRole="button"
+            >
+              <Text style={styles.cancelText}>{cancelLabel}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-
-      <Text style={styles.title}>{title}</Text>
-      {message ? <Text style={styles.message}>{message}</Text> : null}
-
-      <View style={styles.actions}>
-        <Button
-          title={confirmLabel}
-          onPress={onConfirm}
-          variant={variant === 'danger' ? 'danger' : 'primary'}
-          size="lg"
-          loading={loading}
-          style={styles.confirmBtn}
-        />
-        <Button
-          title={cancelLabel}
-          onPress={onClose}
-          variant="ghost"
-          size="lg"
-        />
-      </View>
-    </Modal>
+    </RNModal>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  backdropPressable: {
+    flex: 1,
+    width: '100%',
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  sheet: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.xxl,
+    zIndex: 2,
+    elevation: 24,
+  },
   iconRow: {
     alignItems: 'center',
     marginBottom: SPACING.md,
@@ -78,6 +143,34 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   confirmBtn: {
-    marginBottom: SPACING.xs,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md - 2,
+  },
+  confirmPrimary: {
+    backgroundColor: COLORS.primary,
+  },
+  confirmDanger: {
+    backgroundColor: COLORS.error,
+  },
+  confirmText: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  cancelBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md - 2,
+  },
+  cancelText: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '600',
+    color: COLORS.primary,
   },
 });

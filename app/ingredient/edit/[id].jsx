@@ -41,6 +41,7 @@ export default function EditIngredientScreen() {
   const { unitGroups, defaultPurchaseUnit } = useUnitSystem();
   const [showUnitPicker, setShowUnitPicker] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [impactData, setImpactData] = useState(null);
   const [showImpactModal, setShowImpactModal] = useState(false);
 
@@ -125,8 +126,14 @@ export default function EditIngredientScreen() {
   };
 
   const handleDelete = async () => {
-    await deleteIngredient(id);
-    router.back();
+    setDeleting(true);
+    try {
+      await deleteIngredient(id);
+      setShowDeleteConfirm(false);
+      router.back();
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (!ingredient) {
@@ -347,6 +354,7 @@ export default function EditIngredientScreen() {
         confirmLabel="Delete Ingredient"
         cancelLabel="Keep Ingredient"
         variant="danger"
+        loading={deleting}
       />
 
       {/* Recipe impact modal */}

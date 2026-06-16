@@ -17,14 +17,24 @@ import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 const DISMISS_OFFSET = 640;
 
-export function Modal({ visible, onClose, title, children, style, scrollable = true }) {
+export function Modal({
+  visible,
+  onClose,
+  title,
+  children,
+  style,
+  scrollable = true,
+  showDragHandle = true,
+}) {
   const translateY = useRef(new Animated.Value(DISMISS_OFFSET)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const scrollOffset = useRef(0);
   const keyboardInset = useKeyboardInset();
   const scrollableRef = useRef(scrollable);
+  const showDragHandleRef = useRef(showDragHandle);
 
   scrollableRef.current = scrollable;
+  showDragHandleRef.current = showDragHandle;
 
   const onCloseRef = useRef(onClose);
   const dismissRef = useRef(null);
@@ -86,9 +96,11 @@ export function Modal({ visible, onClose, title, children, style, scrollable = t
 
   const dragPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => showDragHandleRef.current,
       onMoveShouldSetPanResponder: (_, { dy, dx }) => (
-        Math.abs(dy) > 4 && Math.abs(dy) > Math.abs(dx)
+        showDragHandleRef.current
+        && Math.abs(dy) > 4
+        && Math.abs(dy) > Math.abs(dx)
       ),
       onPanResponderMove: (_, { dy }) => {
         if (dy > 0) {
@@ -103,6 +115,8 @@ export function Modal({ visible, onClose, title, children, style, scrollable = t
 
   const sheetPanResponder = useRef(
     PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
       onMoveShouldSetPanResponder: (_, { dy, dx }) => (
         scrollableRef.current
         && scrollOffset.current <= 0
@@ -158,10 +172,16 @@ export function Modal({ visible, onClose, title, children, style, scrollable = t
   if (!visible) return null;
 
   return (
-    <RNModal visible transparent animationType="none" onRequestClose={() => dismissRef.current?.(true)}>
-      <View style={styles.container} pointerEvents="box-none">
+    <RNModal
+      visible
+      transparent
+      animationType="none"
+      onRequestClose={() => dismissRef.current?.(true)}
+      statusBarTranslucent
+    >
+      <View style={styles.container}>
         <Pressable
-          style={StyleSheet.absoluteFill}
+          style={styles.backdropPressable}
           onPress={() => dismissRef.current?.(true)}
           accessibilityRole="button"
           accessibilityLabel="Close modal"
@@ -180,12 +200,14 @@ export function Modal({ visible, onClose, title, children, style, scrollable = t
           ]}
           {...(scrollable ? sheetPanResponder.panHandlers : null)}
         >
-          <View style={styles.dragHandleWrap} {...dragPanResponder.panHandlers}>
-            <View style={styles.dragHandle} />
-          </View>
+          {showDragHandle ? (
+            <View style={styles.dragHandleWrap} {...dragPanResponder.panHandlers}>
+              <View style={styles.dragHandle} />
+            </View>
+          ) : null}
 
           {title ? (
-            <View style={styles.header} {...dragPanResponder.panHandlers}>
+            <View style={styles.header}>
               <Text style={styles.title}>{title}</Text>
               <TouchableOpacity
                 onPress={() => dismissRef.current?.(true)}
@@ -198,7 +220,7 @@ export function Modal({ visible, onClose, title, children, style, scrollable = t
 
           {scrollable ? (
             <ScrollView
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps="always"
               keyboardDismissMode="on-drag"
               automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
               showsVerticalScrollIndicator={false}
@@ -224,9 +246,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
+  backdropPressable: {
+    flex: 1,
+    width: '100%',
+  },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
   sheet: {
     backgroundColor: COLORS.surface,
@@ -236,6 +262,8 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.xxl,
     maxHeight: '90%',
+    zIndex: 2,
+    elevation: 24,
   },
   dragHandleWrap: {
     alignItems: 'center',

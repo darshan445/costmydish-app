@@ -38,6 +38,7 @@ export default function RecipeDetailScreen() {
   const [ingredientsLoading, setIngredientsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     loadRecipe();
@@ -86,8 +87,14 @@ export default function RecipeDetailScreen() {
   const foodCostPercents = formatMetrics.map((fm) => fm.fcp).filter((v) => v != null);
 
   const handleDelete = async () => {
-    await deleteRecipe(id);
-    router.back();
+    setDeleting(true);
+    try {
+      await deleteRecipe(id);
+      setShowDeleteConfirm(false);
+      router.back();
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (error && !recipe) {
@@ -305,6 +312,7 @@ export default function RecipeDetailScreen() {
         confirmLabel="Delete Recipe"
         cancelLabel="Keep Recipe"
         variant="danger"
+        loading={deleting}
       />
     </SafeAreaView>
   );
