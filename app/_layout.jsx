@@ -1,5 +1,6 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { bootLog } from '../lib/debugBoot';
 import { supabase } from '../lib/supabase';
@@ -9,10 +10,12 @@ import {
   attachCustomerInfoListener,
   syncRevenueCatForUser,
 } from '../lib/revenuecat';
+import { applyCustomerInfoUpdate, refreshSubscriptionState } from '../lib/subscriptionSync';
 import useAuthStore from '../stores/authStore';
 import useSettingsStore from '../stores/settingsStore';
 import useRecipeStore from '../stores/recipeStore';
 import useSubscriptionStore from '../stores/subscriptionStore';
+import { AppAlertHost } from '../components/ui/AppAlertHost';
 
 let authSideEffectsFlight = null;
 let authSideEffectsUserId = null;
@@ -54,8 +57,8 @@ async function runAuthSessionSideEffects(event, session) {
       await fetchSettings(userId);
       fetchSellingUnits();
 
-      const entitled = await syncRevenueCatForUser(userId);
-      useSubscriptionStore.getState().setRcEntitled(entitled);
+      const status = await syncRevenueCatForUser(userId);
+      useSubscriptionStore.getState().applyRcStatus(status);
     } catch (error) {
       bootLog('auth:sideEffects:error', { event, message: error?.message });
     } finally {
@@ -71,13 +74,14 @@ function AuthBootstrap() {
   const router = useRouter();
   const segments = useSegments();
   const { user, loading, initialized, initialize, setUser } = useAuthStore();
+  const appState = useRef(AppState.currentState);
 
   useEffect(() => {
     bootLog('bootstrap:effect:start');
     initRevenueCat();
-    attachCustomerInfoListener((entitled) => {
-      bootLog('revenuecat:entitlementUpdate', { entitled });
-      useSubscriptionStore.getState().setRcEntitled(entitled);
+    attachCustomerInfoListener((customerInfo) => {
+      bootLog('revenuecat:entitlementUpdate');
+      applyCustomerInfoUpdate(customerInfo);
     });
 
     bootLog('auth:onAuthStateChange:subscribe');
@@ -98,6 +102,22 @@ function AuthBootstrap() {
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // Refresh RC + profile when app returns to foreground (e.g. after managing in App Store / Play)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      const wasBackground = appState.current === 'background' || appState.current === 'inactive';
+      appState.current = nextState;
+      if (nextState === 'active' && wasBackground) {
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) {
+          bootLog('subscription:foregroundRefresh', { userId });
+          refreshSubscriptionState(userId, { showAlerts: true });
+        }
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {
@@ -138,6 +158,7 @@ export default function RootLayout() {
         <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
       </Stack>
       <AuthBootstrap />
+      <AppAlertHost />
     </SafeAreaProvider>
   );
 }

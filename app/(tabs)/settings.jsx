@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,7 +14,9 @@ import useRecipeStore from '../../stores/recipeStore';
 import useIngredientStore from '../../stores/ingredientStore';
 import { useSubscription } from '../../hooks/useSubscription';
 import { identifyRevenueCatUser, openManageSubscriptions, restorePurchases } from '../../lib/revenuecat';
-import useSubscriptionStore from '../../stores/subscriptionStore';
+import { refreshSubscriptionState } from '../../lib/subscriptionSync';
+import { showAppAlert } from '../../lib/appAlert';
+import { formatSubscriptionDate } from '../../utils/format';
 import { CURRENCIES } from '../../constants/currencies';
 import { UNIT_SYSTEMS } from '../../constants/units';
 import { PRIVACY_POLICY_URL, TERMS_URL } from '../../constants/legal';
@@ -22,9 +24,9 @@ import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { user, signOut, deleteAccount, fetchProfile } = useAuthStore();
+  const { user, signOut, deleteAccount } = useAuthStore();
   const { settings, updateSettings } = useSettingsStore();
-  const { tier, isFree, isHobbyist } = useSubscription();
+  const { tier, isFree, isHobbyist, isCancelled, expiresAt, billingPeriod } = useSubscription();
   const recipes = useRecipeStore((s) => s.recipes);
   const fetchRecipes = useRecipeStore((s) => s.fetchRecipes);
   const ingredients = useIngredientStore((s) => s.ingredients);
@@ -37,6 +39,7 @@ export default function SettingsScreen() {
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [paywallMode, setPaywallMode] = useState('upgrade');
   const [foodCostInput, setFoodCostInput] = useState(String(settings.default_food_cost_percent));
   const [foodCostError, setFoodCostError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -44,6 +47,7 @@ export default function SettingsScreen() {
   const [deleting, setDeleting] = useState(false);
   const [managing, setManaging] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const pendingManageRefresh = useRef(false);
 
   const recipeCount = recipes.length;
   const ingredientCount = ingredients.length;
@@ -51,6 +55,17 @@ export default function SettingsScreen() {
   useEffect(() => {
     if (user?.id) fetchRecipes();
   }, [user?.id, fetchRecipes]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.id) return undefined;
+      if (pendingManageRefresh.current) {
+        pendingManageRefresh.current = false;
+        refreshSubscriptionState(user.id, { showAlerts: true });
+      }
+      return undefined;
+    }, [user?.id]),
+  );
 
   const applyCurrency = async (currency) => {
     setShowCurrencyModal(false);
@@ -105,6 +120,22 @@ export default function SettingsScreen() {
     setShowFoodCostModal(false);
   };
 
+  const billingLabel = billingPeriod === 'annual'
+    ? 'Billed annually'
+    : billingPeriod === 'monthly'
+      ? 'Billed monthly'
+      : null;
+
+  const openUpgradePaywall = () => {
+    setPaywallMode('upgrade');
+    setShowPaywall(true);
+  };
+
+  const openChangePlanPaywall = () => {
+    setPaywallMode('changePlan');
+    setShowPaywall(true);
+  };
+
   const handleRestorePurchases = async () => {
     if (!user?.id) return;
     setRestoring(true);
@@ -112,11 +143,24 @@ export default function SettingsScreen() {
       await identifyRevenueCatUser(user.id);
       const result = await restorePurchases();
       if (result.success) {
-        useSubscriptionStore.getState().setRcEntitled(true);
-        await fetchProfile(user.id);
-        Alert.alert('Restored', 'Your Hobbyist subscription has been restored.');
+        await refreshSubscriptionState(user.id);
+        showAppAlert({
+          title: 'Restored',
+          message: 'Your Hobbyist subscription has been restored.',
+          variant: 'success',
+        });
+      } else if (result.error) {
+        showAppAlert({
+          title: 'Restore Failed',
+          message: result.error,
+          variant: 'error',
+        });
       } else {
-        Alert.alert('Nothing to Restore', 'No active subscription found for this account.');
+        showAppAlert({
+          title: 'Nothing to Restore',
+          message: 'No active subscription found for this account.',
+          variant: 'info',
+        });
       }
     } finally {
       setRestoring(false);
@@ -129,15 +173,17 @@ export default function SettingsScreen() {
     try {
       await identifyRevenueCatUser(user.id);
       const result = await openManageSubscriptions();
-      if (!result.success) {
-        Alert.alert(
-          'Manage Subscription',
-          result.error ?? 'Could not open subscription settings.',
-          [
-            { text: 'Restore Purchases', onPress: handleRestorePurchases },
-            { text: 'OK', style: 'cancel' },
-          ],
-        );
+      if (result.success) {
+        pendingManageRefresh.current = true;
+      } else {
+        showAppAlert({
+          title: 'Manage Subscription',
+          message: result.error ?? 'Could not open subscription settings.',
+          variant: 'warning',
+          primaryLabel: 'OK',
+          secondaryLabel: 'Restore Purchases',
+          onSecondary: handleRestorePurchases,
+        });
       }
     } finally {
       setManaging(false);
@@ -260,9 +306,23 @@ export default function SettingsScreen() {
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.upgradeBtn} onPress={() => setShowPaywall(true)} activeOpacity={0.85}>
+              <TouchableOpacity style={styles.upgradeBtn} onPress={openUpgradePaywall} activeOpacity={0.85}>
                 <Ionicons name="rocket-outline" size={18} color={COLORS.surface} style={{ marginRight: SPACING.sm }} />
                 <Text style={styles.upgradeBtnText}>Upgrade to Hobbyist — $4.99/mo</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.restoreRowFree}
+                onPress={handleRestorePurchases}
+                disabled={restoring}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.manageText}>Restore purchases</Text>
+                {restoring ? (
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                ) : (
+                  <Ionicons name="refresh-outline" size={16} color={COLORS.textTertiary} />
+                )}
               </TouchableOpacity>
             </View>
           ) : (
@@ -271,12 +331,23 @@ export default function SettingsScreen() {
               <View style={styles.subCardHeader}>
                 <View>
                   <Text style={styles.subPlanName}>Hobbyist Plan</Text>
-                  <Text style={styles.subPlanNote}>All features unlocked</Text>
+                  <Text style={styles.subPlanNote}>
+                    {billingLabel ?? 'All features unlocked'}
+                  </Text>
                 </View>
                 <View style={[styles.tierBadge, { backgroundColor: tierBg }]}>
                   <Text style={[styles.tierText, { color: tierColor }]}>Active</Text>
                 </View>
               </View>
+
+              {isCancelled && expiresAt ? (
+                <View style={styles.cancelBanner}>
+                  <Ionicons name="information-circle-outline" size={18} color={COLORS.warning} />
+                  <Text style={styles.cancelBannerText}>
+                    Cancelled — access until {formatSubscriptionDate(expiresAt)}
+                  </Text>
+                </View>
+              ) : null}
 
               {[
                 'Unlimited recipes & ingredients',
@@ -288,6 +359,16 @@ export default function SettingsScreen() {
                   <Text style={styles.featureText}>{f}</Text>
                 </View>
               ))}
+
+              <TouchableOpacity
+                style={styles.manageRow}
+                onPress={openChangePlanPaywall}
+                disabled={managing || restoring}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.manageText}>Change plan (monthly / annual)</Text>
+                <Ionicons name="swap-horizontal-outline" size={16} color={COLORS.textTertiary} />
+              </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.manageRow}
@@ -474,7 +555,12 @@ export default function SettingsScreen() {
         />
       </Modal>
 
-      <PaywallModal visible={showPaywall} onClose={() => setShowPaywall(false)} reason="upgrade" />
+      <PaywallModal
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        reason={paywallMode === 'changePlan' ? 'changePlan' : 'upgrade'}
+        mode={paywallMode}
+      />
 
       {/* Sign out confirm */}
       <ConfirmModal
@@ -591,6 +677,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: SPACING.xs,
     minHeight: 44,
+  },
+  restoreRowFree: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.md,
+    minHeight: 44,
+  },
+  cancelBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    backgroundColor: '#FEF3C7',
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  cancelBannerText: {
+    flex: 1,
+    fontSize: FONT_SIZE.sm,
+    color: '#92400E',
+    lineHeight: 18,
   },
   manageText: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary },
 });

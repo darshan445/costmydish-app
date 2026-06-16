@@ -73,3 +73,17 @@ export function capitalize(str) {
   if (!str) return '';
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
+
+/**
+ * Formats a subscription expiry date for display (e.g. "Jun 9, 2026").
+ */
+export function formatSubscriptionDate(dateInput) {
+  if (!dateInput) return '';
+  const date = new Date(dateInput);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
