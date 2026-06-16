@@ -58,12 +58,14 @@ export default function EditRecipeScreen() {
   const [ingSheetQty, setIngSheetQty] = useState('1');
   const [ingSheetUnit, setIngSheetUnit] = useState('');
   const [editingIngId, setEditingIngId] = useState(null);
+  const [ingQtyError, setIngQtyError] = useState('');
 
   // Selling format bottom sheet
   const [showFmtSheet, setShowFmtSheet] = useState(false);
   const [fmtSheetUnit, setFmtSheetUnit] = useState(sellingUnitOptions[0]?.value ?? 'piece');
   const [fmtSheetQty, setFmtSheetQty] = useState('1');
   const [fmtSheetPrice, setFmtSheetPrice] = useState('');
+  const [fmtPriceError, setFmtPriceError] = useState('');
   const [editingFmtId, setEditingFmtId] = useState(null);
 
   const { control, handleSubmit, watch, reset, formState: { errors, isSubmitting } } = useForm({
@@ -147,6 +149,7 @@ export default function EditRecipeScreen() {
       ?? ri.unit;
     setIngSheetUnit(unit);
     setEditingIngId(ri.ingredient_id);
+    setIngQtyError('');
     setShowIngSheet(true);
   };
 
@@ -158,20 +161,27 @@ export default function EditRecipeScreen() {
       ?? ing.purchase_unit;
     setIngSheetUnit(defaultUnit);
     setIngSheetQty('');
+    setIngQtyError('');
     setIngSheetStep('config');
   };
 
   const handleIngSheetConfirm = () => {
     if (!ingSheetIngredient) return;
-    const qty = ingSheetQty || '1';
+    const qty = parseFloat(ingSheetQty);
+    if (!ingSheetQty.trim() || Number.isNaN(qty) || qty <= 0) {
+      setIngQtyError('Enter a quantity');
+      return;
+    }
+    setIngQtyError('');
+    const qtyStr = String(qty);
     if (editingIngId) {
       setRecipeIngredients((prev) =>
-        prev.map((r) => r.ingredient_id === editingIngId ? { ...r, quantity: qty, unit: ingSheetUnit } : r)
+        prev.map((r) => r.ingredient_id === editingIngId ? { ...r, quantity: qtyStr, unit: ingSheetUnit } : r)
       );
     } else {
       setRecipeIngredients((prev) => [
         ...prev,
-        { ingredient_id: ingSheetIngredient.id, ingredient: ingSheetIngredient, quantity: qty, unit: ingSheetUnit },
+        { ingredient_id: ingSheetIngredient.id, ingredient: ingSheetIngredient, quantity: qtyStr, unit: ingSheetUnit },
       ]);
     }
     setShowIngSheet(false);
@@ -183,6 +193,7 @@ export default function EditRecipeScreen() {
     setIngSheetStep('search');
     setIngSheetIngredient(null);
     setEditingIngId(null);
+    setIngQtyError('');
   };
 
   const removeIngredient = (ingredientId) => {
@@ -206,6 +217,7 @@ export default function EditRecipeScreen() {
     setFmtSheetUnit(sellingUnitOptions[0]?.value ?? 'piece');
     setFmtSheetQty('1');
     setFmtSheetPrice('');
+    setFmtPriceError('');
     setEditingFmtId(null);
     setShowFmtSheet(true);
   };
@@ -214,11 +226,18 @@ export default function EditRecipeScreen() {
     setFmtSheetUnit(fmt.selling_unit_name);
     setFmtSheetQty(fmt.unit_quantity);
     setFmtSheetPrice(fmt.selling_price);
+    setFmtPriceError('');
     setEditingFmtId(fmt.id);
     setShowFmtSheet(true);
   };
 
   const handleFmtSheetConfirm = () => {
+    const price = parseFloat(fmtSheetPrice);
+    if (!fmtSheetPrice.trim() || Number.isNaN(price) || price <= 0) {
+      setFmtPriceError('Enter a selling price per unit');
+      return;
+    }
+    setFmtPriceError('');
     if (editingFmtId) {
       setSellingFormats((prev) => prev.map((f) =>
         f.id === editingFmtId
@@ -582,7 +601,7 @@ export default function EditRecipeScreen() {
         </KeyboardFormLayout>
 
       {/* Category picker */}
-      <Modal visible={showCatPicker} onClose={() => setShowCatPicker(false)} title="Category">
+      <Modal visible={showCatPicker} onClose={() => setShowCatPicker(false)} title="Category" scrollable={false}>
         <Controller control={control} name="category"
           render={({ field: { onChange, value } }) => (
             <>
@@ -605,7 +624,21 @@ export default function EditRecipeScreen() {
         visible={showIngSheet}
         onClose={handleIngSheetClose}
         title={ingSheetStep === 'search' ? 'Add ingredient' : (ingSheetIngredient?.name ?? 'Configure')}
-        scrollable={ingSheetStep !== 'search'}
+        scrollable={false}
+        footer={ingSheetStep === 'config' ? (
+          <>
+            <Button
+              title={editingIngId ? 'Update' : 'Add to recipe'}
+              onPress={handleIngSheetConfirm}
+              size="lg"
+            />
+            {editingIngId === null && (
+              <TouchableOpacity onPress={() => setIngSheetStep('search')} style={styles.sheetBackBtn}>
+                <Text style={styles.sheetBackText}>← Back to search</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        ) : null}
       >
         {ingSheetStep === 'search' ? (
           <>
@@ -630,7 +663,7 @@ export default function EditRecipeScreen() {
                 data={filteredIngredients}
                 keyExtractor={(i) => i.id}
                 style={{ maxHeight: 300 }}
-                keyboardShouldPersistTaps="handled"
+                keyboardShouldPersistTaps="always"
                 renderItem={({ item }) => (
                   <TouchableOpacity style={styles.listRow} onPress={() => handleIngSelect(item)}>
                     <View style={{ flex: 1 }}>
@@ -660,17 +693,18 @@ export default function EditRecipeScreen() {
             <View style={[styles.twoCol, { marginTop: SPACING.md }]}>
               <View style={{ width: 88 }}>
                 <Text style={styles.sheetLabel}>Quantity</Text>
-                <View style={styles.inputBox}>
+                <View style={[styles.inputBox, ingQtyError ? styles.inputBoxError : null]}>
                   <TextInput
                     style={[styles.textInput, { textAlign: 'center' }]}
                     value={ingSheetQty}
-                    onChangeText={setIngSheetQty}
+                    onChangeText={(v) => { setIngSheetQty(v); setIngQtyError(''); }}
                     keyboardType="numeric"
                     placeholder="1"
                     placeholderTextColor={COLORS.textTertiary}
                     autoFocus={editingIngId === null}
                   />
                 </View>
+                {ingQtyError ? <Text style={styles.errorText}>{ingQtyError}</Text> : null}
                 {(() => {
                   const usage = getIngredientUsageSummary(ingSheetIngredient, ingSheetQty, ingSheetUnit, symbol);
                   if (!usage) return null;
@@ -699,17 +733,6 @@ export default function EditRecipeScreen() {
                 </View>
               </View>
             </View>
-            <Button
-              title={editingIngId ? 'Update' : 'Add to recipe'}
-              onPress={handleIngSheetConfirm}
-              size="lg"
-              style={{ marginTop: SPACING.md }}
-            />
-            {editingIngId === null && (
-              <TouchableOpacity onPress={() => setIngSheetStep('search')} style={styles.sheetBackBtn}>
-                <Text style={styles.sheetBackText}>← Back to search</Text>
-              </TouchableOpacity>
-            )}
           </>
         )}
       </Modal>
@@ -719,6 +742,14 @@ export default function EditRecipeScreen() {
         visible={showFmtSheet}
         onClose={() => setShowFmtSheet(false)}
         title={editingFmtId ? 'Edit format' : 'Add selling format'}
+        scrollable={false}
+        footer={(
+          <Button
+            title={editingFmtId ? 'Update format' : 'Add format'}
+            onPress={handleFmtSheetConfirm}
+            size="lg"
+          />
+        )}
       >
         <Text style={styles.sheetLabel}>Selling unit</Text>
         <View style={[styles.chipWrap, { marginBottom: SPACING.md }]}>
@@ -750,17 +781,18 @@ export default function EditRecipeScreen() {
           <View style={{ width: SPACING.sm }} />
           <View style={{ flex: 1 }}>
             <Text style={styles.sheetLabel}>{labelPerSellingUnit('Selling price per', sellingUnitOptions.find((u) => u.value === fmtSheetUnit)?.label ?? fmtSheetUnit)}</Text>
-            <View style={[styles.inputBox, styles.priceBox]}>
+            <View style={[styles.inputBox, styles.priceBox, fmtPriceError ? styles.inputBoxError : null]}>
               <Text style={styles.currencyPrefix}>{symbol}</Text>
               <TextInput
                 style={[styles.textInput, { flex: 1 }]}
                 value={fmtSheetPrice}
-                onChangeText={setFmtSheetPrice}
+                onChangeText={(v) => { setFmtSheetPrice(v); setFmtPriceError(''); }}
                 keyboardType="numeric"
                 placeholder="0.00"
                 placeholderTextColor={COLORS.textTertiary}
               />
             </View>
+            {fmtPriceError ? <Text style={styles.errorText}>{fmtPriceError}</Text> : null}
           </View>
         </View>
 
@@ -788,12 +820,6 @@ export default function EditRecipeScreen() {
           );
         })()}
 
-        <Button
-          title={editingFmtId ? 'Update format' : 'Add format'}
-          onPress={handleFmtSheetConfirm}
-          size="lg"
-          style={{ marginTop: SPACING.md }}
-        />
       </Modal>
     </SafeAreaView>
   );

@@ -512,7 +512,7 @@ export default function CreateRecipeScreen() {
         </KeyboardFormLayout>
 
       {/* Category picker */}
-      <Modal visible={showCatPicker} onClose={() => setShowCatPicker(false)} title="Category">
+      <Modal visible={showCatPicker} onClose={() => setShowCatPicker(false)} title="Category" scrollable={false}>
         <Controller control={control} name="category"
           render={({ field: { onChange, value } }) => (
             <>
@@ -535,7 +535,21 @@ export default function CreateRecipeScreen() {
         visible={showIngSheet}
         onClose={handleIngSheetClose}
         title={ingSheetStep === 'search' ? 'Add ingredient' : (ingSheetIngredient?.name ?? 'Configure')}
-        scrollable={ingSheetStep !== 'search'}
+        scrollable={false}
+        footer={ingSheetStep === 'config' ? (
+          <>
+            <Button
+              title={editingIngId ? 'Update' : 'Add to recipe'}
+              onPress={handleIngSheetConfirm}
+              size="lg"
+            />
+            {editingIngId === null && (
+              <TouchableOpacity onPress={() => setIngSheetStep('search')} style={styles.sheetBackBtn}>
+                <Text style={styles.sheetBackText}>← Back to search</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        ) : null}
       >
         {ingSheetStep === 'search' ? (
           <>
@@ -560,7 +574,7 @@ export default function CreateRecipeScreen() {
                 data={filteredIngredients}
                 keyExtractor={(i) => i.id}
                 style={{ maxHeight: 300 }}
-                keyboardShouldPersistTaps="handled"
+                keyboardShouldPersistTaps="always"
                 renderItem={({ item }) => (
                   <TouchableOpacity style={styles.listRow} onPress={() => handleIngSelect(item)}>
                     <View style={{ flex: 1 }}>
@@ -630,17 +644,6 @@ export default function CreateRecipeScreen() {
                 </View>
               </View>
             </View>
-            <Button
-              title={editingIngId ? 'Update' : 'Add to recipe'}
-              onPress={handleIngSheetConfirm}
-              size="lg"
-              style={{ marginTop: SPACING.md }}
-            />
-            {editingIngId === null && (
-              <TouchableOpacity onPress={() => setIngSheetStep('search')} style={styles.sheetBackBtn}>
-                <Text style={styles.sheetBackText}>← Back to search</Text>
-              </TouchableOpacity>
-            )}
           </>
         )}
       </Modal>
@@ -650,6 +653,14 @@ export default function CreateRecipeScreen() {
         visible={showFmtSheet}
         onClose={() => setShowFmtSheet(false)}
         title={editingFmtId ? 'Edit format' : 'Add selling format'}
+        scrollable={false}
+        footer={(
+          <Button
+            title={editingFmtId ? 'Update format' : 'Add format'}
+            onPress={handleFmtSheetConfirm}
+            size="lg"
+          />
+        )}
       >
         <Text style={styles.sheetLabel}>Selling unit</Text>
         <View style={[styles.chipWrap, { marginBottom: SPACING.md }]}>
@@ -720,12 +731,6 @@ export default function CreateRecipeScreen() {
           );
         })()}
 
-        <Button
-          title={editingFmtId ? 'Update format' : 'Add format'}
-          onPress={handleFmtSheetConfirm}
-          size="lg"
-          style={{ marginTop: SPACING.md }}
-        />
       </Modal>
     </SafeAreaView>
   );

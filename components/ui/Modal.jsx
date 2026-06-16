@@ -3,7 +3,6 @@ import {
   Animated,
   Keyboard,
   Modal as RNModal,
-  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -15,158 +14,42 @@ import {
 import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
-const DISMISS_OFFSET = 640;
-
+/**
+ * Bottom sheet modal — backdrop and sheet are non-overlapping siblings (reliable Android taps).
+ * No PanResponder or sheet translate animation (those caused double-tap issues).
+ */
 export function Modal({
   visible,
   onClose,
   title,
   children,
+  footer,
   style,
   scrollable = true,
-  showDragHandle = true,
 }) {
-  const translateY = useRef(new Animated.Value(DISMISS_OFFSET)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const scrollOffset = useRef(0);
   const keyboardInset = useKeyboardInset();
-  const scrollableRef = useRef(scrollable);
-  const showDragHandleRef = useRef(showDragHandle);
-
-  scrollableRef.current = scrollable;
-  showDragHandleRef.current = showDragHandle;
-
   const onCloseRef = useRef(onClose);
-  const dismissRef = useRef(null);
 
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
-  const dismiss = (animated = true) => {
-    Keyboard.dismiss();
-    if (!animated) {
-      translateY.setValue(DISMISS_OFFSET);
-      backdropOpacity.setValue(0);
-      onCloseRef.current();
-      return;
-    }
-
-    Animated.parallel([
-      Animated.timing(translateY, {
-        toValue: DISMISS_OFFSET,
-        duration: 220,
-        useNativeDriver: true,
-      }),
-      Animated.timing(backdropOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      if (finished) {
-        onCloseRef.current();
-      }
-    });
-  };
-
-  dismissRef.current = dismiss;
-
-  const snapBack = () => {
-    Animated.parallel([
-      Animated.spring(translateY, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 120,
-        friction: 14,
-      }),
-      Animated.timing(backdropOpacity, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-
-  const handlePanRelease = (dy, vy) => {
-    if (dy > 80 || vy > 0.75) {
-      dismissRef.current?.(true);
-    } else {
-      snapBack();
-    }
-  };
-
-  const dragPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => showDragHandleRef.current,
-      onMoveShouldSetPanResponder: (_, { dy, dx }) => (
-        showDragHandleRef.current
-        && Math.abs(dy) > 4
-        && Math.abs(dy) > Math.abs(dx)
-      ),
-      onPanResponderMove: (_, { dy }) => {
-        if (dy > 0) {
-          translateY.setValue(dy);
-          backdropOpacity.setValue(Math.max(0, 1 - dy / 280));
-        }
-      },
-      onPanResponderRelease: (_, { dy, vy }) => handlePanRelease(dy, vy),
-      onPanResponderTerminate: (_, { dy, vy }) => handlePanRelease(dy, vy),
-    }),
-  ).current;
-
-  const sheetPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, { dy, dx }) => (
-        scrollableRef.current
-        && scrollOffset.current <= 0
-        && dy > 6
-        && Math.abs(dy) > Math.abs(dx)
-      ),
-      onMoveShouldSetPanResponderCapture: (_, { dy, dx }) => (
-        scrollableRef.current
-        && scrollOffset.current <= 0
-        && dy > 12
-        && Math.abs(dy) > Math.abs(dx) * 1.5
-      ),
-      onPanResponderMove: (_, { dy }) => {
-        if (dy > 0) {
-          translateY.setValue(dy);
-          backdropOpacity.setValue(Math.max(0, 1 - dy / 280));
-        }
-      },
-      onPanResponderRelease: (_, { dy, vy }) => handlePanRelease(dy, vy),
-      onPanResponderTerminate: (_, { dy, vy }) => handlePanRelease(dy, vy),
-    }),
-  ).current;
-
   useEffect(() => {
     if (visible) {
-      scrollOffset.current = 0;
-      translateY.setValue(DISMISS_OFFSET);
       backdropOpacity.setValue(0);
-      Animated.parallel([
-        Animated.spring(translateY, {
-          toValue: 0,
-          useNativeDriver: true,
-          tension: 68,
-          friction: 12,
-        }),
-        Animated.timing(backdropOpacity, {
-          toValue: 1,
-          duration: 220,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      Animated.timing(backdropOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
     } else {
-      translateY.setValue(DISMISS_OFFSET);
       backdropOpacity.setValue(0);
       Keyboard.dismiss();
     }
-  }, [visible, translateY, backdropOpacity]);
+  }, [visible, backdropOpacity]);
 
-  const handleScroll = (event) => {
-    scrollOffset.current = event.nativeEvent.contentOffset.y;
+  const handleClose = () => {
+    Keyboard.dismiss();
+    onCloseRef.current();
   };
 
   if (!visible) return null;
@@ -175,14 +58,14 @@ export function Modal({
     <RNModal
       visible
       transparent
-      animationType="none"
-      onRequestClose={() => dismissRef.current?.(true)}
+      animationType="fade"
+      onRequestClose={handleClose}
       statusBarTranslucent
     >
       <View style={styles.container}>
         <Pressable
           style={styles.backdropPressable}
-          onPress={() => dismissRef.current?.(true)}
+          onPress={handleClose}
           accessibilityRole="button"
           accessibilityLabel="Close modal"
         >
@@ -192,26 +75,16 @@ export function Modal({
           />
         </Pressable>
 
-        <Animated.View
-          style={[
-            styles.sheet,
-            { transform: [{ translateY }], marginBottom: keyboardInset },
-            style,
-          ]}
-          {...(scrollable ? sheetPanResponder.panHandlers : null)}
-        >
-          {showDragHandle ? (
-            <View style={styles.dragHandleWrap} {...dragPanResponder.panHandlers}>
-              <View style={styles.dragHandle} />
-            </View>
-          ) : null}
-
+        <View style={[styles.sheet, { marginBottom: keyboardInset }, style]}>
           {title ? (
             <View style={styles.header}>
               <Text style={styles.title}>{title}</Text>
               <TouchableOpacity
-                onPress={() => dismissRef.current?.(true)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                onPress={handleClose}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                activeOpacity={0.6}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
               >
                 <Text style={styles.closeBtn}>✕</Text>
               </TouchableOpacity>
@@ -226,16 +99,15 @@ export function Modal({
               showsVerticalScrollIndicator={false}
               bounces
               nestedScrollEnabled
-              scrollEventThrottle={16}
-              onScroll={handleScroll}
-              contentContainerStyle={keyboardInset > 0 ? { paddingBottom: SPACING.sm } : undefined}
             >
               {children}
             </ScrollView>
           ) : (
-            <View>{children}</View>
+            <View style={styles.body}>{children}</View>
           )}
-        </Animated.View>
+
+          {footer ? <View style={styles.footer}>{footer}</View> : null}
+        </View>
       </View>
     </RNModal>
   );
@@ -259,24 +131,11 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: RADIUS.xl,
     borderTopRightRadius: RADIUS.xl,
     paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.sm,
+    paddingTop: SPACING.md,
     paddingBottom: SPACING.xxl,
     maxHeight: '90%',
     zIndex: 2,
     elevation: 24,
-  },
-  dragHandleWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44,
-    paddingVertical: SPACING.sm,
-    marginBottom: SPACING.xs,
-  },
-  dragHandle: {
-    width: 40,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: COLORS.border,
   },
   header: {
     flexDirection: 'row',
@@ -294,5 +153,13 @@ const styles = StyleSheet.create({
   closeBtn: {
     fontSize: FONT_SIZE.md,
     color: COLORS.textSecondary,
+    padding: SPACING.xs,
+  },
+  body: {
+    flexGrow: 0,
+  },
+  footer: {
+    paddingTop: SPACING.md,
+    gap: SPACING.xs,
   },
 });

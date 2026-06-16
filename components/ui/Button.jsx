@@ -1,28 +1,28 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 export function Button({ title, onPress, variant = 'primary', size = 'md', loading = false, disabled = false, style }) {
   const isDisabled = disabled || loading;
 
   return (
-    <Pressable
-      style={({ pressed }) => [
+    <TouchableOpacity
+      style={[
         styles.base,
         styles[variant],
         styles[`size_${size}`],
         isDisabled && styles.disabled,
-        pressed && !isDisabled && styles.pressed,
         style,
       ]}
       onPress={onPress}
       disabled={isDisabled}
+      activeOpacity={0.75}
     >
       {loading ? (
         <ActivityIndicator color={variant === 'primary' || variant === 'danger' ? '#fff' : COLORS.primary} size="small" />
       ) : (
         <Text style={[styles.text, styles[`text_${variant}`], styles[`textSize_${size}`]]}>{title}</Text>
       )}
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -49,9 +49,6 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.5,
-  },
-  pressed: {
-    opacity: 0.75,
   },
   size_sm: {
     paddingHorizontal: SPACING.md,

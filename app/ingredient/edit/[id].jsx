@@ -323,7 +323,12 @@ export default function EditIngredientScreen() {
       </KeyboardFormLayout>
 
       {/* Unit Picker Modal */}
-      <Modal visible={showUnitPicker} onClose={() => setShowUnitPicker(false)} title="Select unit">
+      <Modal
+        visible={showUnitPicker}
+        onClose={() => setShowUnitPicker(false)}
+        title="Select unit"
+        scrollable={false}
+      >
           {unitGroups.map((group) => (
             <View key={group.label} style={styles.unitGroup}>
               <Text style={styles.unitGroupLabel}>{group.label}</Text>

@@ -1,6 +1,5 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { bootLog } from '../lib/debugBoot';
 import { supabase } from '../lib/supabase';
@@ -14,7 +13,6 @@ import useAuthStore from '../stores/authStore';
 import useSettingsStore from '../stores/settingsStore';
 import useRecipeStore from '../stores/recipeStore';
 import useSubscriptionStore from '../stores/subscriptionStore';
-import { COLORS } from '../constants/theme';
 
 let authSideEffectsFlight = null;
 let authSideEffectsUserId = null;
@@ -120,14 +118,6 @@ function AuthBootstrap() {
     }
   }, [user, initialized, loading, segments, router]);
 
-  if (!initialized || loading) {
-    return (
-      <View style={styles.bootOverlay} pointerEvents="none">
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
-    );
-  }
-
   return null;
 }
 
@@ -151,13 +141,3 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  bootOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    zIndex: 999,
-  },
-});

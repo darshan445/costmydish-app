@@ -408,7 +408,12 @@ export default function SettingsScreen() {
       </ScrollView>
 
       {/* Currency picker */}
-      <Modal visible={showCurrencyModal} onClose={() => setShowCurrencyModal(false)} title="Select Currency">
+      <Modal
+        visible={showCurrencyModal}
+        onClose={() => setShowCurrencyModal(false)}
+        title="Select Currency"
+        scrollable={false}
+      >
           {CURRENCIES.map((c) => (
             <TouchableOpacity
               key={c.code}
@@ -422,7 +427,12 @@ export default function SettingsScreen() {
           ))}
       </Modal>
 
-      <Modal visible={showUnitSystemModal} onClose={() => setShowUnitSystemModal(false)} title="Select unit system">
+      <Modal
+        visible={showUnitSystemModal}
+        onClose={() => setShowUnitSystemModal(false)}
+        title="Select unit system"
+        scrollable={false}
+      >
         {UNIT_SYSTEMS.map((system) => (
           <TouchableOpacity
             key={system.value}
@@ -447,7 +457,13 @@ export default function SettingsScreen() {
       />
 
       {/* Food cost % editor */}
-      <Modal visible={showFoodCostModal} onClose={() => setShowFoodCostModal(false)} title="Default Food Cost %">
+      <Modal
+        visible={showFoodCostModal}
+        onClose={() => setShowFoodCostModal(false)}
+        title="Default Food Cost %"
+        scrollable={false}
+        footer={<Button title="Save" onPress={handleSaveFoodCost} loading={saving} size="lg" />}
+      >
         <Input
           label="Target food cost percentage"
           value={foodCostInput}
@@ -456,7 +472,6 @@ export default function SettingsScreen() {
           hint="Typical range: 25–35%"
           error={foodCostError}
         />
-        <Button title="Save" onPress={handleSaveFoodCost} loading={saving} size="lg" />
       </Modal>
 
       <PaywallModal visible={showPaywall} onClose={() => setShowPaywall(false)} reason="upgrade" />

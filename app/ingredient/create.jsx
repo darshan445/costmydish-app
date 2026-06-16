@@ -398,6 +398,7 @@ export default function CreateIngredientScreen() {
         visible={unitPickerDraftId != null}
         onClose={() => setUnitPickerDraftId(null)}
         title="Select unit"
+        scrollable={false}
       >
           {unitGroups.map((group) => (
             <View key={group.label} style={styles.unitGroup}>

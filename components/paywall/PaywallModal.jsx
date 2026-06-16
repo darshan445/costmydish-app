@@ -115,7 +115,27 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade' }) {
   };
 
   return (
-    <Modal visible={visible} onClose={onClose} title="Upgrade to Hobbyist">
+    <Modal
+      visible={visible}
+      onClose={onClose}
+      title="Upgrade to Hobbyist"
+      scrollable={false}
+      footer={(
+        <>
+          <Button
+            title={purchasing ? 'Processing…' : `Subscribe · ${isAnnual ? annualPriceStr + '/yr' : monthlyPriceStr + '/mo'}`}
+            onPress={handleSubscribe}
+            loading={purchasing}
+            size="lg"
+          />
+          <Button title="Maybe later" onPress={onClose} variant="ghost" size="md" />
+          <TouchableOpacity onPress={handleRestore} disabled={restoring} style={styles.restoreBtn}>
+            <Text style={styles.restoreText}>{restoring ? 'Restoring…' : 'Restore purchases'}</Text>
+          </TouchableOpacity>
+          <SubscriptionLegalNotice />
+        </>
+      )}
+    >
       <Text style={styles.reason}>{REASON_TEXT[reason] ?? REASON_TEXT.upgrade}</Text>
 
       {/* Billing toggle */}
@@ -173,20 +193,6 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade' }) {
         </View>
       )}
 
-      <Button
-        title={purchasing ? 'Processing…' : `Subscribe · ${isAnnual ? annualPriceStr + '/yr' : monthlyPriceStr + '/mo'}`}
-        onPress={handleSubscribe}
-        loading={purchasing}
-        size="lg"
-        style={styles.cta}
-      />
-      <Button title="Maybe later" onPress={onClose} variant="ghost" size="md" />
-
-      <TouchableOpacity onPress={handleRestore} disabled={restoring} style={styles.restoreBtn}>
-        <Text style={styles.restoreText}>{restoring ? 'Restoring…' : 'Restore purchases'}</Text>
-      </TouchableOpacity>
-
-      <SubscriptionLegalNotice />
     </Modal>
   );
 }
