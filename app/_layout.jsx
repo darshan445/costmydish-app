@@ -2,56 +2,103 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { bootLog } from '../lib/debugBoot';
 import { supabase } from '../lib/supabase';
-import { initRevenueCat, identifyRevenueCatUser, resetRevenueCatUser, attachCustomerInfoListener } from '../lib/revenuecat';
+import {
+  initRevenueCat,
+  resetRevenueCatUser,
+  attachCustomerInfoListener,
+  syncRevenueCatForUser,
+} from '../lib/revenuecat';
 import useAuthStore from '../stores/authStore';
 import useSettingsStore from '../stores/settingsStore';
 import useRecipeStore from '../stores/recipeStore';
 import useSubscriptionStore from '../stores/subscriptionStore';
 import { COLORS } from '../constants/theme';
 
+let authSideEffectsFlight = null;
+let authSideEffectsUserId = null;
+
+/** Deferred session work — must not run inside onAuthStateChange (Supabase auth lock). */
+async function runAuthSessionSideEffects(event, session) {
+  bootLog('auth:sideEffects:start', { event });
+
+  if (!session?.user) {
+    authSideEffectsFlight = null;
+    authSideEffectsUserId = null;
+    useSubscriptionStore.getState().clearRcEntitlement();
+    if (event === 'SIGNED_OUT') {
+      bootLog('auth:event:revenuecat:logout:start');
+      await resetRevenueCatUser();
+      bootLog('auth:event:revenuecat:logout:done');
+    }
+    bootLog('auth:sideEffects:done', { event });
+    return;
+  }
+
+  const userId = session.user.id;
+  if (authSideEffectsFlight && authSideEffectsUserId === userId) {
+    bootLog('auth:sideEffects:skipped', { event, reason: 'in-flight' });
+    return authSideEffectsFlight;
+  }
+
+  authSideEffectsUserId = userId;
+  authSideEffectsFlight = (async () => {
+    try {
+      const { fetchProfile } = useAuthStore.getState();
+      const { fetchSettings, applyDeviceLocaleSettings } = useSettingsStore.getState();
+      const { fetchSellingUnits } = useRecipeStore.getState();
+
+      await fetchProfile(userId);
+      if (event === 'SIGNED_UP') {
+        await applyDeviceLocaleSettings(userId);
+      }
+      await fetchSettings(userId);
+      fetchSellingUnits();
+
+      const entitled = await syncRevenueCatForUser(userId);
+      useSubscriptionStore.getState().setRcEntitled(entitled);
+    } catch (error) {
+      bootLog('auth:sideEffects:error', { event, message: error?.message });
+    } finally {
+      authSideEffectsFlight = null;
+      bootLog('auth:sideEffects:done', { event });
+    }
+  })();
+
+  return authSideEffectsFlight;
+}
+
 function AuthBootstrap() {
   const router = useRouter();
   const segments = useSegments();
-  const { user, loading, initialized, initialize, setUser, fetchProfile } = useAuthStore();
-  const { fetchSettings, applyDeviceLocaleSettings } = useSettingsStore();
-  const { fetchSellingUnits } = useRecipeStore();
+  const { user, loading, initialized, initialize, setUser } = useAuthStore();
 
   useEffect(() => {
+    bootLog('bootstrap:effect:start');
     initRevenueCat();
     attachCustomerInfoListener((entitled) => {
+      bootLog('revenuecat:entitlementUpdate', { entitled });
       useSubscriptionStore.getState().setRcEntitled(entitled);
     });
-    (async () => {
-      await initialize();
-      const userId = useAuthStore.getState().user?.id;
-      if (userId) {
-        await identifyRevenueCatUser(userId);
-        await useSubscriptionStore.getState().syncFromRevenueCat();
-      }
-    })();
-  }, []);
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    bootLog('auth:onAuthStateChange:subscribe');
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      bootLog('auth:event', { event, hasUser: !!session?.user });
       if (session?.user) {
         setUser(session.user);
-        await fetchProfile(session.user.id);
-        if (event === 'SIGNED_UP') {
-          await applyDeviceLocaleSettings(session.user.id);
-        }
-        await fetchSettings(session.user.id);
-        fetchSellingUnits();
-        await identifyRevenueCatUser(session.user.id);
-        await useSubscriptionStore.getState().syncFromRevenueCat();
       } else {
         useAuthStore.setState({ user: null, profile: null });
-        useSubscriptionStore.getState().clearRcEntitlement();
-        if (event === 'SIGNED_OUT') {
-          await resetRevenueCatUser();
-        }
       }
+      setTimeout(() => {
+        runAuthSessionSideEffects(event, session);
+      }, 0);
     });
+
+    initialize().then(() => {
+      bootLog('bootstrap:effect:done');
+    });
+
     return () => subscription.unsubscribe();
   }, []);
 
@@ -59,6 +106,12 @@ function AuthBootstrap() {
     if (!initialized || loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+
+    bootLog('bootstrap:navigate', {
+      hasUser: !!user,
+      inAuthGroup,
+      segment: segments[0] ?? null,
+    });
 
     if (!user && !inAuthGroup) {
       router.replace('/(auth)/welcome');

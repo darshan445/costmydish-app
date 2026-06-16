@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { bootLog, BOOT_TIMEOUT_MS, withBootTimeout } from '../lib/debugBoot';
 import { supabase } from '../lib/supabase';
 import { RESET_PASSWORD_REDIRECT_URL } from '../constants/auth';
 import useSettingsStore from './settingsStore';
@@ -13,28 +14,39 @@ const useAuthStore = create((set, get) => ({
   setProfile: (profile) => set({ profile }),
 
   initialize: async () => {
+    bootLog('auth:initialize:start');
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      bootLog('auth:getSession:start');
+      const { data: { session } } = await withBootTimeout(
+        supabase.auth.getSession(),
+        BOOT_TIMEOUT_MS,
+        'getSession',
+      );
+      bootLog('auth:getSession:done', { hasUser: !!session?.user });
       if (session?.user) {
         set({ user: session.user });
-        await get().fetchProfile(session.user.id);
       }
     } catch (error) {
+      bootLog('auth:initialize:error', { message: error?.message });
       console.error('Auth init error:', error);
     } finally {
       set({ loading: false, initialized: true });
+      bootLog('auth:initialize:done');
     }
   },
 
   fetchProfile: async (userId) => {
+    bootLog('auth:fetchProfile:start', { userId });
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
+      bootLog('auth:fetchProfile:done', { ok: !error && !!data, error: error?.message ?? null });
       if (!error && data) set({ profile: data });
     } catch (error) {
+      bootLog('auth:fetchProfile:error', { message: error?.message });
       console.error('Fetch profile error:', error);
     }
   },
