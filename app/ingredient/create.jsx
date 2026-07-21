@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -233,6 +233,8 @@ function IngredientDraftCard({
 
 export default function CreateIngredientScreen() {
   const router = useRouter();
+  const { fromRecipe } = useLocalSearchParams();
+  const isFromRecipe = fromRecipe === '1';
   const scrollRef = useRef(null);
   const { addIngredient, ingredients } = useIngredientStore();
   const getCurrencySymbol = useSettingsStore((s) => s.getCurrencySymbol);
@@ -331,12 +333,22 @@ export default function CreateIngredientScreen() {
       Alert.alert(
         'Partially saved',
         `${saved.length} saved. ${failures.length} failed: ${failures.map((f) => f.name).join(', ')}`,
-        [{ text: 'OK', onPress: () => router.replace('/(tabs)/ingredients') }],
+        [{
+          text: 'OK',
+          onPress: () => {
+            if (isFromRecipe) router.back();
+            else router.replace('/(tabs)/ingredients');
+          },
+        }],
       );
       return;
     }
 
-    router.replace('/(tabs)/ingredients');
+    if (isFromRecipe) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/ingredients');
+    }
   };
 
   return (
@@ -347,7 +359,9 @@ export default function CreateIngredientScreen() {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Add ingredients</Text>
-          <Text style={styles.headerSub}>Fill in each card, tap + for more</Text>
+          <Text style={styles.headerSub}>
+            {isFromRecipe ? 'Save to your shared ingredient library' : 'Fill in each card, tap + for more'}
+          </Text>
         </View>
         <View style={{ width: 24 }} />
       </View>
@@ -362,8 +376,8 @@ export default function CreateIngredientScreen() {
                 saving
                   ? 'Saving…'
                   : filledCount > 1
-                    ? `Save ${filledCount} ingredients`
-                    : 'Save ingredient'
+                    ? `Save ${filledCount} to library`
+                    : 'Save to library'
               }
               onPress={saveAll}
               loading={saving}
@@ -372,6 +386,17 @@ export default function CreateIngredientScreen() {
           </View>
         )}
       >
+          {isFromRecipe ? (
+            <View style={styles.libraryHint}>
+              <Ionicons name="library-outline" size={20} color={COLORS.primary} />
+              <View style={styles.libraryHintCopy}>
+                <Text style={styles.libraryHintTitle}>Add your purchase information</Text>
+                <Text style={styles.libraryHintText}>
+                  This is what you buy, for example 1 kg of flour. Save it once, then reuse it in any recipe and choose how much that recipe uses.
+                </Text>
+              </View>
+            </View>
+          ) : null}
           {cards.map((card, index) => (
             <IngredientDraftCard
               key={card.draftId}
@@ -445,6 +470,29 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: FONT_SIZE.md, fontWeight: '700', color: COLORS.text },
   headerSub: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginTop: 2, textAlign: 'center' },
   scroll: { padding: SPACING.md, paddingBottom: SPACING.xxl },
+  libraryHint: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.primaryLight,
+    backgroundColor: '#F0FDF4',
+  },
+  libraryHintCopy: { flex: 1 },
+  libraryHintTitle: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
+    marginBottom: 2,
+  },
+  libraryHintText: {
+    fontSize: FONT_SIZE.xs,
+    lineHeight: 17,
+    color: COLORS.textSecondary,
+  },
 
   ingredientCard: {
     backgroundColor: COLORS.surface,

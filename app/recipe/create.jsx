@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useState, useMemo, useRef } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState, useMemo, useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import {
   Alert, FlatList,
@@ -68,6 +68,7 @@ export default function CreateRecipeScreen() {
   const [ingSheetUnit, setIngSheetUnit] = useState('');
   const [ingQtyError, setIngQtyError] = useState('');
   const [editingIngId, setEditingIngId] = useState(null);
+  const reopenIngredientPickerRef = useRef(false);
 
   // Selling format bottom sheet
   const [showFmtSheet, setShowFmtSheet] = useState(false);
@@ -126,6 +127,24 @@ export default function CreateRecipeScreen() {
     setIngSearch('');
     setIngredientError(false);
     setShowIngSheet(true);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (reopenIngredientPickerRef.current) {
+        reopenIngredientPickerRef.current = false;
+        openAddIngSheet();
+      }
+    }, [])
+  );
+
+  const openCreateIngredient = () => {
+    reopenIngredientPickerRef.current = true;
+    setShowIngSheet(false);
+    router.push({
+      pathname: '/ingredient/create',
+      params: { fromRecipe: '1' },
+    });
   };
 
   const openEditIngSheet = (ri) => {
@@ -269,7 +288,12 @@ export default function CreateRecipeScreen() {
       namedFormats
     );
     if (error) { Alert.alert('Error', error); return; }
-    router.replace(`/recipe/${recipe.id}`);
+    // justSaved lets the detail screen decide whether this is a good
+    // moment to ask for a store review (engagement-based, see storeReview.js).
+    router.replace({
+      pathname: '/recipe/[id]',
+      params: { id: recipe.id, justSaved: '1' },
+    });
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -564,10 +588,24 @@ export default function CreateRecipeScreen() {
                 autoCapitalize="none"
               />
             </View>
+            <TouchableOpacity
+              style={styles.createIngredientBtn}
+              onPress={openCreateIngredient}
+              activeOpacity={0.7}
+            >
+              <View style={styles.createIngredientIcon}>
+                <Ionicons name="add" size={18} color={COLORS.primary} />
+              </View>
+              <View style={styles.createIngredientCopy}>
+                <Text style={styles.createIngredientTitle}>New ingredient</Text>
+                <Text style={styles.createIngredientHint}>Save it once and reuse it in any recipe</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
+            </TouchableOpacity>
             {ingredients.length === 0 ? (
               <View style={styles.modalEmpty}>
                 <Text style={styles.modalEmptyText}>No ingredients yet</Text>
-                <Text style={styles.modalEmptyHint}>Go to the Ingredients tab to add some first.</Text>
+                <Text style={styles.modalEmptyHint}>Create your first library ingredient above.</Text>
               </View>
             ) : (
               <FlatList
@@ -945,6 +983,31 @@ const styles = StyleSheet.create({
   modalEmpty: { paddingVertical: SPACING.lg, alignItems: 'center' },
   modalEmptyText: { fontSize: FONT_SIZE.base, fontWeight: '600', color: COLORS.text, marginBottom: SPACING.xs },
   modalEmptyHint: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, textAlign: 'center' },
+  createIngredientBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 56,
+    paddingHorizontal: SPACING.sm,
+    marginBottom: SPACING.sm,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    backgroundColor: '#F0FDF4',
+  },
+  createIngredientIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: RADIUS.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING.sm,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  createIngredientCopy: { flex: 1 },
+  createIngredientTitle: { fontSize: FONT_SIZE.sm, color: COLORS.primary, fontWeight: '700' },
+  createIngredientHint: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginTop: 2 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, paddingTop: SPACING.xs },
   chip: {
     paddingHorizontal: SPACING.md,

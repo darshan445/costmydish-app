@@ -1,28 +1,37 @@
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RecipeCard } from '../../components/recipe/RecipeCard';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Skeleton, RecipeCardSkeleton } from '../../components/ui/Skeleton';
+import { PaywallModal } from '../../components/paywall/PaywallModal';
 import { useRecipes } from '../../hooks/useRecipes';
-import { useIngredients } from '../../hooks/useIngredients';
+import { useSubscription } from '../../hooks/useSubscription';
 import useAuthStore from '../../stores/authStore';
 import useSettingsStore from '../../stores/settingsStore';
 import { formatFoodCostPercent } from '../../utils/format';
 import { normalizeFoodCostPercent } from '../../lib/calculations';
-import { NO_INGREDIENTS_MSG } from '../../constants/messages';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 export default function DashboardScreen() {
   const router = useRouter();
   const profile = useAuthStore((s) => s.profile);
   const { recipes, costSummaries, loading } = useRecipes();
-  const { ingredients } = useIngredients();
+  const { canCreateRecipe } = useSubscription();
   const getCurrencySymbol = useSettingsStore((s) => s.getCurrencySymbol);
   const symbol = getCurrencySymbol();
 
-  const canCreateRecipe = ingredients.length > 0;
+  const [showPaywall, setShowPaywall] = useState(false);
+
+  const handleCreateRecipe = () => {
+    if (!canCreateRecipe(recipes.length)) {
+      setShowPaywall(true);
+      return;
+    }
+    router.push('/recipe/create');
+  };
 
   const greeting = profile?.full_name ? `Hi, ${profile.full_name.split(' ')[0]} 👋` : 'Welcome 👋';
   const recentRecipes = recipes.slice(0, 5);
@@ -163,17 +172,30 @@ export default function DashboardScreen() {
           <EmptyState
             icon="🍽️"
             title="No recipes yet"
-            description={
-              canCreateRecipe
-                ? 'Create your first recipe to see a full cost breakdown.'
-                : NO_INGREDIENTS_MSG
-            }
+            description="Create your first recipe to see a full cost breakdown."
             actionLabel="Create Recipe"
-            onAction={() => router.push('/recipe/create')}
-            actionDisabled={!canCreateRecipe}
+            onAction={handleCreateRecipe}
           />
         }
+        ListFooterComponent={
+          recentRecipes.length > 0 ? (
+            <TouchableOpacity
+              style={styles.createCta}
+              onPress={handleCreateRecipe}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="add-circle-outline"
+                size={18}
+                color={COLORS.primary}
+                style={{ marginRight: SPACING.xs }}
+              />
+              <Text style={styles.createCtaText}>Create new recipe</Text>
+            </TouchableOpacity>
+          ) : null
+        }
       />
+      <PaywallModal visible={showPaywall} onClose={() => setShowPaywall(false)} reason="recipe" />
     </SafeAreaView>
   );
 }
@@ -234,4 +256,18 @@ const styles = StyleSheet.create({
   allGoodLabel: { fontSize: FONT_SIZE.xs, fontWeight: '700', color: COLORS.success, marginTop: 2 },
 
   sectionTitle: { fontSize: FONT_SIZE.md, fontWeight: '700', color: COLORS.text, marginBottom: SPACING.sm },
+
+  createCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.md,
+    marginTop: SPACING.sm,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    borderStyle: 'dashed',
+    borderRadius: RADIUS.lg,
+    minHeight: 44,
+  },
+  createCtaText: { fontSize: FONT_SIZE.base, color: COLORS.primary, fontWeight: '600' },
 });

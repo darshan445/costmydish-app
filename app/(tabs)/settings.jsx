@@ -19,7 +19,7 @@ import { showAppAlert } from '../../lib/appAlert';
 import { formatSubscriptionDate } from '../../utils/format';
 import { CURRENCIES } from '../../constants/currencies';
 import { UNIT_SYSTEMS } from '../../constants/units';
-import { PRIVACY_POLICY_URL, TERMS_URL } from '../../constants/legal';
+import { PRIVACY_POLICY_URL, TERMS_URL, SUPPORT_EMAIL } from '../../constants/legal';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 export default function SettingsScreen() {
@@ -217,6 +217,22 @@ export default function SettingsScreen() {
       await Linking.openURL(url);
     } catch {
       Alert.alert('Could not open link', 'Please try again later.');
+    }
+  };
+
+  const contactSupport = async () => {
+    const subject = encodeURIComponent('CostMyDish — Help needed');
+    const body = encodeURIComponent(
+      `Hi CostMyDish team,\n\nI need help with:\n\n\n---\nMy account email: ${user?.email ?? 'not signed in'}`
+    );
+    const url = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert(
+        'Could not open email app',
+        `Please email us at ${SUPPORT_EMAIL} — we're happy to help with any question.`,
+      );
     }
   };
 
@@ -444,6 +460,26 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Help & support */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>HELP & SUPPORT</Text>
+          <View style={styles.card}>
+            <TouchableOpacity style={styles.supportRow} onPress={contactSupport} activeOpacity={0.7}>
+              <View style={styles.supportIconBadge}>
+                <Ionicons name="mail-outline" size={20} color={COLORS.primary} />
+              </View>
+              <View style={styles.supportLabelWrap}>
+                <Text style={styles.rowLabel}>Contact Support</Text>
+                <Text style={styles.supportEmail} numberOfLines={1}>{SUPPORT_EMAIL}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.supportNote}>
+            Questions, something not working, or need help getting started? Email us anytime — we reply to every message.
+          </Text>
+        </View>
+
         {/* Danger zone */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>ACCOUNT ACTIONS</Text>
@@ -607,6 +643,25 @@ const styles = StyleSheet.create({
   tierBadge: { paddingHorizontal: SPACING.sm, paddingVertical: 3, borderRadius: RADIUS.full },
   tierText: { fontSize: FONT_SIZE.sm, fontWeight: '700' },
   dangerNote: { fontSize: FONT_SIZE.xs, color: COLORS.textTertiary, marginTop: SPACING.sm, paddingHorizontal: SPACING.xs, lineHeight: 18 },
+  supportNote: { fontSize: FONT_SIZE.xs, color: COLORS.textTertiary, marginTop: SPACING.sm, paddingHorizontal: SPACING.xs, lineHeight: 18 },
+  supportRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    minHeight: 60,
+  },
+  supportIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: RADIUS.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#D1FAE5',
+    marginRight: SPACING.sm + 2,
+  },
+  supportLabelWrap: { flex: 1, marginRight: SPACING.sm },
+  supportEmail: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, marginTop: 2 },
   currencyRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.border, gap: SPACING.md },
   currencySelected: { backgroundColor: '#F0FDF4' },
   currencySymbol: { width: 28, fontSize: FONT_SIZE.md, fontWeight: '700', color: COLORS.primary, textAlign: 'center' },

@@ -8,25 +8,20 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { RecipeCardSkeleton } from '../../components/ui/Skeleton';
 import { PaywallModal } from '../../components/paywall/PaywallModal';
 import { useRecipes } from '../../hooks/useRecipes';
-import { useIngredients } from '../../hooks/useIngredients';
 import { useSubscription } from '../../hooks/useSubscription';
 import useSettingsStore from '../../stores/settingsStore';
-import { NO_INGREDIENTS_MSG } from '../../constants/messages';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 export default function RecipesScreen() {
   const router = useRouter();
   const { recipes, costSummaries, loading } = useRecipes();
-  const { ingredients } = useIngredients();
   const { canCreateRecipe } = useSubscription();
   const getCurrencySymbol = useSettingsStore((s) => s.getCurrencySymbol);
   const symbol = getCurrencySymbol();
 
   const [showPaywall, setShowPaywall] = useState(false);
-  const hasIngredients = ingredients.length > 0;
 
   const handleCreate = () => {
-    if (!hasIngredients) return;
     if (!canCreateRecipe(recipes.length)) {
       setShowPaywall(true);
       return;
@@ -42,11 +37,10 @@ export default function RecipesScreen() {
         <Text style={styles.title}>Recipes</Text>
         <TouchableOpacity
           onPress={handleCreate}
-          style={[styles.addBtn, !hasIngredients && styles.addBtnDisabled]}
-          disabled={!hasIngredients}
+          style={styles.addBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name="add-circle" size={32} color={hasIngredients ? COLORS.primary : COLORS.textTertiary} />
+          <Ionicons name="add-circle" size={32} color={COLORS.primary} />
         </TouchableOpacity>
       </View>
 
@@ -58,14 +52,9 @@ export default function RecipesScreen() {
         <EmptyState
           icon="🍽️"
           title="No recipes yet"
-          description={
-            hasIngredients
-              ? 'Create your first recipe to see a full cost breakdown.'
-              : NO_INGREDIENTS_MSG
-          }
+          description="Create your first recipe to see a full cost breakdown."
           actionLabel="Create Recipe"
           onAction={handleCreate}
-          actionDisabled={!hasIngredients}
         />
       ) : (
         <>
@@ -84,18 +73,17 @@ export default function RecipesScreen() {
             ListFooterComponent={
               recipes.length > 0 ? (
                 <TouchableOpacity
-                  style={[styles.ctaFooter, !hasIngredients && styles.ctaFooterDisabled]}
+                  style={styles.ctaFooter}
                   onPress={handleCreate}
-                  disabled={!hasIngredients}
                   activeOpacity={0.7}
                 >
                   <Ionicons
                     name="add-circle-outline"
                     size={18}
-                    color={hasIngredients ? COLORS.primary : COLORS.textTertiary}
+                    color={COLORS.primary}
                     style={{ marginRight: SPACING.xs }}
                   />
-                  <Text style={[styles.ctaText, !hasIngredients && styles.ctaTextDisabled]}>
+                  <Text style={styles.ctaText}>
                     Add your next recipe
                   </Text>
                 </TouchableOpacity>
@@ -123,7 +111,6 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: FONT_SIZE.xl, fontWeight: '800', color: COLORS.text },
   addBtn: { padding: 4 },
-  addBtnDisabled: { opacity: 0.5 },
 
   list: { padding: SPACING.md, flexGrow: 1 },
 
@@ -139,6 +126,4 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
   },
   ctaText: { fontSize: FONT_SIZE.base, color: COLORS.primary, fontWeight: '600' },
-  ctaFooterDisabled: { borderColor: COLORS.border, opacity: 0.6 },
-  ctaTextDisabled: { color: COLORS.textTertiary },
 });

@@ -13,6 +13,7 @@ import { Button } from '../../components/ui/Button';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { useRecipeCost } from '../../hooks/useRecipeCost';
 import { calculateSellingFormatMetrics } from '../../lib/calculations';
+import { maybeRequestStoreReview } from '../../lib/storeReview';
 import { useSubscription } from '../../hooks/useSubscription';
 import useRecipeStore from '../../stores/recipeStore';
 import useSettingsStore from '../../stores/settingsStore';
@@ -25,9 +26,10 @@ import { Skeleton } from '../../components/ui/Skeleton';
 const MARGIN_LABELS = { good: 'On Target', warning: 'Slightly Over', danger: 'Over Budget' };
 
 export default function RecipeDetailScreen() {
-  const { id } = useLocalSearchParams();
+  const { id, justSaved } = useLocalSearchParams();
   const router = useRouter();
   const { fetchRecipeWithIngredients, deleteRecipe, getRecipeById } = useRecipeStore();
+  const allRecipes = useRecipeStore((s) => s.recipes);
   const getCurrencySymbol = useSettingsStore((s) => s.getCurrencySymbol);
   const symbol = getCurrencySymbol();
   const { canExportPDF } = useSubscription();
@@ -85,6 +87,26 @@ export default function RecipeDetailScreen() {
     null,
   );
   const foodCostPercents = formatMetrics.map((fm) => fm.fcp).filter((v) => v != null);
+
+  // Try after the first completed recipe. The persistent guard prevents any
+  // later recipe from asking again once the native request has run.
+  const nonSampleCount = allRecipes.filter((r) => !r.is_sample).length;
+  const reviewEligible =
+    justSaved === '1'
+    && !ingredientsLoading
+    && formatMetrics.length > 0
+    && nonSampleCount >= 1;
+
+  useEffect(() => {
+    if (!reviewEligible) return undefined;
+
+    // Let the user see the completed cost result before the native sheet appears.
+    const timer = setTimeout(() => {
+      maybeRequestStoreReview();
+    }, 1800);
+
+    return () => clearTimeout(timer);
+  }, [reviewEligible]);
 
   const handleDelete = async () => {
     setDeleting(true);
