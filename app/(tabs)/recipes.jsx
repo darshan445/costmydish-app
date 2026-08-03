@@ -21,12 +21,6 @@ const STATUS_FILTERS = [
   { key: 'over_target', label: 'Over Target' },
 ];
 
-const SORT_OPTIONS = [
-  { key: 'newest', label: 'Newest' },
-  { key: 'food_cost', label: 'Highest food cost' },
-  { key: 'profit', label: 'Highest profit' },
-];
-
 function getDishStatus(summary) {
   if (!summary || summary.format_count < 1) return null;
   if (summary.worst_margin_status === 'danger' || summary.has_danger_format || summary.worst_margin_status === 'warning') {
@@ -38,20 +32,6 @@ function getDishStatus(summary) {
   return null;
 }
 
-function getFoodCostSortValue(summary) {
-  if (!summary) return -Infinity;
-  if (summary.worst_food_cost_percent != null) return summary.worst_food_cost_percent;
-  if (summary.actual_food_cost_percent != null) return summary.actual_food_cost_percent;
-  return -Infinity;
-}
-
-function getProfitSortValue(summary) {
-  if (!summary) return -Infinity;
-  if (summary.format_profits?.length > 0) return Math.max(...summary.format_profits);
-  if (summary.gross_profit != null) return summary.gross_profit;
-  return -Infinity;
-}
-
 export default function DishesScreen() {
   const router = useRouter();
   const { recipes, costSummaries, loading } = useRecipes();
@@ -61,37 +41,24 @@ export default function DishesScreen() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
-  const [showSortMenu, setShowSortMenu] = useState(false);
 
   const showSkeleton = loading && recipes.length === 0;
 
   const filteredDishes = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let list = recipes.filter((r) => {
-      if (q && !r.name?.toLowerCase().includes(q)) return false;
-      if (statusFilter === 'all') return true;
-      return getDishStatus(costSummaries[r.id]) === statusFilter;
-    });
-
-    list = [...list].sort((a, b) => {
-      const sa = costSummaries[a.id];
-      const sb = costSummaries[b.id];
-      if (sortBy === 'food_cost') {
-        return getFoodCostSortValue(sb) - getFoodCostSortValue(sa);
-      }
-      if (sortBy === 'profit') {
-        return getProfitSortValue(sb) - getProfitSortValue(sa);
-      }
-      const aTime = new Date(a.created_at ?? 0).getTime();
-      const bTime = new Date(b.created_at ?? 0).getTime();
-      return bTime - aTime;
-    });
-
-    return list;
-  }, [recipes, costSummaries, search, statusFilter, sortBy]);
-
-  const activeSortLabel = SORT_OPTIONS.find((o) => o.key === sortBy)?.label ?? 'Newest';
+    return recipes
+      .filter((r) => {
+        if (q && !r.name?.toLowerCase().includes(q)) return false;
+        if (statusFilter === 'all') return true;
+        return getDishStatus(costSummaries[r.id]) === statusFilter;
+      })
+      .slice()
+      .sort((a, b) => {
+        const aTime = new Date(a.created_at ?? 0).getTime();
+        const bTime = new Date(b.created_at ?? 0).getTime();
+        return bTime - aTime;
+      });
+  }, [recipes, costSummaries, search, statusFilter]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -124,30 +91,26 @@ export default function DishesScreen() {
         />
       ) : (
         <>
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={18} color={COLORS.textTertiary} style={{ marginRight: SPACING.sm }} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search dishes…"
-              placeholderTextColor={COLORS.textTertiary}
-              value={search}
-              onChangeText={setSearch}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close-circle" size={18} color={COLORS.textTertiary} />
-              </TouchableOpacity>
-            )}
-          </View>
+          <View style={styles.controls}>
+            <View style={styles.searchBar}>
+              <Ionicons name="search" size={18} color={COLORS.textTertiary} style={{ marginRight: SPACING.sm }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search dishes…"
+                placeholderTextColor={COLORS.textTertiary}
+                value={search}
+                onChangeText={setSearch}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {search.length > 0 && (
+                <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle" size={18} color={COLORS.textTertiary} />
+                </TouchableOpacity>
+              )}
+            </View>
 
-          <View style={styles.toolbar}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filterRow}
-            >
+            <View style={styles.filterRow}>
               {STATUS_FILTERS.map((f) => {
                 const active = statusFilter === f.key;
                 return (
@@ -161,53 +124,14 @@ export default function DishesScreen() {
                   </TouchableOpacity>
                 );
               })}
-            </ScrollView>
-
-            <TouchableOpacity
-              style={styles.sortBtn}
-              onPress={() => setShowSortMenu((v) => !v)}
-              activeOpacity={0.75}
-            >
-              <Ionicons name="swap-vertical" size={16} color={COLORS.primary} />
-              <Text style={styles.sortBtnText} numberOfLines={1}>{activeSortLabel}</Text>
-              <Ionicons
-                name={showSortMenu ? 'chevron-up' : 'chevron-down'}
-                size={14}
-                color={COLORS.primary}
-              />
-            </TouchableOpacity>
-          </View>
-
-          {showSortMenu ? (
-            <View style={styles.sortMenu}>
-              {SORT_OPTIONS.map((opt) => {
-                const active = sortBy === opt.key;
-                return (
-                  <TouchableOpacity
-                    key={opt.key}
-                    style={styles.sortOption}
-                    onPress={() => {
-                      setSortBy(opt.key);
-                      setShowSortMenu(false);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.sortOptionText, active && styles.sortOptionTextActive]}>
-                      {opt.label}
-                    </Text>
-                    {active ? <Ionicons name="checkmark" size={18} color={COLORS.primary} /> : null}
-                  </TouchableOpacity>
-                );
-              })}
             </View>
-          ) : null}
+          </View>
 
           <FlatList
             data={filteredDishes}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.list}
             keyboardShouldPersistTaps="handled"
-            onScrollBeginDrag={() => setShowSortMenu(false)}
             renderItem={({ item }) => (
               <RecipeCard
                 recipe={item}
@@ -273,11 +197,16 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, marginTop: 2 },
   addBtn: { padding: 4 },
 
+  controls: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
+    gap: SPACING.md,
+    backgroundColor: COLORS.background,
+  },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.md,
     backgroundColor: COLORS.surface,
     borderRadius: RADIUS.md,
     paddingHorizontal: SPACING.md,
@@ -288,29 +217,21 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: FONT_SIZE.base, color: COLORS.text, paddingVertical: 0 },
 
-  toolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: SPACING.md,
-    paddingRight: SPACING.sm,
-    paddingTop: SPACING.sm,
-    gap: SPACING.sm,
-  },
   filterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.xs,
-    paddingRight: SPACING.xs,
+    gap: SPACING.sm,
   },
   chip: {
-    paddingHorizontal: SPACING.md,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: SPACING.sm,
-    borderRadius: RADIUS.full,
+    borderRadius: RADIUS.md,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
-    minHeight: 36,
-    justifyContent: 'center',
+    minHeight: 40,
   },
   chipActive: {
     backgroundColor: COLORS.primary,
@@ -324,52 +245,8 @@ const styles = StyleSheet.create({
   chipTextActive: {
     color: COLORS.surface,
   },
-  sortBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.sm,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.surfaceAlt,
-    maxWidth: 148,
-    minHeight: 36,
-  },
-  sortBtnText: {
-    flexShrink: 1,
-    fontSize: FONT_SIZE.xs,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  sortMenu: {
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.sm,
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
-  },
-  sortOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
-    minHeight: 44,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  sortOptionText: {
-    fontSize: FONT_SIZE.base,
-    color: COLORS.text,
-  },
-  sortOptionTextActive: {
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
 
-  list: { padding: SPACING.md, flexGrow: 1 },
+  list: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.md, flexGrow: 1 },
 
   ctaFooter: {
     flexDirection: 'row',
