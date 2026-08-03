@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Badge } from '../ui/Badge';
+import { FOOD_COST_COPY } from '../../constants/copy';
 import { COLORS, FONT_SIZE, SPACING, RADIUS } from '../../constants/theme';
 import { formatCurrency, formatFoodCostPercent } from '../../utils/format';
 
@@ -63,7 +64,7 @@ export function RecipeCostSummary({
   return (
     <View style={styles.container}>
       <View style={styles.bigMetric}>
-        <Text style={styles.bigLabel}>Total Recipe Cost</Text>
+        <Text style={styles.bigLabel}>{FOOD_COST_COPY.result.totalDishCost}</Text>
         <Text style={styles.bigValue}>{formatCurrency(totalCost, currencySymbol)}</Text>
       </View>
 
@@ -74,7 +75,7 @@ export function RecipeCostSummary({
           displayIsRange && styles.profitBannerStacked,
         ]}>
           <Text style={styles.profitBannerLabel}>
-            {displayIsRange ? 'Batch profit range' : 'Batch profit'}
+            {displayIsRange ? 'Dish profit range' : 'Dish profit'}
           </Text>
           <Text style={[
             styles.profitBannerValue,

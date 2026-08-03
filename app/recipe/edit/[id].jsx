@@ -22,6 +22,7 @@ import { getIngredientUsageSummary } from '../../../utils/unitDisplay';
 import { calculateSellingFormatMetrics } from '../../../lib/calculations';
 import { useUnitSystem } from '../../../hooks/useUnitSystem';
 import { formatUnitLabel, RECIPE_CATEGORIES } from '../../../constants/units';
+import { FOOD_COST_COPY as C } from '../../../constants/copy';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from '../../../constants/theme';
 
 let _editFmtId = 0;
@@ -296,7 +297,7 @@ export default function EditRecipeScreen() {
           <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={24} color={COLORS.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edit recipe</Text>
+          <Text style={styles.headerTitle}>{C.edit.header}</Text>
           <View style={{ width: 24 }} />
         </View>
 
@@ -359,7 +360,7 @@ export default function EditRecipeScreen() {
           <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={24} color={COLORS.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edit recipe</Text>
+          <Text style={styles.headerTitle}>{C.edit.header}</Text>
           <View style={{ width: 24 }} />
         </View>
 
@@ -371,22 +372,22 @@ export default function EditRecipeScreen() {
           }}
           footer={(
             <View style={styles.stickyFooter}>
-              <Button title="Save changes" onPress={handleSubmit(onSubmit)} loading={isSubmitting} size="lg" />
+              <Button title={C.action.saveChanges} onPress={handleSubmit(onSubmit)} loading={isSubmitting} size="lg" />
             </View>
           )}
         >
 
-          {/* Recipe name */}
-          <Controller control={control} name="name" rules={{ required: 'Name is required' }}
+          {/* Dish name */}
+          <Controller control={control} name="name" rules={{ required: C.wizard.dishNameRequired }}
             render={({ field: { onChange, value } }) => (
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Recipe name</Text>
+                <Text style={styles.fieldLabel}>{C.wizard.dishName}</Text>
                 <View style={[styles.inputBox, errors.name && styles.inputBoxError]}>
                   <TextInput
                     style={styles.textInput}
                     value={value}
                     onChangeText={onChange}
-                    placeholder="Recipe name"
+                    placeholder={C.wizard.dishNamePlaceholder}
                     placeholderTextColor={COLORS.textTertiary}
                     autoCapitalize="words"
                   />
@@ -538,7 +539,7 @@ export default function EditRecipeScreen() {
               <Text style={styles.sectionLabel}>LIVE COST PREVIEW</Text>
               <View style={styles.previewCard}>
                 <View style={styles.previewRow}>
-                  <Text style={styles.previewLabel}>Total recipe cost</Text>
+                  <Text style={styles.previewLabel}>{C.wizard.totalDishCost}</Text>
                   <Text style={styles.previewValue}>{formatCurrency(totalCost, symbol)}</Text>
                 </View>
 
@@ -583,7 +584,7 @@ export default function EditRecipeScreen() {
                         <Text style={styles.previewValue}>{formatCurrency(metrics.profit, symbol)}</Text>
                       </View>
                       <View style={styles.previewRow}>
-                        <Text style={styles.previewLabel}>Total batch profit</Text>
+                        <Text style={styles.previewLabel}>Total dish profit</Text>
                         <Text style={styles.previewValue}>
                           {formatCurrency(metrics.batchProfit, symbol)}
                           <Text style={styles.previewHint}>
@@ -628,7 +629,7 @@ export default function EditRecipeScreen() {
         footer={ingSheetStep === 'config' ? (
           <>
             <Button
-              title={editingIngId ? 'Update' : 'Add to recipe'}
+              title={editingIngId ? 'Update' : C.action.addToDish}
               onPress={handleIngSheetConfirm}
               size="lg"
             />

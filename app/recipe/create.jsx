@@ -1,5 +1,5 @@
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState, useMemo, useRef } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import {
   Alert, FlatList,
@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { KeyboardFormLayout } from '../../components/ui/KeyboardFormLayout';
+import { WizardProgress } from '../../components/food-cost/WizardProgress';
 import { useRecipes } from '../../hooks/useRecipes';
 import { useIngredients } from '../../hooks/useIngredients';
 import { useRecipeCost } from '../../hooks/useRecipeCost';
@@ -19,15 +20,37 @@ import { formatCurrency, formatFoodCostPercent } from '../../utils/format';
 import { formatSellingFormatName, labelPerSellingUnit } from '../../utils/sellingFormat';
 import { getIngredientUsageSummary } from '../../utils/unitDisplay';
 import { calculateSellingFormatMetrics } from '../../lib/calculations';
+import {
+  clearFoodCostDraft,
+  isMeaningfulDraft,
+  loadFoodCostDraft,
+  saveFoodCostDraft,
+} from '../../lib/foodCostDraft';
+import { trackFoodCost } from '../../lib/foodCostAnalytics';
+import {
+  consumePendingAddToDishIngredientIds,
+} from '../../lib/pendingRecipeIngredients';
 import { useUnitSystem } from '../../hooks/useUnitSystem';
+import useIngredientStore from '../../stores/ingredientStore';
 import { formatUnitLabel, RECIPE_CATEGORIES } from '../../constants/units';
+import { FOOD_COST_COPY as C } from '../../constants/copy';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from '../../constants/theme';
+
+const HOW_MUCH_TITLE = 'How much do you use in this recipe?';
+
+function howMuchTitle(ingredientName) {
+  const name = ingredientName?.trim();
+  if (!name) return HOW_MUCH_TITLE;
+  return `How much ${name} do you use in this recipe?`;
+}
 
 let _fmtId = 0;
 function newFmtId() { return ++_fmtId; }
 
 export default function CreateRecipeScreen() {
   const router = useRouter();
+  const { fresh } = useLocalSearchParams();
+  const startFresh = fresh === '1';
   const { createRecipe } = useRecipes();
   const { ingredients } = useIngredients();
   const { sellingUnits } = useRecipeStore();
@@ -36,41 +59,35 @@ export default function CreateRecipeScreen() {
   const symbol = getCurrencySymbol();
   const { getCompatibleUnits } = useUnitSystem();
 
-  // Selling unit options — use sellingUnits from store or a sensible fallback
+  const [step, setStep] = useState(1);
+
   const sellingUnitOptions = sellingUnits.length > 0
     ? sellingUnits.map((u) => ({ value: u.name, label: u.label ?? u.name }))
     : [{ value: 'piece', label: 'piece' }, { value: 'slice', label: 'slice' }, { value: 'pack', label: 'pack' }, { value: 'box', label: 'box' }];
 
   const scrollRef = useRef(null);
-  const scrolledToTop = useRef(false);
-  const handleScrollLayout = () => {
-    if (!scrolledToTop.current) {
-      scrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
-      scrolledToTop.current = true;
-    }
-  };
 
-  // Local state
   const [recipeIngredients, setRecipeIngredients] = useState([]);
   const [sellingFormats, setSellingFormats] = useState([]);
   const [ingredientError, setIngredientError] = useState(false);
   const [sellingFormatError, setSellingFormatError] = useState(false);
 
-  // Modal / sheet state
   const [showCatPicker, setShowCatPicker] = useState(false);
 
-  // Ingredient bottom sheet — two-step: search → configure
   const [showIngSheet, setShowIngSheet] = useState(false);
   const [ingSearch, setIngSearch] = useState('');
-  const [ingSheetStep, setIngSheetStep] = useState('search'); // 'search' | 'config'
+  const [ingSheetStep, setIngSheetStep] = useState('search');
   const [ingSheetIngredient, setIngSheetIngredient] = useState(null);
   const [ingSheetQty, setIngSheetQty] = useState('');
   const [ingSheetUnit, setIngSheetUnit] = useState('');
   const [ingQtyError, setIngQtyError] = useState('');
   const [editingIngId, setEditingIngId] = useState(null);
+  /** Remaining ingredient IDs to configure after saving new ones from library */
+  const [addToDishQueue, setAddToDishQueue] = useState([]);
   const reopenIngredientPickerRef = useRef(false);
+  const addToDishQueueRef = useRef([]);
+  const recipeIngredientsRef = useRef(recipeIngredients);
 
-  // Selling format bottom sheet
   const [showFmtSheet, setShowFmtSheet] = useState(false);
   const [fmtSheetUnit, setFmtSheetUnit] = useState(sellingUnitOptions[0]?.value ?? 'piece');
   const [fmtSheetQty, setFmtSheetQty] = useState('1');
@@ -78,7 +95,7 @@ export default function CreateRecipeScreen() {
   const [fmtPriceError, setFmtPriceError] = useState('');
   const [editingFmtId, setEditingFmtId] = useState(null);
 
-  const { control, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm({
+  const { control, handleSubmit, watch, trigger, reset, formState: { errors, isSubmitting } } = useForm({
     defaultValues: {
       name: '',
       category: 'other',
@@ -86,12 +103,95 @@ export default function CreateRecipeScreen() {
     },
   });
 
-  const [watchCategory, watchTarget] = watch(['category', 'target_food_cost_percent']);
-
+  const [watchName, watchCategory, watchTarget] = watch(['name', 'category', 'target_food_cost_percent']);
   const targetPct = parseFloat(watchTarget) || 30;
   const categoryLabel = RECIPE_CATEGORIES.find((c) => c.value === watchCategory)?.label ?? 'Other';
 
-  // Rich ingredients for cost calculation
+  const draftReadyRef = useRef(false);
+
+  const persistDraft = useCallback(async (nextStep = step) => {
+    await saveFoodCostDraft({
+      step: nextStep,
+      dish: {
+        name: watchName ?? '',
+        category: watchCategory ?? 'other',
+        target_food_cost_percent: watchTarget ?? String(settings.default_food_cost_percent ?? 30),
+      },
+      ingredients: recipeIngredients,
+      sellingFormats,
+    });
+  }, [step, watchName, watchCategory, watchTarget, recipeIngredients, sellingFormats, settings.default_food_cost_percent]);
+
+  // Restore unfinished draft once on mount (unless starting fresh after discard)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (startFresh) {
+        await clearFoodCostDraft();
+        if (cancelled) return;
+        reset({
+          name: '',
+          category: 'other',
+          target_food_cost_percent: String(settings.default_food_cost_percent ?? 30),
+        });
+        setStep(1);
+        setRecipeIngredients([]);
+        setSellingFormats([]);
+        setIngredientError(false);
+        setSellingFormatError(false);
+        draftReadyRef.current = true;
+        trackFoodCost('step_1', { source: 'fresh' });
+        return;
+      }
+      const draft = await loadFoodCostDraft();
+      if (cancelled) return;
+      if (isMeaningfulDraft(draft)) {
+        reset({
+          name: draft.dish?.name ?? '',
+          category: draft.dish?.category ?? 'other',
+          target_food_cost_percent: draft.dish?.target_food_cost_percent
+            ?? String(settings.default_food_cost_percent ?? 30),
+        });
+        const restoredStep = draft.step >= 1 && draft.step <= 3 ? draft.step : 1;
+        setStep(restoredStep);
+        setRecipeIngredients(draft.ingredients ?? []);
+        setSellingFormats(draft.sellingFormats ?? []);
+        trackFoodCost(`step_${restoredStep}`, { source: 'draft' });
+      } else {
+        trackFoodCost('step_1', { source: 'new' });
+      }
+      draftReadyRef.current = true;
+    })();
+    return () => { cancelled = true; };
+  }, [startFresh]);
+
+  // Attach live library rows when ingredients finish loading / update
+  useEffect(() => {
+    if (!draftReadyRef.current) return;
+    setRecipeIngredients((prev) => {
+      if (prev.length === 0) return prev;
+      let changed = false;
+      const next = prev.map((ri) => {
+        const live = ingredients.find((i) => i.id === ri.ingredient_id);
+        if (live && live !== ri.ingredient) {
+          changed = true;
+          return { ...ri, ingredient: live };
+        }
+        return ri;
+      });
+      return changed ? next : prev;
+    });
+  }, [ingredients]);
+
+  // Autosave draft while editing
+  useEffect(() => {
+    if (!draftReadyRef.current) return undefined;
+    const timer = setTimeout(() => {
+      persistDraft(step);
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [persistDraft, step]);
+
   const richIngredients = useMemo(() =>
     recipeIngredients
       .filter((ri) => ri.ingredient)
@@ -100,8 +200,6 @@ export default function CreateRecipeScreen() {
   );
 
   const { totalCost } = useRecipeCost({ recipeIngredients: richIngredients });
-
-  // ── Ingredient helpers ──────────────────────────────────────────────────────
 
   const addedIds = useMemo(() => new Set(recipeIngredients.map((r) => r.ingredient_id)), [recipeIngredients]);
 
@@ -124,19 +222,78 @@ export default function CreateRecipeScreen() {
     setIngSheetUnit('');
     setIngQtyError('');
     setEditingIngId(null);
+    setAddToDishQueue([]);
+    addToDishQueueRef.current = [];
     setIngSearch('');
     setIngredientError(false);
     setShowIngSheet(true);
   };
 
+  const openConfigForIngredient = useCallback((ing) => {
+    if (!ing) return;
+    setIngSheetIngredient(ing);
+    const compatible = getCompatibleUnits(ing.purchase_unit);
+    const defaultUnit = compatible.find((u) => u.value === ing.purchase_unit)?.value
+      ?? compatible[0]?.value
+      ?? ing.purchase_unit;
+    setIngSheetUnit(defaultUnit);
+    setIngSheetQty('');
+    setIngQtyError('');
+    setEditingIngId(null);
+    setIngSheetStep('config');
+    setShowIngSheet(true);
+  }, [getCompatibleUnits]);
+
+  const resolveIngredient = useCallback((id) => (
+    ingredients.find((i) => i.id === id)
+    ?? useIngredientStore.getState().getIngredientById(id)
+  ), [ingredients]);
+
+  const startAddToDishQueue = useCallback((ids) => {
+    const already = new Set(recipeIngredientsRef.current.map((r) => r.ingredient_id));
+    const pending = ids.filter((id) => id && !already.has(id));
+    if (pending.length === 0) return;
+
+    addToDishQueueRef.current = pending;
+    setAddToDishQueue(pending);
+
+    const openFirst = () => {
+      const ing = resolveIngredient(pending[0]);
+      if (ing) {
+        openConfigForIngredient(ing);
+        return true;
+      }
+      return false;
+    };
+
+    if (openFirst()) return;
+
+    // Store may still be settling — brief retries
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts += 1;
+      if (openFirst() || attempts >= 10) clearInterval(timer);
+    }, 50);
+  }, [openConfigForIngredient, resolveIngredient]);
+
   useFocusEffect(
     useCallback(() => {
+      const pendingIds = consumePendingAddToDishIngredientIds();
+      if (pendingIds.length > 0) {
+        reopenIngredientPickerRef.current = false;
+        startAddToDishQueue(pendingIds);
+        return;
+      }
       if (reopenIngredientPickerRef.current) {
         reopenIngredientPickerRef.current = false;
         openAddIngSheet();
       }
-    }, [])
+    }, [startAddToDishQueue])
   );
+
+  useEffect(() => {
+    recipeIngredientsRef.current = recipeIngredients;
+  }, [recipeIngredients]);
 
   const openCreateIngredient = () => {
     reopenIngredientPickerRef.current = true;
@@ -148,6 +305,8 @@ export default function CreateRecipeScreen() {
   };
 
   const openEditIngSheet = (ri) => {
+    setAddToDishQueue([]);
+    addToDishQueueRef.current = [];
     setIngSheetStep('config');
     setIngSheetIngredient(ri.ingredient);
     setIngSheetQty(String(ri.quantity));
@@ -162,6 +321,8 @@ export default function CreateRecipeScreen() {
   };
 
   const handleIngSelect = (ing) => {
+    setAddToDishQueue([]);
+    addToDishQueueRef.current = [];
     setIngSheetIngredient(ing);
     const compatible = getCompatibleUnits(ing.purchase_unit);
     const defaultUnit = compatible.find((u) => u.value === ing.purchase_unit)?.value
@@ -186,13 +347,38 @@ export default function CreateRecipeScreen() {
       setRecipeIngredients((prev) =>
         prev.map((r) => r.ingredient_id === editingIngId ? { ...r, quantity: qtyStr, unit: ingSheetUnit } : r)
       );
-    } else {
-      setRecipeIngredients((prev) => [
+      setIngredientError(false);
+      setShowIngSheet(false);
+      return;
+    }
+
+    setRecipeIngredients((prev) => {
+      if (prev.some((r) => r.ingredient_id === ingSheetIngredient.id)) {
+        return prev.map((r) => r.ingredient_id === ingSheetIngredient.id
+          ? { ...r, quantity: qtyStr, unit: ingSheetUnit, ingredient: ingSheetIngredient }
+          : r);
+      }
+      return [
         ...prev,
         { ingredient_id: ingSheetIngredient.id, ingredient: ingSheetIngredient, quantity: qtyStr, unit: ingSheetUnit },
-      ]);
-    }
+      ];
+    });
     setIngredientError(false);
+
+    const queue = addToDishQueueRef.current;
+    if (queue.length > 1) {
+      const rest = queue.slice(1);
+      addToDishQueueRef.current = rest;
+      setAddToDishQueue(rest);
+      const nextIng = resolveIngredient(rest[0]);
+      if (nextIng) {
+        openConfigForIngredient(nextIng);
+        return;
+      }
+    }
+
+    addToDishQueueRef.current = [];
+    setAddToDishQueue([]);
     setShowIngSheet(false);
   };
 
@@ -203,13 +389,13 @@ export default function CreateRecipeScreen() {
     setIngSheetIngredient(null);
     setEditingIngId(null);
     setIngQtyError('');
+    setAddToDishQueue([]);
+    addToDishQueueRef.current = [];
   };
 
   const removeIngredient = (ingredientId) => {
     setRecipeIngredients((prev) => prev.filter((r) => r.ingredient_id !== ingredientId));
   };
-
-  // ── Selling format helpers ─────────────────────────────────────────────────
 
   const openAddFmtSheet = () => {
     setFmtSheetUnit(sellingUnitOptions[0]?.value ?? 'piece');
@@ -256,7 +442,76 @@ export default function CreateRecipeScreen() {
     setSellingFormats((prev) => prev.filter((f) => f.id !== id));
   };
 
-  // ── Submit ─────────────────────────────────────────────────────────────────
+  const goBack = async () => {
+    if (step > 1) {
+      const prev = step - 1;
+      await persistDraft(prev);
+      setStep(prev);
+      trackFoodCost(`step_${prev}`, { direction: 'back' });
+      requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
+      return;
+    }
+    await persistDraft(1);
+    router.back();
+  };
+
+  const canReachStep = useCallback((target) => {
+    if (target === step) return true;
+    if (target < step) return true;
+    if (target === 2) return Boolean(watchName?.trim());
+    if (target === 3) {
+      return Boolean(watchName?.trim()) && recipeIngredients.length > 0;
+    }
+    return false;
+  }, [step, watchName, recipeIngredients.length]);
+
+  const goToStep = async (target) => {
+    if (target === step) return;
+
+    if (target > step) {
+      if (target >= 2) {
+        const ok = await trigger('name');
+        if (!ok) {
+          setStep(1);
+          return;
+        }
+      }
+      if (target >= 3 && recipeIngredients.length === 0) {
+        setIngredientError(true);
+        if (step !== 2) {
+          await persistDraft(2);
+          setStep(2);
+        }
+        return;
+      }
+    }
+
+    await persistDraft(target);
+    setStep(target);
+    trackFoodCost(`step_${target}`, { direction: target < step ? 'jump_back' : 'jump_forward' });
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
+  };
+
+  const goNextFromDish = async () => {
+    const ok = await trigger('name');
+    if (!ok) return;
+    await persistDraft(2);
+    setStep(2);
+    trackFoodCost('step_2', { direction: 'forward' });
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
+  };
+
+  const goNextFromIngredients = async () => {
+    if (recipeIngredients.length === 0) {
+      setIngredientError(true);
+      return;
+    }
+    setIngredientError(false);
+    await persistDraft(3);
+    setStep(3);
+    trackFoodCost('step_3', { direction: 'forward' });
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
+  };
 
   const onSubmit = async (data) => {
     const hasIngredients = recipeIngredients.length > 0;
@@ -266,7 +521,12 @@ export default function CreateRecipeScreen() {
     setIngredientError(!hasIngredients);
     setSellingFormatError(!hasSellingFormat);
 
-    if (!hasIngredients || !hasSellingFormat) return;
+    if (!hasIngredients || !hasSellingFormat) {
+      if (!hasIngredients) setStep(2);
+      else setStep(3);
+      return;
+    }
+
     const submitIngredients = recipeIngredients.map((ri) => ({
       ingredient_id: ri.ingredient_id,
       quantity: parseFloat(ri.quantity) || 0,
@@ -288,256 +548,281 @@ export default function CreateRecipeScreen() {
       namedFormats
     );
     if (error) { Alert.alert('Error', error); return; }
-    // justSaved lets the detail screen decide whether this is a good
-    // moment to ask for a store review (engagement-based, see storeReview.js).
+    await clearFoodCostDraft();
+    trackFoodCost('wizard_completed', { recipeId: recipe.id });
     router.replace({
       pathname: '/recipe/[id]',
       params: { id: recipe.id, justSaved: '1' },
     });
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  const footerButton = () => {
+    if (step === 1) {
+      return <Button title={C.action.continue} onPress={goNextFromDish} size="lg" />;
+    }
+    if (step === 2) {
+      return <Button title={C.action.continue} onPress={goNextFromIngredients} size="lg" />;
+    }
+    return (
+      <Button
+        title={C.action.seeResult}
+        onPress={handleSubmit(onSubmit)}
+        loading={isSubmitting}
+        size="lg"
+      />
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create recipe</Text>
-          <View style={{ width: 24 }} />
-        </View>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={goBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{C.wizard.header}</Text>
+        <View style={{ width: 24 }} />
+      </View>
 
-        <KeyboardFormLayout
-          scrollRef={scrollRef}
-          contentContainerStyle={styles.scroll}
-          scrollProps={{ onLayout: handleScrollLayout }}
-          footer={(
-            <View style={styles.stickyFooter}>
-              <Button title="Save recipe" onPress={handleSubmit(onSubmit)} loading={isSubmitting} size="lg" />
-            </View>
-          )}
-        >
+      <WizardProgress step={step} onStepPress={goToStep} canReachStep={canReachStep} />
 
-          {/* Recipe name */}
-          <Controller control={control} name="name" rules={{ required: 'Name is required' }}
-            render={({ field: { onChange, value } }) => (
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Recipe name</Text>
-                <View style={[styles.inputBox, errors.name && styles.inputBoxError]}>
-                  <TextInput
-                    style={styles.textInput}
-                    value={value}
-                    onChangeText={onChange}
-                    placeholder="e.g. Chocolate cupcakes..."
-                    placeholderTextColor={COLORS.textTertiary}
-                    autoCapitalize="words"
-                  />
-                </View>
-                {errors.name && <Text style={styles.errorText}>{errors.name.message}</Text>}
-              </View>
-            )} />
+      <KeyboardFormLayout
+        scrollRef={scrollRef}
+        contentContainerStyle={styles.scroll}
+        footer={<View style={styles.stickyFooter}>{footerButton()}</View>}
+      >
+        <Text style={styles.stepTitle}>{C.wizard.stepTitles[step]}</Text>
+        <Text style={styles.stepSub}>{C.wizard.stepSubs[step]}</Text>
 
-          {/* Category + Food cost target */}
-          <View style={styles.twoCol}>
-            <Controller control={control} name="category"
-              render={({ field: { value } }) => (
-                <View style={[styles.fieldGroup, { flex: 1 }]}>
-                  <Text style={styles.fieldLabel}>Category</Text>
-                  <TouchableOpacity
-                    style={[styles.inputBox, styles.pickerBox]}
-                    onPress={() => setShowCatPicker(true)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.pickerText}>{categoryLabel}</Text>
-                    <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
-                  </TouchableOpacity>
-                </View>
-              )} />
-
-            <View style={{ width: SPACING.sm }} />
-
-            <Controller control={control} name="target_food_cost_percent"
+        {step === 1 && (
+          <>
+            <Controller
+              control={control}
+              name="name"
+              rules={{ required: C.wizard.dishNameRequired }}
               render={({ field: { onChange, value } }) => (
-                <View style={[styles.fieldGroup, { flex: 0.65 }]}>
-                  <Text style={styles.fieldLabel}>Food cost target</Text>
-                  <View style={styles.inputBox}>
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>{C.wizard.dishName}</Text>
+                  <View style={[styles.inputBox, errors.name && styles.inputBoxError]}>
                     <TextInput
                       style={styles.textInput}
                       value={value}
                       onChangeText={onChange}
-                      keyboardType="numeric"
-                      placeholder="30"
+                      placeholder="e.g. Chocolate chip cookies"
                       placeholderTextColor={COLORS.textTertiary}
+                      autoCapitalize="words"
                     />
-                    <Text style={styles.suffix}>%</Text>
                   </View>
+                  {errors.name && <Text style={styles.errorText}>{errors.name.message}</Text>}
                 </View>
-              )} />
-          </View>
+              )}
+            />
 
-          {/* INGREDIENTS */}
-          <Text style={styles.sectionLabel}>INGREDIENTS</Text>
-          <View style={[styles.card, ingredientError && styles.cardError]}>
-            {recipeIngredients.length === 0 ? (
-              <Text style={[styles.emptySectionHint, ingredientError && styles.emptySectionHintError]}>
-                Add ingredients for this recipe.
-              </Text>
-            ) : (
-              recipeIngredients.map((ri, idx) => {
-                const usage = getIngredientUsageSummary(ri.ingredient, ri.quantity, ri.unit, symbol);
-                return (
-                  <View key={ri.ingredient_id}>
-                    {idx > 0 && <View style={styles.ingRowDivider} />}
+            <View style={styles.twoCol}>
+              <Controller
+                control={control}
+                name="category"
+                render={() => (
+                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                    <Text style={styles.fieldLabel}>Category</Text>
                     <TouchableOpacity
-                      style={styles.ingRow}
-                      onPress={() => openEditIngSheet(ri)}
-                      activeOpacity={0.75}
+                      style={[styles.inputBox, styles.pickerBox]}
+                      onPress={() => setShowCatPicker(true)}
+                      activeOpacity={0.7}
                     >
-                      <View style={styles.ingRowLeft}>
-                        <Text style={styles.ingName} numberOfLines={1}>{ri.ingredient?.name}</Text>
-                        {usage ? (
-                          <Text style={styles.ingUsageLine}>{usage.usageLine}</Text>
-                        ) : null}
-                      </View>
-                      <View style={styles.ingMeta}>
-                        <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => removeIngredient(ri.ingredient_id)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        style={{ marginLeft: SPACING.xs }}
-                      >
-                        <Ionicons name="close" size={16} color={COLORS.textTertiary} />
-                      </TouchableOpacity>
+                      <Text style={styles.pickerText}>{categoryLabel}</Text>
+                      <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
                     </TouchableOpacity>
                   </View>
-                );
-              })
-            )}
-
-            <TouchableOpacity
-              style={styles.addIngBtn}
-              onPress={openAddIngSheet}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="add" size={18} color={COLORS.primary} />
-              <Text style={styles.addIngText}>Add ingredient</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* SELLING FORMATS */}
-          <Text style={styles.sectionLabel}>SELLING FORMATS</Text>
-          <View style={[styles.card, sellingFormatError && styles.cardError]}>
-            {sellingFormats.length === 0 ? (
-              <Text style={[styles.emptySectionHint, sellingFormatError && styles.emptySectionHintError]}>
-                Add at least one selling format with a price. This is required to calculate food cost and margins.
-              </Text>
-            ) : (
-              sellingFormats.map((fmt, idx) => {
-                const unitLabel = sellingUnitOptions.find((u) => u.value === fmt.selling_unit_name)?.label ?? fmt.selling_unit_name;
-                const autoName = formatSellingFormatName(unitLabel, fmt.unit_quantity);
-                const price = parseFloat(fmt.selling_price);
-                return (
-                  <View key={fmt.id}>
-                    {idx > 0 && <View style={styles.fmtDivider} />}
-                    <TouchableOpacity style={styles.fmtSummaryRow} onPress={() => openEditFmtSheet(fmt)} activeOpacity={0.75}>
-                      <View style={styles.fmtSummaryLeft}>
-                        <Text style={styles.fmtAutoLabel}>{autoName}</Text>
-                        <Text style={styles.fmtPriceLabel}>{labelPerSellingUnit('Selling price per', unitLabel)}</Text>
-                        <Text style={styles.fmtPriceDot}>{symbol}{price.toFixed(2)}</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} style={{ marginLeft: SPACING.xs }} />
-                      <TouchableOpacity
-                        onPress={() => removeFormat(fmt.id)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        style={{ marginLeft: SPACING.sm }}
-                      >
-                        <Ionicons name="trash-outline" size={15} color={COLORS.error} />
-                      </TouchableOpacity>
-                    </TouchableOpacity>
+                )}
+              />
+              <View style={{ width: SPACING.sm }} />
+              <Controller
+                control={control}
+                name="target_food_cost_percent"
+                render={({ field: { onChange, value } }) => (
+                  <View style={[styles.fieldGroup, { flex: 0.65 }]}>
+                    <Text style={styles.fieldLabel}>Food cost target</Text>
+                    <View style={styles.inputBox}>
+                      <TextInput
+                        style={styles.textInput}
+                        value={value}
+                        onChangeText={onChange}
+                        keyboardType="numeric"
+                        placeholder="30"
+                        placeholderTextColor={COLORS.textTertiary}
+                      />
+                      <Text style={styles.suffix}>%</Text>
+                    </View>
                   </View>
-                );
-              })
-            )}
+                )}
+              />
+            </View>
+            <Text style={styles.hint}>A common food cost target is 25–35%.</Text>
+          </>
+        )}
 
-            <TouchableOpacity style={styles.addIngBtn} onPress={openAddFmtSheet} activeOpacity={0.7}>
-              <Ionicons name="add" size={18} color={COLORS.primary} />
-              <Text style={styles.addIngText}>Add selling format</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* LIVE COST PREVIEW */}
-          {richIngredients.length > 0 && (
-            <>
-              <Text style={styles.sectionLabel}>LIVE COST PREVIEW</Text>
-              <View style={styles.previewCard}>
-                <View style={styles.previewRow}>
-                  <Text style={styles.previewLabel}>Total recipe cost</Text>
-                  <Text style={styles.previewValue}>{formatCurrency(totalCost, symbol)}</Text>
-                </View>
-
-                {sellingFormats.map((fmt) => {
-                  const price = parseFloat(fmt.selling_price);
-                  if (!price) return null;
-                  const unitLabel = sellingUnitOptions.find((u) => u.value === fmt.selling_unit_name)?.label ?? fmt.selling_unit_name;
-                  const fmtLabel = formatSellingFormatName(unitLabel, fmt.unit_quantity);
-                  const metrics = calculateSellingFormatMetrics({
-                    totalRecipeCost: totalCost,
-                    unitQuantity: fmt.unit_quantity,
-                    sellingPrice: fmt.selling_price,
-                    targetFoodCostPercent: targetPct,
-                  });
-                  const fcp = metrics.foodCostPercent ?? 0;
-                  const color = metrics.marginStatus === 'good' ? COLORS.success
-                    : metrics.marginStatus === 'warning' ? COLORS.warning
-                    : metrics.marginStatus === 'danger' ? COLORS.error
-                    : COLORS.text;
-
-                  const qty = (metrics.quantityMade ?? parseFloat(fmt.unit_quantity)) || 1;
+        {step === 2 && (
+          <>
+            <View style={[styles.card, ingredientError && styles.cardError]}>
+              {recipeIngredients.length === 0 ? (
+                <Text style={[styles.emptySectionHint, ingredientError && styles.emptySectionHintError]}>
+                  Add at least one ingredient to continue.
+                </Text>
+              ) : (
+                recipeIngredients.map((ri, idx) => {
+                  const usage = getIngredientUsageSummary(ri.ingredient, ri.quantity, ri.unit, symbol);
                   return (
-                    <View key={fmt.id}>
-                      <View style={styles.previewDivider} />
-                      <Text style={styles.previewFormatName}>{fmtLabel}</Text>
-                      <View style={styles.previewRow}>
-                        <Text style={styles.previewLabel}>{labelPerSellingUnit('Cost per', unitLabel)}</Text>
-                        <Text style={styles.previewValue}>{formatCurrency(metrics.costPerUnit, symbol)}</Text>
-                      </View>
-                      <View style={styles.previewRow}>
-                        <Text style={styles.previewLabel}>{labelPerSellingUnit('Selling price per', unitLabel)}</Text>
-                        <Text style={styles.previewValue}>{formatCurrency(price, symbol)}</Text>
-                      </View>
-                      <View style={styles.previewRow}>
-                        <Text style={styles.previewLabel}>Food cost %</Text>
-                        <Text style={[styles.previewValue, { color, fontWeight: '700' }]}>
-                          {formatFoodCostPercent(fcp)}
-                        </Text>
-                      </View>
-                      <View style={styles.previewRow}>
-                        <Text style={styles.previewLabel}>{labelPerSellingUnit('Profit per', unitLabel)}</Text>
-                        <Text style={styles.previewValue}>{formatCurrency(metrics.profit, symbol)}</Text>
-                      </View>
-                      <View style={styles.previewRow}>
-                        <Text style={styles.previewLabel}>Total batch profit</Text>
-                        <Text style={styles.previewValue}>
-                          {formatCurrency(metrics.batchProfit, symbol)}
-                          <Text style={styles.previewHint}>
-                            {` (${qty} × ${formatCurrency(metrics.profit, symbol)})`}
-                          </Text>
-                        </Text>
-                      </View>
+                    <View key={ri.ingredient_id}>
+                      {idx > 0 && <View style={styles.ingRowDivider} />}
+                      <TouchableOpacity
+                        style={styles.ingRow}
+                        onPress={() => openEditIngSheet(ri)}
+                        activeOpacity={0.75}
+                      >
+                        <View style={styles.ingRowLeft}>
+                          <Text style={styles.ingName} numberOfLines={1}>{ri.ingredient?.name}</Text>
+                          {usage ? (
+                            <Text style={styles.ingUsageLine}>{usage.usageLine}</Text>
+                          ) : null}
+                        </View>
+                        <View style={styles.ingMeta}>
+                          <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => removeIngredient(ri.ingredient_id)}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          style={{ marginLeft: SPACING.xs }}
+                        >
+                          <Ionicons name="close" size={16} color={COLORS.textTertiary} />
+                        </TouchableOpacity>
+                      </TouchableOpacity>
                     </View>
                   );
-                })}
-              </View>
-            </>
-          )}
+                })
+              )}
 
-        </KeyboardFormLayout>
+              <TouchableOpacity style={styles.addIngBtn} onPress={openAddIngSheet} activeOpacity={0.7}>
+                <Ionicons name="add" size={18} color={COLORS.primary} />
+                <Text style={styles.addIngText}>Add ingredient</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
-      {/* Category picker */}
+        {step === 3 && (
+          <>
+            <View style={[styles.card, sellingFormatError && styles.cardError]}>
+              {sellingFormats.length === 0 ? (
+                <Text style={[styles.emptySectionHint, sellingFormatError && styles.emptySectionHintError]}>
+                  Add at least one selling price to see food cost and margins.
+                </Text>
+              ) : (
+                sellingFormats.map((fmt, idx) => {
+                  const unitLabel = sellingUnitOptions.find((u) => u.value === fmt.selling_unit_name)?.label ?? fmt.selling_unit_name;
+                  const autoName = formatSellingFormatName(unitLabel, fmt.unit_quantity);
+                  const price = parseFloat(fmt.selling_price);
+                  return (
+                    <View key={fmt.id}>
+                      {idx > 0 && <View style={styles.fmtDivider} />}
+                      <TouchableOpacity style={styles.fmtSummaryRow} onPress={() => openEditFmtSheet(fmt)} activeOpacity={0.75}>
+                        <View style={styles.fmtSummaryLeft}>
+                          <Text style={styles.fmtAutoLabel}>{autoName}</Text>
+                          <Text style={styles.fmtPriceLabel}>{labelPerSellingUnit('Selling price per', unitLabel)}</Text>
+                          <Text style={styles.fmtPriceDot}>{symbol}{price.toFixed(2)}</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} style={{ marginLeft: SPACING.xs }} />
+                        <TouchableOpacity
+                          onPress={() => removeFormat(fmt.id)}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          style={{ marginLeft: SPACING.sm }}
+                        >
+                          <Ionicons name="trash-outline" size={15} color={COLORS.error} />
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })
+              )}
+
+              <TouchableOpacity style={styles.addIngBtn} onPress={openAddFmtSheet} activeOpacity={0.7}>
+                <Ionicons name="add" size={18} color={COLORS.primary} />
+                <Text style={styles.addIngText}>
+                  {sellingFormats.length === 0 ? 'Add selling price' : 'Add another selling format'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {richIngredients.length > 0 && (
+              <>
+                <Text style={styles.sectionLabel}>LIVE FOOD COST</Text>
+                <View style={styles.previewCard}>
+                  <View style={styles.previewRow}>
+                    <Text style={styles.previewLabel}>{C.wizard.totalDishCost}</Text>
+                    <Text style={styles.previewValue}>{formatCurrency(totalCost, symbol)}</Text>
+                  </View>
+
+                  {sellingFormats.map((fmt) => {
+                    const price = parseFloat(fmt.selling_price);
+                    if (!price) return null;
+                    const unitLabel = sellingUnitOptions.find((u) => u.value === fmt.selling_unit_name)?.label ?? fmt.selling_unit_name;
+                    const fmtLabel = formatSellingFormatName(unitLabel, fmt.unit_quantity);
+                    const metrics = calculateSellingFormatMetrics({
+                      totalRecipeCost: totalCost,
+                      unitQuantity: fmt.unit_quantity,
+                      sellingPrice: fmt.selling_price,
+                      targetFoodCostPercent: targetPct,
+                    });
+                    const fcp = metrics.foodCostPercent ?? 0;
+                    const color = metrics.marginStatus === 'good' ? COLORS.success
+                      : metrics.marginStatus === 'warning' ? COLORS.warning
+                      : metrics.marginStatus === 'danger' ? COLORS.error
+                      : COLORS.text;
+                    const qty = (metrics.quantityMade ?? parseFloat(fmt.unit_quantity)) || 1;
+                    return (
+                      <View key={fmt.id}>
+                        <View style={styles.previewDivider} />
+                        <Text style={styles.previewFormatName}>{fmtLabel}</Text>
+                        <View style={styles.previewRow}>
+                          <Text style={styles.previewLabel}>{labelPerSellingUnit('Cost per', unitLabel)}</Text>
+                          <Text style={styles.previewValue}>{formatCurrency(metrics.costPerUnit, symbol)}</Text>
+                        </View>
+                        <View style={styles.previewRow}>
+                          <Text style={styles.previewLabel}>{labelPerSellingUnit('Selling price per', unitLabel)}</Text>
+                          <Text style={styles.previewValue}>{formatCurrency(price, symbol)}</Text>
+                        </View>
+                        <View style={styles.previewRow}>
+                          <Text style={styles.previewLabel}>Food cost %</Text>
+                          <Text style={[styles.previewValue, { color, fontWeight: '700' }]}>
+                            {formatFoodCostPercent(fcp)}
+                          </Text>
+                        </View>
+                        <View style={styles.previewRow}>
+                          <Text style={styles.previewLabel}>{labelPerSellingUnit('Profit per', unitLabel)}</Text>
+                          <Text style={styles.previewValue}>{formatCurrency(metrics.profit, symbol)}</Text>
+                        </View>
+                        <View style={styles.previewRow}>
+                          <Text style={styles.previewLabel}>Total dish profit</Text>
+                          <Text style={styles.previewValue}>
+                            {formatCurrency(metrics.batchProfit, symbol)}
+                            <Text style={styles.previewHint}>
+                              {` (${qty} × ${formatCurrency(metrics.profit, symbol)})`}
+                            </Text>
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+          </>
+        )}
+      </KeyboardFormLayout>
+
       <Modal visible={showCatPicker} onClose={() => setShowCatPicker(false)} title="Category" scrollable={false}>
-        <Controller control={control} name="category"
+        <Controller
+          control={control}
+          name="category"
           render={({ field: { onChange, value } }) => (
             <>
               {RECIPE_CATEGORIES.map((cat) => (
@@ -551,23 +836,45 @@ export default function CreateRecipeScreen() {
                 </TouchableOpacity>
               ))}
             </>
-          )} />
+          )}
+        />
       </Modal>
 
-      {/* ── Ingredient bottom sheet (two-step: search → configure) ── */}
       <Modal
         visible={showIngSheet}
         onClose={handleIngSheetClose}
-        title={ingSheetStep === 'search' ? 'Add ingredient' : (ingSheetIngredient?.name ?? 'Configure')}
+        title={
+          ingSheetStep === 'search'
+            ? 'Add ingredient'
+            : editingIngId
+              ? (ingSheetIngredient?.name ?? 'Configure')
+              : howMuchTitle(ingSheetIngredient?.name)
+        }
         scrollable={false}
         footer={ingSheetStep === 'config' ? (
           <>
+            {addToDishQueue.length > 1 ? (
+              <View style={styles.sheetQueueFooter}>
+                <Text style={styles.sheetQueueCount}>
+                  {addToDishQueue.length} ingredients left to add
+                </Text>
+                <Text style={styles.sheetQueueHint}>
+                  Tap Next to add another ingredient to this dish
+                </Text>
+              </View>
+            ) : null}
             <Button
-              title={editingIngId ? 'Update' : 'Add to recipe'}
+              title={
+                editingIngId
+                  ? 'Update'
+                  : addToDishQueue.length > 1
+                    ? 'Next'
+                    : 'Add to dish'
+              }
               onPress={handleIngSheetConfirm}
               size="lg"
             />
-            {editingIngId === null && (
+            {editingIngId === null && addToDishQueue.length === 0 && (
               <TouchableOpacity onPress={() => setIngSheetStep('search')} style={styles.sheetBackBtn}>
                 <Text style={styles.sheetBackText}>← Back to search</Text>
               </TouchableOpacity>
@@ -598,14 +905,14 @@ export default function CreateRecipeScreen() {
               </View>
               <View style={styles.createIngredientCopy}>
                 <Text style={styles.createIngredientTitle}>New ingredient</Text>
-                <Text style={styles.createIngredientHint}>Save it once and reuse it in any recipe</Text>
+                <Text style={styles.createIngredientHint}>Add one you haven’t used before</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
             </TouchableOpacity>
             {ingredients.length === 0 ? (
               <View style={styles.modalEmpty}>
                 <Text style={styles.modalEmptyText}>No ingredients yet</Text>
-                <Text style={styles.modalEmptyHint}>Create your first library ingredient above.</Text>
+                <Text style={styles.modalEmptyHint}>Tap New ingredient above to add your first one.</Text>
               </View>
             ) : (
               <FlatList
@@ -686,7 +993,6 @@ export default function CreateRecipeScreen() {
         )}
       </Modal>
 
-      {/* ── Selling format bottom sheet ── */}
       <Modal
         visible={showFmtSheet}
         onClose={() => setShowFmtSheet(false)}
@@ -768,7 +1074,6 @@ export default function CreateRecipeScreen() {
             </View>
           );
         })()}
-
       </Modal>
     </SafeAreaView>
   );
@@ -786,13 +1091,47 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     backgroundColor: COLORS.surface,
   },
-  headerTitle: { fontSize: FONT_SIZE.md, fontWeight: '600', color: COLORS.text },
+  headerTitle: { fontSize: FONT_SIZE.md, fontWeight: '700', color: COLORS.text },
   scroll: { padding: SPACING.md, paddingBottom: SPACING.xxl },
+
+  stepTitle: {
+    fontSize: FONT_SIZE.xl,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
+  },
+  stepSub: {
+    fontSize: FONT_SIZE.base,
+    color: COLORS.textSecondary,
+    lineHeight: 22,
+    marginBottom: SPACING.lg,
+  },
+  hint: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textTertiary,
+    marginTop: -SPACING.sm,
+  },
+  teachCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.primaryLight,
+    backgroundColor: '#F0FDF4',
+  },
+  teachText: {
+    flex: 1,
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+  },
 
   fieldGroup: { marginBottom: SPACING.md },
   twoCol: { flexDirection: 'row', alignItems: 'flex-start' },
   fieldLabel: { fontSize: FONT_SIZE.sm, fontWeight: '600', color: COLORS.text, marginBottom: SPACING.xs },
-  colLabel: { fontSize: FONT_SIZE.xs, fontWeight: '600', color: COLORS.textSecondary, marginBottom: SPACING.xs },
   errorText: { fontSize: FONT_SIZE.xs, color: COLORS.error, marginTop: SPACING.xs },
 
   inputBox: {
@@ -829,7 +1168,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textTertiary,
     letterSpacing: 0.8,
-    marginTop: SPACING.md,
+    marginTop: SPACING.lg,
     marginBottom: SPACING.sm,
   },
   card: {
@@ -857,8 +1196,6 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
   },
 
-  // Ingredient table
-  // Ingredient list rows (tappable, read-only)
   ingRowDivider: { height: 1, backgroundColor: COLORS.border },
   ingRow: {
     flexDirection: 'row',
@@ -881,10 +1218,10 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: COLORS.primary,
     borderRadius: RADIUS.md,
+    minHeight: 44,
   },
   addIngText: { fontSize: FONT_SIZE.sm, color: COLORS.primary, fontWeight: '600' },
 
-  // Selling format summary rows
   fmtDivider: { height: 1, backgroundColor: COLORS.border },
   fmtSummaryRow: {
     flexDirection: 'row',
@@ -897,16 +1234,30 @@ const styles = StyleSheet.create({
   fmtPriceLabel: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary },
   fmtPriceDot: { fontSize: FONT_SIZE.sm, fontWeight: '700', color: COLORS.primary },
 
-  // Shared sheet styles
   sheetLabel: { fontSize: FONT_SIZE.sm, fontWeight: '600', color: COLORS.text, marginBottom: SPACING.xs },
   sheetSub: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, marginBottom: SPACING.xs },
+  sheetQueueFooter: {
+    marginBottom: SPACING.sm,
+    alignItems: 'center',
+  },
+  sheetQueueCount: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '700',
+    color: COLORS.primary,
+    textAlign: 'center',
+  },
+  sheetQueueHint: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: 2,
+  },
   sheetUsageWrap: { marginTop: SPACING.xs, gap: 2 },
   sheetUsageLine: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, lineHeight: 16 },
   sheetConvertedLine: { fontSize: FONT_SIZE.xs, color: COLORS.primary, fontWeight: '600', lineHeight: 16 },
   sheetBackBtn: { alignItems: 'center', paddingVertical: SPACING.sm, marginTop: SPACING.xs },
   sheetBackText: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary },
 
-  // Format sheet chip/label
   formatMeta: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -927,7 +1278,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
-  // Live cost preview
   previewCard: {
     backgroundColor: COLORS.surface,
     borderRadius: RADIUS.lg,
@@ -947,20 +1297,6 @@ const styles = StyleSheet.create({
   previewHint: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, fontWeight: '400' },
   previewDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: SPACING.sm },
 
-  // Sticky cost strip + footer
-  costStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-  },
-  costStripMetric: { flex: 1, alignItems: 'center' },
-  costStripLabel: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginBottom: 1 },
-  costStripValue: { fontSize: FONT_SIZE.sm, fontWeight: '600', color: COLORS.text },
-  costStripDivider: { width: 1, height: 28, backgroundColor: COLORS.border },
   stickyFooter: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
@@ -969,7 +1305,6 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
   },
 
-  // Shared picker/modal styles
   listRow: {
     flexDirection: 'row',
     alignItems: 'center',

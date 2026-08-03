@@ -19,6 +19,7 @@ import {
   HOBBYIST_ANNUAL_USD,
   HOBBYIST_MONTHLY_USD,
 } from '../../constants/subscription';
+import { FOOD_COST_COPY as C } from '../../constants/copy';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 function formatUsd(amount) {
@@ -31,18 +32,18 @@ function formatUsd(amount) {
 }
 
 const FEATURES = [
-  { icon: 'infinite-outline', text: 'Unlimited recipes' },
-  { icon: 'leaf-outline', text: 'Unlimited ingredients' },
+  { icon: 'infinite-outline', text: 'Unlimited dishes' },
+  { icon: 'leaf-outline', text: 'Unlimited library items' },
   { icon: 'trending-up-outline', text: 'Ingredient price history' },
   { icon: 'cloud-outline', text: 'Cloud sync across devices' },
 ];
 
 const REASON_TEXT = {
-  recipe: "You've reached the 5 recipe limit on the free plan.",
-  ingredient: "You've reached the 20 ingredient limit on the free plan.",
-  priceHistory: 'Price history is a Hobbyist feature.',
-  upgrade: 'Unlock unlimited recipes, price history, and more.',
-  changePlan: 'Switch between monthly and annual billing. Your store account handles proration.',
+  recipe: C.paywall.recipe,
+  ingredient: C.paywall.ingredient,
+  priceHistory: C.paywall.priceHistory,
+  upgrade: C.paywall.upgrade,
+  changePlan: C.paywall.changePlan,
 };
 
 export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upgrade' }) {
@@ -136,7 +137,7 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upg
         } else {
           showAppAlert({
             title: 'Welcome to Hobbyist!',
-            message: 'Unlimited recipes, ingredients, and price history are now unlocked.',
+            message: 'Unlimited dishes, library items, and price history are now unlocked.',
             variant: 'success',
             onPrimary: onClose,
           });

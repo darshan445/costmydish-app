@@ -12,6 +12,7 @@ import { useIngredients } from '../../hooks/useIngredients';
 import { useSubscription } from '../../hooks/useSubscription';
 import useIngredientStore from '../../stores/ingredientStore';
 import useSettingsStore from '../../stores/settingsStore';
+import { FOOD_COST_COPY as C } from '../../constants/copy';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 export default function IngredientsScreen() {
@@ -52,7 +53,10 @@ export default function IngredientsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Ingredients</Text>
+        <View style={styles.headerText}>
+          <Text style={styles.title}>{C.library.title}</Text>
+          <Text style={styles.headerSub}>{C.library.subtitle}</Text>
+        </View>
         <TouchableOpacity onPress={handleAdd} style={styles.addBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="add-circle" size={32} color={COLORS.primary} />
         </TouchableOpacity>
@@ -62,7 +66,7 @@ export default function IngredientsScreen() {
         <Ionicons name="search" size={18} color={COLORS.textTertiary} style={{ marginRight: SPACING.sm }} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search ingredients…"
+          placeholder="Search library…"
           placeholderTextColor={COLORS.textTertiary}
           value={search}
           onChangeText={setSearch}
@@ -93,13 +97,13 @@ export default function IngredientsScreen() {
           )}
           ListEmptyComponent={
             search.length > 0 ? (
-              <EmptyState icon="🔍" title="No results" description={`No ingredients matching "${search}"`} />
+              <EmptyState icon="🔍" title="No results" description={`No items matching "${search}"`} />
             ) : (
               <EmptyState
                 icon="🥕"
-                title="No ingredients yet"
-                description="Add your ingredients with purchase prices to start costing recipes."
-                actionLabel="Add Ingredient"
+                title={C.library.emptyTitle}
+                description={C.library.emptyDescription}
+                actionLabel="Add to library"
                 onAction={handleAdd}
               />
             )
@@ -108,7 +112,7 @@ export default function IngredientsScreen() {
             filtered.length > 0 && search.length === 0 ? (
               <TouchableOpacity style={styles.ctaFooter} onPress={handleAdd} activeOpacity={0.7}>
                 <Ionicons name="add-circle-outline" size={18} color={COLORS.primary} style={{ marginRight: SPACING.xs }} />
-                <Text style={styles.ctaText}>Add another ingredient</Text>
+                <Text style={styles.ctaText}>Add another to library</Text>
               </TouchableOpacity>
             ) : null
           }
@@ -119,8 +123,8 @@ export default function IngredientsScreen() {
         visible={!!pendingDelete}
         onClose={() => setPendingDelete(null)}
         onConfirm={handleDeleteConfirm}
-        title="Delete Ingredient"
-        message={`Remove "${pendingDelete?.name}" from your library? Existing recipe costs may be affected.`}
+        title="Remove from library"
+        message={`Remove "${pendingDelete?.name}" from your library? Food costs that use it may be affected.`}
         confirmLabel="Delete"
         cancelLabel="Cancel"
         variant="danger"
@@ -135,7 +139,9 @@ export default function IngredientsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.surface },
+  headerText: { flex: 1, marginRight: SPACING.sm },
   title: { fontSize: FONT_SIZE.xl, fontWeight: '800', color: COLORS.text },
+  headerSub: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, marginTop: 2 },
   addBtn: { padding: 4 },
   searchBar: { flexDirection: 'row', alignItems: 'center', margin: SPACING.md, backgroundColor: COLORS.surface, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderWidth: 1, borderColor: COLORS.border },
   searchInput: { flex: 1, fontSize: FONT_SIZE.base, color: COLORS.text },

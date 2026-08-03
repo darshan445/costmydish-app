@@ -16,6 +16,7 @@ import { useSubscription } from '../../hooks/useSubscription';
 import { useUnitSystem } from '../../hooks/useUnitSystem';
 import { formatUnitLabel } from '../../constants/units';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from '../../constants/theme';
+import { setPendingAddToDishIngredientIds } from '../../lib/pendingRecipeIngredients';
 
 let _draftId = 0;
 function newDraftId() {
@@ -330,6 +331,9 @@ export default function CreateIngredientScreen() {
     }
 
     if (failures.length > 0) {
+      if (isFromRecipe && saved.length > 0) {
+        setPendingAddToDishIngredientIds(saved.map((s) => s.id));
+      }
       Alert.alert(
         'Partially saved',
         `${saved.length} saved. ${failures.length} failed: ${failures.map((f) => f.name).join(', ')}`,
@@ -345,6 +349,7 @@ export default function CreateIngredientScreen() {
     }
 
     if (isFromRecipe) {
+      setPendingAddToDishIngredientIds(saved.map((s) => s.id));
       router.back();
     } else {
       router.replace('/(tabs)/ingredients');

@@ -20,6 +20,7 @@ import { formatSubscriptionDate } from '../../utils/format';
 import { CURRENCIES } from '../../constants/currencies';
 import { UNIT_SYSTEMS } from '../../constants/units';
 import { PRIVACY_POLICY_URL, TERMS_URL, SUPPORT_EMAIL } from '../../constants/legal';
+import { FOOD_COST_COPY as C } from '../../constants/copy';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 export default function SettingsScreen() {
@@ -292,10 +293,10 @@ export default function SettingsScreen() {
                 </View>
               </View>
 
-              {/* Usage: Recipes */}
+              {/* Usage: Dishes */}
               <View style={styles.usageRow}>
                 <View style={styles.usageLabelRow}>
-                  <Text style={styles.usageLabel}>Recipes</Text>
+                  <Text style={styles.usageLabel}>{C.settings.usageDishes}</Text>
                   <Text style={styles.usageCount}>{recipeCount} / 5</Text>
                 </View>
                 <View style={styles.usageBar}>
@@ -307,10 +308,10 @@ export default function SettingsScreen() {
                 </View>
               </View>
 
-              {/* Usage: Ingredients */}
+              {/* Usage: Library */}
               <View style={styles.usageRow}>
                 <View style={styles.usageLabelRow}>
-                  <Text style={styles.usageLabel}>Ingredients</Text>
+                  <Text style={styles.usageLabel}>{C.settings.usageLibrary}</Text>
                   <Text style={styles.usageCount}>{ingredientCount} / 20</Text>
                 </View>
                 <View style={styles.usageBar}>
@@ -366,7 +367,7 @@ export default function SettingsScreen() {
               ) : null}
 
               {[
-                'Unlimited recipes & ingredients',
+                'Unlimited dishes & library items',
                 'Ingredient price history',
                 'Cloud sync across devices',
               ].map((f) => (
@@ -499,7 +500,7 @@ export default function SettingsScreen() {
               <Ionicons name="chevron-forward" size={16} color={COLORS.error} />
             </TouchableOpacity>
           </View>
-          <Text style={styles.dangerNote}>Deleting your account permanently removes all your recipes, ingredients and data.</Text>
+          <Text style={styles.dangerNote}>Deleting your account permanently removes all your dishes, library items and data.</Text>
         </View>
 
         {/* Legal */}
@@ -567,7 +568,7 @@ export default function SettingsScreen() {
         onClose={handleCancelCurrencyWarning}
         onConfirm={() => pendingCurrency && applyCurrency(pendingCurrency)}
         title="Change Currency?"
-        message={"Changing currency won't convert your existing recipe prices.\nYou'll need to update them manually."}
+        message={"Changing currency won't convert your existing dish prices.\nYou'll need to update them manually."}
         confirmLabel="Change Currency"
         cancelLabel="Cancel"
         variant="danger"
@@ -604,7 +605,7 @@ export default function SettingsScreen() {
         onClose={() => setShowSignOutConfirm(false)}
         onConfirm={handleSignOut}
         title="Sign Out"
-        message="You'll need to sign in again to access your recipes and ingredients."
+        message="You'll need to sign in again to access your dishes and library."
         confirmLabel="Sign Out"
         cancelLabel="Stay Signed In"
         variant="danger"
@@ -617,7 +618,7 @@ export default function SettingsScreen() {
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={handleDeleteAccount}
         title="Delete Account"
-        message={`This will permanently delete all your recipes, ingredients, and account data.\n\nThis cannot be undone.`}
+        message={`This will permanently delete all your dishes, library items, and account data.\n\nThis cannot be undone.`}
         confirmLabel="Yes, Delete Everything"
         cancelLabel="Keep My Account"
         variant="danger"

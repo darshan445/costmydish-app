@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
+import { FOOD_COST_COPY as C } from '../../constants/copy';
 import { formatCurrency, formatFoodCostPercent, formatPercent, formatCategory } from '../../utils/format';
 
 const MARGIN_LABELS = { good: 'On Target', warning: 'Slightly Over', danger: 'Over Budget' };
@@ -95,7 +96,7 @@ export const RecipeCard = memo(function RecipeCard({ recipe, costSummary, curren
 
         <View style={styles.metricsRow}>
           <View style={styles.metricHalf}>
-            <Text style={styles.metricLabel}>Total cost</Text>
+            <Text style={styles.metricLabel}>{C.result.dishCost}</Text>
             <Text style={styles.metricValue}>{formatCurrency(costSummary?.total_recipe_cost, currencySymbol)}</Text>
           </View>
           {foodCostDisplay != null && (
@@ -126,7 +127,7 @@ export const RecipeCard = memo(function RecipeCard({ recipe, costSummary, curren
             profitRowStyle,
           ]}>
             <Text style={styles.profitLabel}>
-              {profitDisplay.isRange ? 'Batch profit range' : 'Batch profit'}
+              {profitDisplay.isRange ? 'Dish profit range' : 'Dish profit'}
             </Text>
             <Text style={[
               styles.profitValue,

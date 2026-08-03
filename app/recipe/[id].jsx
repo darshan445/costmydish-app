@@ -17,6 +17,7 @@ import { maybeRequestStoreReview } from '../../lib/storeReview';
 import { useSubscription } from '../../hooks/useSubscription';
 import useRecipeStore from '../../stores/recipeStore';
 import useSettingsStore from '../../stores/settingsStore';
+import { FOOD_COST_COPY as C } from '../../constants/copy';
 import { COLORS, FONT_SIZE, SPACING, RADIUS } from '../../constants/theme';
 import { formatCategory, formatCurrency, formatFoodCostPercent } from '../../utils/format';
 import { formatSellingFormatName, labelPerSellingUnit } from '../../utils/sellingFormat';
@@ -164,6 +165,9 @@ export default function RecipeDetailScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.titleSection}>
+          <Text style={styles.resultEyebrow}>
+            {justSaved === '1' ? C.result.justSaved : C.result.default}
+          </Text>
           <Text style={styles.name}>{recipe.name}</Text>
           <View style={styles.metaRow}>
             {recipe.category && <Badge label={formatCategory(recipe.category)} variant="neutral" />}
@@ -172,7 +176,7 @@ export default function RecipeDetailScreen() {
           <Text style={styles.batchInfo}>Target: {recipe.target_food_cost_percent}% food cost</Text>
         </View>
 
-        <Text style={styles.sectionTitle}>Cost Summary</Text>
+        <Text style={styles.sectionTitle}>{C.result.summary}</Text>
 
         {ingredientsLoading ? (
           <View style={styles.costSkeletonCard}>
@@ -252,7 +256,7 @@ export default function RecipeDetailScreen() {
                       </Text>
                     </View>
                     <View style={styles.formatDetailRow}>
-                      <Text style={styles.formatDetailLabel}>Total batch profit:</Text>
+                      <Text style={styles.formatDetailLabel}>Total dish profit:</Text>
                       <Text style={styles.formatDetailValue}>
                         {formatCurrency(fm.batchProfit, symbol)}
                         <Text style={styles.formatDetailHint}>
@@ -283,7 +287,7 @@ export default function RecipeDetailScreen() {
 
         {!ingredientsLoading && formatMetrics.length === 0 && (
           <View style={styles.noFormatsHint}>
-            <Text style={styles.noFormatsText}>No selling prices set yet. Edit the recipe to add formats.</Text>
+            <Text style={styles.noFormatsText}>{C.result.noFormats}</Text>
           </View>
         )}
 
@@ -329,10 +333,10 @@ export default function RecipeDetailScreen() {
         visible={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={handleDelete}
-        title="Delete Recipe"
-        message="This will permanently remove this recipe and all its cost data. This cannot be undone."
-        confirmLabel="Delete Recipe"
-        cancelLabel="Keep Recipe"
+        title={C.result.deleteTitle}
+        message={C.result.deleteMessage}
+        confirmLabel={C.result.deleteConfirm}
+        cancelLabel={C.result.deleteCancel}
         variant="danger"
         loading={deleting}
       />
@@ -347,6 +351,13 @@ const styles = StyleSheet.create({
   headerBtn: { padding: 4 },
   scroll: { padding: SPACING.md, paddingBottom: SPACING.xxl },
   titleSection: { marginBottom: SPACING.lg },
+  resultEyebrow: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '700',
+    color: COLORS.primary,
+    letterSpacing: 0.6,
+    marginBottom: SPACING.xs,
+  },
   name: { fontSize: FONT_SIZE.xl, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.sm },
   metaRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.sm },
   batchInfo: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary },
