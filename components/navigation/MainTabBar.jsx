@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PaywallModal } from '../paywall/PaywallModal';
 import { useCalculateFoodCost } from '../../hooks/useCalculateFoodCost';
 import { FOOD_COST_COPY as C } from '../../constants/copy';
+import { track, AnalyticsEvents } from '../../lib/analytics';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from '../../constants/theme';
 
 const TAB_CONFIG = {
@@ -27,6 +28,7 @@ function TabItem({ route, descriptor, navigation, focused }) {
       canPreventDefault: true,
     });
     if (!focused && !event.defaultPrevented) {
+      track(AnalyticsEvents.TAB_VIEWED, { tab: route.name });
       navigation.navigate(route.name);
     }
   };

@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { KeyboardFormLayout } from '../../components/ui/KeyboardFormLayout';
 import useAuthStore from '../../stores/authStore';
+import { track, AnalyticsEvents } from '../../lib/analytics';
 import { COLORS, FONT_SIZE, SPACING } from '../../constants/theme';
 
 export default function LoginScreen() {
@@ -18,7 +19,9 @@ export default function LoginScreen() {
   const onSubmit = async ({ email, password }) => {
     try {
       await signIn({ email, password });
+      track(AnalyticsEvents.AUTH_LOGIN_COMPLETED);
     } catch (error) {
+      track(AnalyticsEvents.AUTH_LOGIN_FAILED, { message: error.message ?? 'unknown' });
       Alert.alert('Sign In Failed', error.message ?? 'Invalid email or password.');
     }
   };

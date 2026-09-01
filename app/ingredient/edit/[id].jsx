@@ -15,6 +15,7 @@ import useIngredientStore from '../../../stores/ingredientStore';
 import useRecipeStore from '../../../stores/recipeStore';
 import useSettingsStore from '../../../stores/settingsStore';
 import { supabase } from '../../../lib/supabase';
+import { track, AnalyticsEvents } from '../../../lib/analytics';
 import { formatFoodCostPercent } from '../../../utils/format';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from '../../../constants/theme';
 import { useSubscription } from '../../../hooks/useSubscription';
@@ -87,7 +88,10 @@ export default function EditIngredientScreen() {
       waste_percent: parseFloat(data.waste_percent) || 0,
       notes: data.notes || null,
     });
-    if (error) { Alert.alert('Error', error); return; }
+    if (error) {
+      Alert.alert('Error', error);
+      return;
+    }
 
     try {
       const { data: riRows } = await supabase
@@ -96,6 +100,12 @@ export default function EditIngredientScreen() {
         .eq('ingredient_id', id);
 
       const affectedIds = new Set((riRows ?? []).map((r) => r.recipe_id));
+      const priceChanged = parseFloat(data.purchase_price) !== Number(ingredient.purchase_price);
+
+      track(AnalyticsEvents.INGREDIENT_UPDATED, {
+        price_changed: priceChanged,
+        affected_recipe_count: affectedIds.size,
+      });
 
       if (affectedIds.size > 0) {
         await fetchRecipes();
@@ -121,7 +131,10 @@ export default function EditIngredientScreen() {
         return;
       }
     } catch (_) {
-      // silently proceed
+      track(AnalyticsEvents.INGREDIENT_UPDATED, {
+        price_changed: parseFloat(data.purchase_price) !== Number(ingredient.purchase_price),
+        affected_recipe_count: 0,
+      });
     }
   };
 

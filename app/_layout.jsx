@@ -15,7 +15,10 @@ import useAuthStore from '../stores/authStore';
 import useSettingsStore from '../stores/settingsStore';
 import useRecipeStore from '../stores/recipeStore';
 import useSubscriptionStore from '../stores/subscriptionStore';
+import { PostHogRoot } from '../lib/posthog';
 import { AppAlertHost } from '../components/ui/AppAlertHost';
+import { AnalyticsBridge } from '../components/analytics/AnalyticsBridge';
+import { track, AnalyticsEvents } from '../lib/analytics';
 
 let authSideEffectsFlight = null;
 let authSideEffectsUserId = null;
@@ -29,6 +32,7 @@ async function runAuthSessionSideEffects(event, session) {
     authSideEffectsUserId = null;
     useSubscriptionStore.getState().clearRcEntitlement();
     if (event === 'SIGNED_OUT') {
+      track(AnalyticsEvents.AUTH_SIGNED_OUT);
       bootLog('auth:event:revenuecat:logout:start');
       await resetRevenueCatUser();
       bootLog('auth:event:revenuecat:logout:done');
@@ -143,22 +147,25 @@ function AuthBootstrap() {
 
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="recipe/[id]" />
-        <Stack.Screen name="recipe/create" />
-        <Stack.Screen name="recipe/edit/[id]" />
-        <Stack.Screen name="ingredient/create" />
-        <Stack.Screen name="ingredient/edit/[id]" />
-        <Stack.Screen name="ingredient/price-history/[id]" />
-        <Stack.Screen name="change-password" />
-        <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
-      </Stack>
+    <PostHogRoot>
+      <SafeAreaProvider>
+        <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="recipe/[id]" />
+          <Stack.Screen name="recipe/create" />
+          <Stack.Screen name="recipe/edit/[id]" />
+          <Stack.Screen name="ingredient/create" />
+          <Stack.Screen name="ingredient/edit/[id]" />
+          <Stack.Screen name="ingredient/price-history/[id]" />
+          <Stack.Screen name="change-password" />
+          <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
+        </Stack>
       <AuthBootstrap />
+      <AnalyticsBridge />
       <AppAlertHost />
-    </SafeAreaProvider>
+      </SafeAreaProvider>
+    </PostHogRoot>
   );
 }

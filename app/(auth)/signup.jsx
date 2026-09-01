@@ -7,6 +7,7 @@ import { Input } from '../../components/ui/Input';
 import { SignupLegalNotice } from '../../components/ui/LegalLinks';
 import { KeyboardFormLayout } from '../../components/ui/KeyboardFormLayout';
 import useAuthStore from '../../stores/authStore';
+import { track, AnalyticsEvents } from '../../lib/analytics';
 import { COLORS, FONT_SIZE, SPACING } from '../../constants/theme';
 
 export default function SignupScreen() {
@@ -19,8 +20,10 @@ export default function SignupScreen() {
   const onSubmit = async ({ fullName, email, password }) => {
     try {
       await signUp({ email, password, fullName });
+      track(AnalyticsEvents.AUTH_SIGNUP_COMPLETED, { has_full_name: !!fullName?.trim() });
       router.replace('/(tabs)');
     } catch (error) {
+      track(AnalyticsEvents.AUTH_SIGNUP_FAILED, { message: error.message ?? 'unknown' });
       Alert.alert('Sign Up Failed', error.message ?? 'Something went wrong. Please try again.');
     }
   };

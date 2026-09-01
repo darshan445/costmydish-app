@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+body {
+  width: 1200px; height: 1920px; overflow: hidden;
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #FAFAF8;
+  display: flex; flex-direction: column;
+}
+/* App fills top ~86% — what users see first in store carousel */
+.app-frame {
+  width: 100%; height: 1640px; flex-shrink: 0;
+  background: #FAFAF8;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  border-bottom: 1px solid #E5E7EB;
+}
+.app-inner {
+  flex: 1; overflow: hidden;
+  display: flex; flex-direction: column;
+  font-size: 19px;
+  color: #1A1A1A;
+}
+/* Compact caption strip at bottom — not wasted green space */
+.caption {
+  height: 280px; flex-shrink: 0;
+  background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
+  padding: 50px 84px;
+  display: flex; flex-direction: column; justify-content: center;
+  color: #fff;
+}
+.caption-brand {
+  font-size: 13px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.8; margin-bottom: 8px;
+}
+.caption h1 {
+  font-size: 38px; font-weight: 800; line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.caption p {
+  font-size: 20px; margin-top: 10px; opacity: 0.92;
+  line-height: 1.35; font-weight: 500; max-width: 95%;
+}
+.status-bar { display: flex; justify-content: space-between; padding: 16px 30px 8px; font-size: 18px; font-weight: 600; background: #FFFFFF; }
+.status-icons { letter-spacing: 2px; font-size: 15px; }
+.nav-header { display: flex; align-items: center; justify-content: center; padding: 19px 27px; background: #FFFFFF; font-weight: 600; font-size: 23px; position: relative; border-bottom: 1px solid #E5E7EB; }
+.back { position: absolute; left: 27px; font-size: 38px; color: #1A1A1A; }
+.nav-actions { position: absolute; right: 27px; font-size: 22px; }
+.screen-body { flex: 1; overflow: hidden; padding: 24px 30px; background: #FAFAF8; }
+.screen-body.compact { padding: 19px 24px; }
+.home-greeting { font-size: 35px; font-weight: 800; }
+.home-sub { color: #6B7280; font-size: 20px; margin: 8px 0 24px; }
+.stat-row { display: flex; gap: 16px; margin-bottom: 24px; }
+.stat-card { flex: 1; background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 19px; padding: 22px; text-align: center; }
+.stat-num { font-size: 46px; font-weight: 800; }
+.stat-num.green { color: #10B981; }
+.stat-num.red { color: #EF4444; }
+.stat-label { font-size: 18px; color: #6B7280; margin-top: 4px; }
+.section-title { font-size: 24px; font-weight: 700; margin: 19px 0 14px; }
+.section-title.red { color: #EF4444; font-size: 26px; }
+.alert-card { display: flex; justify-content: space-between; align-items: center; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 19px; padding: 22px; margin-bottom: 14px; }
+.alert-pct { color: #EF4444; font-weight: 700; font-size: 22px; text-align: right; }
+.alert-over { color: #EF4444; font-size: 18px; text-align: right; }
+.dish-card { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 22px; padding: 22px; margin-bottom: 16px; }
+.card-name { font-weight: 700; font-size: 24px; }
+.card-meta { color: #6B7280; font-size: 19px; margin-top: 3px; }
+.metrics-box { display: flex; background: #F5F5F0; border-radius: 16px; margin: 16px 0; overflow: hidden; }
+.metric { flex: 1; padding: 16px; text-align: center; }
+.metric + .metric { border-left: 1px solid #E5E7EB; }
+.metric-label { font-size: 16px; color: #6B7280; }
+.metric-value { font-weight: 700; font-size: 24px; margin-top: 4px; }
+.profit-row { display: flex; justify-content: space-between; padding: 16px; border-radius: 14px; font-size: 22px; margin: 11px 0; align-items: center; }
+.card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 11px; }
+.badge { font-size: 18px; font-weight: 600; padding: 8px 16px; border-radius: 999px; display: inline-block; }
+.badge.good { background: #ECFDF5; color: #10B981; }
+.chevron { color: #9CA3AF; font-size: 30px; }
+.wizard-tabs { display: flex; justify-content: center; gap: 14px; padding: 14px 19px 8px; background: #FFFFFF; font-size: 18px; }
+.wizard-tab { color: #9CA3AF; padding: 8px 14px; }
+.wizard-tab.active { color: #2D6A4F; font-weight: 700; background: #E8F5EE; border-radius: 999px; }
+.wizard-track { height: 5px; background: #E5E7EB; margin: 0 27px; }
+.wizard-fill { height: 100%; background: #2D6A4F; border-radius: 2px; }
+.wizard-step-label { text-align: center; font-size: 18px; color: #6B7280; padding: 11px; background: #FFFFFF; border-bottom: 1px solid #E5E7EB; }
+.wizard-title { font-size: 32px; font-weight: 800; margin-bottom: 11px; line-height: 1.2; }
+.wizard-title.sm { font-size: 28px; }
+.wizard-sub { color: #6B7280; font-size: 20px; margin-bottom: 24px; line-height: 1.4; }
+.field-label { font-size: 19px; font-weight: 600; color: #6B7280; margin: 19px 0 11px; display: block; }
+.field { border: 1px solid #E5E7EB; border-radius: 16px; padding: 22px; background: #FFFFFF; font-size: 24px; }
+.field.filled { font-weight: 500; }
+.field.target { display: flex; justify-content: space-between; }
+.pct { color: #6B7280; }
+.hint { font-size: 19px; color: #9CA3AF; margin-top: 14px; }
+.ingredient-list { border: 1px solid #E5E7EB; border-radius: 19px; background: #FFFFFF; overflow: hidden; }
+.ing-row { display: flex; justify-content: space-between; padding: 22px; border-bottom: 1px solid #E5E7EB; align-items: center; }
+.ing-name { font-weight: 600; font-size: 23px; }
+.ing-qty { font-size: 19px; color: #6B7280; margin-top: 3px; }
+.ing-actions { display: flex; gap: 19px; color: #9CA3AF; font-size: 24px; }
+.ing-actions .x { color: #EF4444; }
+.add-ing { padding: 22px; text-align: center; color: #2D6A4F; font-weight: 600; border: 2px dashed #52B788; margin: 16px; border-radius: 16px; font-size: 22px; }
+.bottom-btn { background: #2D6A4F; color: #fff; text-align: center; padding: 27px; font-weight: 700; font-size: 24px; margin-top: auto; }
+.format-card { border: 1px solid #E5E7EB; border-radius: 16px; padding: 19px 22px; background: #FFFFFF; margin-bottom: 14px; }
+.format-top { display: flex; justify-content: space-between; font-weight: 700; font-size: 23px; }
+.format-price { color: #2D6A4F; font-size: 27px; }
+.format-sub { font-size: 18px; color: #6B7280; margin-top: 3px; }
+.live-label { font-size: 16px; font-weight: 700; color: #9CA3AF; letter-spacing: 0.06em; margin: 19px 0 11px; }
+.live-card { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 19px; padding: 19px; font-size: 20px; }
+.live-row { display: flex; justify-content: space-between; padding: 8px 0; }
+.live-row.bold { font-weight: 700; font-size: 23px; padding-bottom: 14px; border-bottom: 1px solid #E5E7EB; margin-bottom: 11px; }
+.live-section { margin-top: 14px; padding-top: 11px; border-top: 1px solid #E5E7EB; }
+.live-section-title { font-weight: 700; margin-bottom: 6px; font-size: 22px; }
+.green { color: #10B981; font-weight: 700; }
+.warn { color: #F59E0B; font-weight: 700; }
+.result-eyebrow { color: #2D6A4F; font-size: 19px; font-weight: 600; }
+.result-title { font-size: 38px; font-weight: 800; margin: 6px 0; }
+.target-line { font-size: 19px; color: #6B7280; margin-bottom: 19px; }
+.result-card { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 22px; overflow: hidden; margin-bottom: 22px; }
+.result-highlight { background: #ECFDF5; padding: 24px; text-align: center; font-size: 19px; color: #6B7280; }
+.result-highlight .big { font-size: 49px; margin-top: 6px; }
+.big-profit { padding: 22px; font-size: 27px; font-weight: 700; border-top: 1px solid #E5E7EB; }
+.result-footer { display: flex; justify-content: space-between; align-items: center; padding: 19px; font-size: 22px; border-top: 1px solid #E5E7EB; }
+.analysis-card { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 22px; padding: 22px; margin-bottom: 16px; }
+.analysis-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; font-size: 22px; }
+.ing-detail-row { display: flex; justify-content: space-between; padding: 22px 0; border-bottom: 1px solid #E5E7EB; align-items: center; }
+.dishes-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 19px; }
+.dishes-title { font-size: 41px; font-weight: 800; }
+.add-btn { width: 59px; height: 59px; background: #2D6A4F; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 35px; font-weight: 300; }
+.search { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 16px; padding: 19px; color: #9CA3AF; font-size: 22px; margin-bottom: 16px; }
+.chips { display: flex; gap: 14px; margin-bottom: 19px; }
+.chip { padding: 11px 24px; border-radius: 999px; border: 1px solid #E5E7EB; font-size: 19px; font-weight: 600; background: #FFFFFF; color: #6B7280; }
+.chip.active { background: #2D6A4F; color: #fff; border-color: #2D6A4F; }
+.lib-card { display: flex; justify-content: space-between; align-items: center; background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 19px; padding: 22px; margin-bottom: 14px; }
+.lib-unit { font-size: 19px; color: #6B7280; background: #F5F5F0; padding: 8px 14px; border-radius: 11px; }
+.tab-bar { display: flex; align-items: flex-end; justify-content: space-around; background: #FFFFFF; border-top: 1px solid #E5E7EB; padding: 11px 0 19px; margin-top: auto; }
+.tab-item { display: flex; flex-direction: column; align-items: center; font-size: 16px; color: #9CA3AF; gap: 3px; }
+.tab-item.active { color: #2D6A4F; font-weight: 600; }
+.tab-icon { font-size: 27px; }
+.tab-fab { margin-top: -30px; }
+.fab-btn { width: 76px; height: 76px; background: #2D6A4F; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; box-shadow: 0 4px 16px rgba(45,106,79,0.35); }
+</style>
+</head>
+<body>
+  <div class="app-frame">
+    <div class="app-inner">
+    <div class="status-bar"><span>9:41</span><span class="status-icons">● ● ▮</span></div>
+    <div class="screen-body library-screen">
+      <div class="dishes-header"><div><h2 class="dishes-title">Library</h2><p class="home-sub">Your buy prices — reuse across dishes</p></div><div class="add-btn">+</div></div>
+      <div class="search">🔍 Search library...</div>
+      
+        <div class="lib-card">
+          <div><div class="card-name">Chicken Breast</div><div class="card-meta">$8.99 per 1 kg</div></div>
+          <div class="lib-unit">kg ›</div>
+        </div>
+        <div class="lib-card">
+          <div><div class="card-name">All Purpose Flour</div><div class="card-meta">$2.50 per 1 kg</div></div>
+          <div class="lib-unit">kg ›</div>
+        </div>
+        <div class="lib-card">
+          <div><div class="card-name">Heavy Cream</div><div class="card-meta">$4.50 per 1 L</div></div>
+          <div class="lib-unit">L ›</div>
+        </div>
+        <div class="lib-card">
+          <div><div class="card-name">Unsalted Butter</div><div class="card-meta">$5.99 per 1 kg</div></div>
+          <div class="lib-unit">kg ›</div>
+        </div>
+        <div class="lib-card">
+          <div><div class="card-name">Parmesan</div><div class="card-meta">$12.00 per 500 g</div></div>
+          <div class="lib-unit">g ›</div>
+        </div>
+        <div class="lib-card">
+          <div><div class="card-name">Fresh Basil</div><div class="card-meta">$2.99 per 1 pack</div></div>
+          <div class="lib-unit">pack ›</div>
+        </div>
+    </div>
+    <div class="tab-bar"><div class="tab-item"><span class="tab-icon">⌂</span><span class="tab-label">Home</span></div><div class="tab-item"><span class="tab-icon">⚇</span><span class="tab-label">Dishes</span></div><div class="tab-fab"><div class="fab-btn">▣</div></div><div class="tab-item active"><span class="tab-icon">♣</span><span class="tab-label">Library</span></div><div class="tab-item"><span class="tab-icon">⚙</span><span class="tab-label">Settings</span></div></div></div>
+  </div>
+  <div class="caption">
+    <div class="caption-brand">CostMyDish</div>
+    <h1>Ingredient library<br>— buy prices in one place</h1>
+    <p>Change a supplier price → every connected dish updates</p>
+  </div>
+</body></html>

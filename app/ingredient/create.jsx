@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
@@ -17,6 +17,7 @@ import { useUnitSystem } from '../../hooks/useUnitSystem';
 import { formatUnitLabel } from '../../constants/units';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from '../../constants/theme';
 import { setPendingAddToDishIngredientIds } from '../../lib/pendingRecipeIngredients';
+import { track, AnalyticsEvents } from '../../lib/analytics';
 
 let _draftId = 0;
 function newDraftId() {
@@ -249,6 +250,15 @@ export default function CreateIngredientScreen() {
   const [showPaywall, setShowPaywall] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  useFocusEffect(
+    useCallback(() => {
+      track(AnalyticsEvents.INGREDIENT_CREATE_OPENED, {
+        source: isFromRecipe ? 'recipe_wizard' : 'library',
+        ingredient_count: ingredients.length,
+      });
+    }, [isFromRecipe, ingredients.length]),
+  );
+
   const filledCount = cards.filter(isCardFilled).length;
   const unitPickerCard = cards.find((c) => c.draftId === unitPickerDraftId);
 
@@ -309,6 +319,7 @@ export default function CreateIngredientScreen() {
     }
 
     if (!canAddIngredient(ingredients.length + itemsToSave.length - 1)) {
+      track(AnalyticsEvents.PAYWALL_VIEWED, { reason: 'ingredient', source: 'ingredient_create' });
       setShowPaywall(true);
       return;
     }
@@ -326,9 +337,20 @@ export default function CreateIngredientScreen() {
     setSaving(false);
 
     if (saved.length === 0) {
+      track(AnalyticsEvents.INGREDIENT_CREATE_FAILED, {
+        count: itemsToSave.length,
+        message: failures[0]?.error ?? 'unknown',
+      });
       Alert.alert('Save failed', failures[0]?.error ?? 'Could not save ingredients. Please try again.');
       return;
     }
+
+    track(AnalyticsEvents.INGREDIENT_CREATED, {
+      count: saved.length,
+      failed_count: failures.length,
+      source: isFromRecipe ? 'recipe_wizard' : 'library',
+      total_ingredients_after: ingredients.length + saved.length,
+    });
 
     if (failures.length > 0) {
       if (isFromRecipe && saved.length > 0) {

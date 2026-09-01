@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../../components/ui/Button';
+import { track, AnalyticsEvents } from '../../lib/analytics';
 import { COLORS, FONT_SIZE, SPACING } from '../../constants/theme';
 
 export default function WelcomeScreen() {
@@ -31,10 +32,16 @@ export default function WelcomeScreen() {
       </View>
 
       <View style={styles.actions}>
-        <Button title="Get Started" onPress={() => router.push('/(auth)/signup')} size="lg" style={styles.primaryBtn} />
+        <Button title="Get Started" onPress={() => {
+          track(AnalyticsEvents.ONBOARDING_GET_STARTED);
+          router.push('/(auth)/signup');
+        }} size="lg" style={styles.primaryBtn} />
         <Button
           title="I already have an account"
-          onPress={() => router.push('/(auth)/login')}
+          onPress={() => {
+            track(AnalyticsEvents.ONBOARDING_SIGN_IN_TAPPED);
+            router.push('/(auth)/login');
+          }}
           variant="ghost"
           size="lg"
         />

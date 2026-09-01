@@ -13,6 +13,7 @@ import {
 } from '../../lib/revenuecat';
 import { refreshSubscriptionState } from '../../lib/subscriptionSync';
 import { showAppAlert } from '../../lib/appAlert';
+import { track, AnalyticsEvents } from '../../lib/analytics';
 import useAuthStore from '../../stores/authStore';
 import {
   HOBBYIST_ANNUAL_PER_MONTH_USD,
@@ -62,6 +63,8 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upg
   useEffect(() => {
     if (!visible) return;
 
+    track(AnalyticsEvents.PAYWALL_VIEWED, { reason, mode });
+
     getHobbyistPackages().then(setPackages);
 
     if (isChangePlan) {
@@ -100,6 +103,11 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upg
     return `Subscribe · ${isAnnual ? `${annualPriceStr}/yr` : `${monthlyPriceStr}/mo`}`;
   })();
 
+  const handleClose = () => {
+    track(AnalyticsEvents.PAYWALL_DISMISSED, { reason, mode });
+    onClose();
+  };
+
   const handleSubscribe = async () => {
     if (isSamePlan) return;
 
@@ -121,28 +129,45 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upg
     }
 
     setPurchasing(true);
+    track(AnalyticsEvents.PAYWALL_PURCHASE_STARTED, {
+      reason,
+      mode,
+      billing: isAnnual ? 'annual' : 'monthly',
+    });
     try {
       await identifyRevenueCatUser(userId);
       const result = await purchasePackage(selectedPkg);
 
       if (result.success) {
+        track(AnalyticsEvents.PAYWALL_PURCHASE_COMPLETED, {
+          reason,
+          mode,
+          billing: isAnnual ? 'annual' : 'monthly',
+        });
         await refreshSubscriptionState(userId);
         if (isChangePlan) {
           showAppAlert({
             title: 'Plan Updated',
             message: `You're now on the ${isAnnual ? 'annual' : 'monthly'} Hobbyist plan. Billing changes are handled by the App Store or Play Store.`,
             variant: 'success',
-            onPrimary: onClose,
+            onPrimary: handleClose,
           });
         } else {
           showAppAlert({
             title: 'Welcome to Hobbyist!',
             message: 'Unlimited dishes, library items, and price history are now unlocked.',
             variant: 'success',
-            onPrimary: onClose,
+            onPrimary: handleClose,
           });
         }
-      } else if (!result.cancelled) {
+      } else if (result.cancelled) {
+        track(AnalyticsEvents.PAYWALL_PURCHASE_CANCELLED, { reason, mode });
+      } else {
+        track(AnalyticsEvents.PAYWALL_PURCHASE_FAILED, {
+          reason,
+          mode,
+          message: result.error ?? 'unknown',
+        });
         showAppAlert({
           title: 'Purchase Failed',
           message: result.error ?? 'Something went wrong. Please try again.',
@@ -164,25 +189,33 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upg
       return;
     }
     setRestoring(true);
+    track(AnalyticsEvents.PAYWALL_RESTORE_STARTED, { reason, mode });
     try {
       await identifyRevenueCatUser(userId);
       const result = await restorePurchases();
 
       if (result.success) {
+        track(AnalyticsEvents.PAYWALL_RESTORE_COMPLETED, { reason, mode });
         await refreshSubscriptionState(userId);
         showAppAlert({
           title: 'Restored',
           message: 'Your Hobbyist subscription has been restored.',
           variant: 'success',
-          onPrimary: onClose,
+          onPrimary: handleClose,
         });
       } else if (result.error) {
+        track(AnalyticsEvents.PAYWALL_RESTORE_FAILED, {
+          reason,
+          mode,
+          message: result.error,
+        });
         showAppAlert({
           title: 'Restore Failed',
           message: result.error,
           variant: 'error',
         });
       } else {
+        track(AnalyticsEvents.PAYWALL_RESTORE_EMPTY, { reason, mode });
         showAppAlert({
           title: 'Nothing to Restore',
           message: 'No active subscription found for this account.',
@@ -194,10 +227,20 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upg
     }
   };
 
+  const handleBillingChange = (nextBilling) => {
+    if (nextBilling === billing) return;
+    track(AnalyticsEvents.PAYWALL_BILLING_TOGGLED, {
+      reason,
+      mode,
+      billing: nextBilling,
+    });
+    setBilling(nextBilling);
+  };
+
   return (
     <Modal
       visible={visible}
-      onClose={onClose}
+      onClose={handleClose}
       title={modalTitle}
       scrollable={false}
       footer={(
@@ -211,7 +254,7 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upg
           />
           <Button
             title={isChangePlan ? 'Cancel' : 'Maybe later'}
-            onPress={onClose}
+            onPress={handleClose}
             variant="ghost"
             size="md"
           />
@@ -238,14 +281,14 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upg
       <View style={styles.toggleWrap}>
         <TouchableOpacity
           style={[styles.toggleBtn, !isAnnual && styles.toggleActive]}
-          onPress={() => setBilling('monthly')}
+          onPress={() => handleBillingChange('monthly')}
           activeOpacity={0.8}
         >
           <Text style={[styles.toggleText, !isAnnual && styles.toggleTextActive]}>Monthly</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.toggleBtn, isAnnual && styles.toggleActive]}
-          onPress={() => setBilling('annual')}
+          onPress={() => handleBillingChange('annual')}
           activeOpacity={0.8}
         >
           <Text style={[styles.toggleText, isAnnual && styles.toggleTextActive]}>Annual</Text>

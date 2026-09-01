@@ -13,6 +13,7 @@ import { useSubscription } from '../../hooks/useSubscription';
 import useIngredientStore from '../../stores/ingredientStore';
 import useSettingsStore from '../../stores/settingsStore';
 import { FOOD_COST_COPY as C } from '../../constants/copy';
+import { track, AnalyticsEvents } from '../../lib/analytics';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 export default function IngredientsScreen() {
@@ -33,7 +34,12 @@ export default function IngredientsScreen() {
   );
 
   const handleAdd = () => {
+    track(AnalyticsEvents.INGREDIENT_ADD_TAPPED, {
+      ingredient_count: ingredients.length,
+      at_limit: !canAddIngredient(ingredients.length),
+    });
     if (!canAddIngredient(ingredients.length)) {
+      track(AnalyticsEvents.PAYWALL_VIEWED, { reason: 'ingredient', source: 'ingredients_tab' });
       setShowPaywall(true);
       return;
     }

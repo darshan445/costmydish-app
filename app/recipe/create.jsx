@@ -216,6 +216,7 @@ export default function CreateRecipeScreen() {
   };
 
   const openAddIngSheet = () => {
+    trackFoodCost('ingredient_picker_opened', { wizard_step: step });
     setIngSheetStep('search');
     setIngSheetIngredient(null);
     setIngSheetQty('');
@@ -280,15 +281,21 @@ export default function CreateRecipeScreen() {
     useCallback(() => {
       const pendingIds = consumePendingAddToDishIngredientIds();
       if (pendingIds.length > 0) {
+        trackFoodCost('returned_from_library', {
+          wizard_step: step,
+          pending_count: pendingIds.length,
+          flow: 'configure_saved',
+        });
         reopenIngredientPickerRef.current = false;
         startAddToDishQueue(pendingIds);
         return;
       }
       if (reopenIngredientPickerRef.current) {
         reopenIngredientPickerRef.current = false;
+        trackFoodCost('returned_from_library', { wizard_step: step, flow: 'picker' });
         openAddIngSheet();
       }
-    }, [startAddToDishQueue])
+    }, [startAddToDishQueue, step])
   );
 
   useEffect(() => {
@@ -296,6 +303,7 @@ export default function CreateRecipeScreen() {
   }, [recipeIngredients]);
 
   const openCreateIngredient = () => {
+    trackFoodCost('add_to_library_tapped', { wizard_step: step });
     reopenIngredientPickerRef.current = true;
     setShowIngSheet(false);
     router.push({
@@ -365,6 +373,18 @@ export default function CreateRecipeScreen() {
     });
     setIngredientError(false);
 
+    if (!editingIngId) {
+      const isNew = !recipeIngredients.some((r) => r.ingredient_id === ingSheetIngredient.id);
+      if (isNew) {
+        trackFoodCost('ingredient_added', {
+          wizard_step: step,
+          ingredient_id: ingSheetIngredient.id,
+          recipe_ingredient_count: recipeIngredients.length + 1,
+          from_queue: addToDishQueueRef.current.length > 0,
+        });
+      }
+    }
+
     const queue = addToDishQueueRef.current;
     if (queue.length > 1) {
       const rest = queue.slice(1);
@@ -433,6 +453,11 @@ export default function CreateRecipeScreen() {
         ...prev,
         { id: newFmtId(), selling_unit_name: fmtSheetUnit, unit_quantity: fmtSheetQty, selling_price: fmtSheetPrice },
       ]);
+      trackFoodCost('selling_format_added', {
+        wizard_step: step,
+        selling_format_count: sellingFormats.length + 1,
+        unit: fmtSheetUnit,
+      });
     }
     setSellingFormatError(false);
     setShowFmtSheet(false);
@@ -549,7 +574,11 @@ export default function CreateRecipeScreen() {
     );
     if (error) { Alert.alert('Error', error); return; }
     await clearFoodCostDraft();
-    trackFoodCost('wizard_completed', { recipeId: recipe.id });
+    trackFoodCost('wizard_completed', {
+      recipeId: recipe.id,
+      ingredient_count: recipeIngredients.length,
+      selling_format_count: sellingFormats.length,
+    });
     router.replace({
       pathname: '/recipe/[id]',
       params: { id: recipe.id, justSaved: '1' },

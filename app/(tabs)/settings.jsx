@@ -21,6 +21,7 @@ import { CURRENCIES } from '../../constants/currencies';
 import { UNIT_SYSTEMS } from '../../constants/units';
 import { PRIVACY_POLICY_URL, TERMS_URL, SUPPORT_EMAIL } from '../../constants/legal';
 import { FOOD_COST_COPY as C } from '../../constants/copy';
+import { track, AnalyticsEvents } from '../../lib/analytics';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 export default function SettingsScreen() {
@@ -72,6 +73,10 @@ export default function SettingsScreen() {
     setShowCurrencyModal(false);
     setShowCurrencyWarning(false);
     setPendingCurrency(null);
+    track(AnalyticsEvents.SETTINGS_CURRENCY_CHANGED, {
+      from: settings.currency,
+      to: currency.code,
+    });
     await updateSettings(user.id, { currency: currency.code, currency_symbol: currency.symbol });
   };
 
@@ -103,6 +108,10 @@ export default function SettingsScreen() {
       return;
     }
     setShowUnitSystemModal(false);
+    track(AnalyticsEvents.SETTINGS_UNIT_SYSTEM_CHANGED, {
+      from: settings.unit_system,
+      to: system.value,
+    });
     await updateSettings(user.id, { unit_system: system.value });
   };
 
@@ -116,7 +125,12 @@ export default function SettingsScreen() {
     }
     setFoodCostError('');
     setSaving(true);
+    const previous = settings.default_food_cost_percent;
     await updateSettings(user.id, { default_food_cost_percent: val });
+    track(AnalyticsEvents.SETTINGS_FOOD_COST_TARGET_CHANGED, {
+      from: previous,
+      to: val,
+    });
     setSaving(false);
     setShowFoodCostModal(false);
   };
@@ -128,17 +142,20 @@ export default function SettingsScreen() {
       : null;
 
   const openUpgradePaywall = () => {
+    track(AnalyticsEvents.SETTINGS_UPGRADE_TAPPED, { tier });
     setPaywallMode('upgrade');
     setShowPaywall(true);
   };
 
   const openChangePlanPaywall = () => {
+    track(AnalyticsEvents.SETTINGS_SUBSCRIPTION_TAPPED, { tier, billing_period: billingPeriod });
     setPaywallMode('changePlan');
     setShowPaywall(true);
   };
 
   const handleRestorePurchases = async () => {
     if (!user?.id) return;
+    track(AnalyticsEvents.SETTINGS_RESTORE_PURCHASES_TAPPED);
     setRestoring(true);
     try {
       await identifyRevenueCatUser(user.id);
