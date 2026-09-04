@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import {
   Animated,
+  Easing,
   Keyboard,
   Modal as RNModal,
   Platform,
@@ -14,6 +15,8 @@ import {
 import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
+const KEYBOARD_LIFT_MS = Platform.OS === 'ios' ? 250 : 200;
+
 /**
  * Bottom sheet modal — backdrop and sheet are non-overlapping siblings (reliable Android taps).
  * No PanResponder or sheet translate animation (those caused double-tap issues).
@@ -26,12 +29,33 @@ export function Modal({
   footer,
   style,
   scrollable = true,
+  /** When false, sheet does not rise with the keyboard. Ignored if keyboardOffset is set. */
+  keyboardLift = true,
+  /**
+   * Exact sheet lift in px (smart avoidance). When set, overrides keyboardLift.
+   * Pass 0 when the focused field is already visible on this screen size.
+   */
+  keyboardOffset = null,
 }) {
   const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const sheetLift = useRef(new Animated.Value(0)).current;
   const keyboardInset = useKeyboardInset();
   const onCloseRef = useRef(onClose);
+  const sheetKeyboardInset = keyboardOffset != null
+    ? keyboardOffset
+    : (keyboardLift ? keyboardInset : 0);
+  const adjustScrollInsets = keyboardOffset == null && keyboardLift && Platform.OS === 'ios';
 
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
+  useEffect(() => {
+    Animated.timing(sheetLift, {
+      toValue: sheetKeyboardInset,
+      duration: KEYBOARD_LIFT_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [sheetKeyboardInset, sheetLift]);
 
   useEffect(() => {
     if (visible) {
@@ -43,9 +67,10 @@ export function Modal({
       }).start();
     } else {
       backdropOpacity.setValue(0);
+      sheetLift.setValue(0);
       Keyboard.dismiss();
     }
-  }, [visible, backdropOpacity]);
+  }, [visible, backdropOpacity, sheetLift]);
 
   const handleClose = () => {
     Keyboard.dismiss();
@@ -75,7 +100,7 @@ export function Modal({
           />
         </Pressable>
 
-        <View style={[styles.sheet, { marginBottom: keyboardInset }, style]}>
+        <Animated.View style={[styles.sheet, { marginBottom: sheetLift }, style]}>
           {title ? (
             <View style={styles.header}>
               <Text style={styles.title}>{title}</Text>
@@ -95,7 +120,7 @@ export function Modal({
             <ScrollView
               keyboardShouldPersistTaps="always"
               keyboardDismissMode="on-drag"
-              automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+              automaticallyAdjustKeyboardInsets={adjustScrollInsets}
               showsVerticalScrollIndicator={false}
               bounces
               nestedScrollEnabled
@@ -107,7 +132,7 @@ export function Modal({
           )}
 
           {footer ? <View style={styles.footer}>{footer}</View> : null}
-        </View>
+        </Animated.View>
       </View>
     </RNModal>
   );

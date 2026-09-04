@@ -131,6 +131,20 @@ export function isUnitInSystem(unit, unitSystem) {
 }
 
 /**
+ * Infer metric vs imperial from a stored unit.
+ * Count units exist in both systems — fall back to the user's preference.
+ */
+export function inferUnitSystem(unit, fallback = 'metric') {
+  const preferred = normalizeUnitSystem(fallback);
+  if (!unit) return preferred;
+  const inMetric = isUnitInSystem(unit, 'metric');
+  const inImperial = isUnitInSystem(unit, 'imperial');
+  if (inMetric && !inImperial) return 'metric';
+  if (inImperial && !inMetric) return 'imperial';
+  return preferred;
+}
+
+/**
  * Units pickable for an ingredient/recipe row in the user's unit system.
  * Same family as purchase unit; count units always available.
  */

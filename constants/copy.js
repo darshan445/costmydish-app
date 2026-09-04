@@ -15,9 +15,13 @@ export const FOOD_COST_COPY = {
     keepDraft: 'Keep it',
     resume: 'Resume',
     discardAndStartNew: 'Discard and start new',
-    seeResult: 'See food cost result',
+    seeResult: 'Save & see food cost',
     saveChanges: 'Save changes',
     addToDish: 'Add to dish',
+    addIngredient: 'Add an ingredient',
+    addAnotherIngredient: 'Add another ingredient',
+    addSellingPrice: 'Add selling price',
+    addAnotherSellingPrice: 'Add another selling price',
   },
 
   nav: {
@@ -91,8 +95,8 @@ export const FOOD_COST_COPY = {
     },
     stepSubs: {
       1: "We'll calculate food cost for this.",
-      2: 'Add each ingredient and how much you use.',
-      3: "We'll show food cost % and profit. You can add more selling formats if needed.",
+      2: 'Tap Add an ingredient for each item in the recipe.',
+      3: 'Add what you charge per serving or piece.',
     },
   },
 
@@ -112,6 +116,16 @@ export const FOOD_COST_COPY = {
 
   edit: {
     header: 'Edit food cost',
+    stepTitles: {
+      1: "What's the dish?",
+      2: 'What ingredients do you use in this recipe?',
+      3: "What's your selling price?",
+    },
+    stepSubs: {
+      1: 'Update the name, category, or food cost goal.',
+      2: 'Change used amounts, or add and remove ingredients.',
+      3: 'Update selling prices and check your margins.',
+    },
   },
 
   paywall: {

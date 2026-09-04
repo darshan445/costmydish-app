@@ -2,6 +2,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import {
+  ActivityIndicator,
   Alert, FlatList,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
@@ -10,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { KeyboardFormLayout } from '../../components/ui/KeyboardFormLayout';
+import { Skeleton } from '../../components/ui/Skeleton';
 import { WizardProgress } from '../../components/food-cost/WizardProgress';
 import { useRecipes } from '../../hooks/useRecipes';
 import { useIngredients } from '../../hooks/useIngredients';
@@ -26,40 +28,80 @@ import {
   loadFoodCostDraft,
   saveFoodCostDraft,
 } from '../../lib/foodCostDraft';
+import { track, AnalyticsEvents } from '../../lib/analytics';
 import { trackFoodCost } from '../../lib/foodCostAnalytics';
+import { supabase } from '../../lib/supabase';
 import {
   consumePendingAddToDishIngredientIds,
 } from '../../lib/pendingRecipeIngredients';
 import { useUnitSystem } from '../../hooks/useUnitSystem';
+import { useSubscription } from '../../hooks/useSubscription';
+import { useSmartKeyboardOffset } from '../../hooks/useSmartKeyboardOffset';
 import useIngredientStore from '../../stores/ingredientStore';
-import { formatUnitLabel, RECIPE_CATEGORIES } from '../../constants/units';
+import { formatUnitLabel, RECIPE_CATEGORIES, getUnitGroupsForSystem, getDefaultPurchaseUnit, isUnitInSystem, inferUnitSystem, getCompatibleUnitsForIngredient } from '../../constants/units';
 import { FOOD_COST_COPY as C } from '../../constants/copy';
+import { PaywallModal } from '../../components/paywall/PaywallModal';
+import { UnitSystemToggle } from '../../components/ui/UnitSystemToggle';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from '../../constants/theme';
-
-const HOW_MUCH_TITLE = 'How much do you use in this recipe?';
-
-function howMuchTitle(ingredientName) {
-  const name = ingredientName?.trim();
-  if (!name) return HOW_MUCH_TITLE;
-  return `How much ${name} do you use in this recipe?`;
-}
 
 let _fmtId = 0;
 function newFmtId() { return ++_fmtId; }
 
-export default function CreateRecipeScreen() {
+function formatHistoryDate(dateStr) {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+/** One-line move hint from the latest price history row, e.g. "Up 12% vs previous price". */
+function formatRecentPriceMoveHint(entry) {
+  if (!entry) return null;
+  const oldP = Number(entry.old_price);
+  const newP = Number(entry.new_price);
+  if (!(oldP > 0) || Number.isNaN(oldP) || Number.isNaN(newP) || oldP === newP) return null;
+  const pct = ((newP - oldP) / oldP) * 100;
+  if (Math.abs(pct) < 0.5) return null;
+  const dir = pct > 0 ? 'Up' : 'Down';
+  const when = entry.changed_at ? formatHistoryDate(entry.changed_at) : 'previous price';
+  return `${dir} ${Math.abs(pct).toFixed(0)}% since ${when}`;
+}
+
+export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
   const router = useRouter();
-  const { fresh } = useLocalSearchParams();
-  const startFresh = fresh === '1';
-  const { createRecipe } = useRecipes();
-  const { ingredients } = useIngredients();
-  const { sellingUnits } = useRecipeStore();
+  const { fresh, editId: editIdParam } = useLocalSearchParams();
+  const recipeId = recipeIdProp
+    ?? (typeof editIdParam === 'string' ? editIdParam : editIdParam?.[0])
+    ?? null;
+  const isEdit = Boolean(recipeId);
+  const startFresh = !isEdit && fresh === '1';
+  const { createRecipe, updateRecipe } = useRecipes();
+  const { ingredients, addIngredient, updateIngredient } = useIngredients();
+  const { fetchRecipeWithIngredients, sellingUnits } = useRecipeStore();
   const settings = useSettingsStore((s) => s.settings);
   const getCurrencySymbol = useSettingsStore((s) => s.getCurrencySymbol);
   const symbol = getCurrencySymbol();
-  const { getCompatibleUnits } = useUnitSystem();
+  const { unitSystem: settingsUnitSystem, defaultPurchaseUnit } = useUnitSystem();
+  const { canAddIngredient, canViewPriceHistory } = useSubscription();
+
+  const compatibleUsedUnits = useCallback(
+    (purchaseUnit) => getCompatibleUnitsForIngredient(
+      purchaseUnit,
+      inferUnitSystem(purchaseUnit, settingsUnitSystem),
+    ),
+    [settingsUnitSystem],
+  );
 
   const [step, setStep] = useState(1);
+  const [pageLoading, setPageLoading] = useState(isEdit);
+  const [loadError, setLoadError] = useState(null);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [paywallReason, setPaywallReason] = useState('ingredient');
+  const [showPriceHistorySheet, setShowPriceHistorySheet] = useState(false);
+  const [priceHistoryRows, setPriceHistoryRows] = useState([]);
+  const [priceHistoryLoading, setPriceHistoryLoading] = useState(false);
 
   const sellingUnitOptions = sellingUnits.length > 0
     ? sellingUnits.map((u) => ({ value: u.name, label: u.label ?? u.name }))
@@ -88,12 +130,59 @@ export default function CreateRecipeScreen() {
   const addToDishQueueRef = useRef([]);
   const recipeIngredientsRef = useRef(recipeIngredients);
 
+  // Inline new-ingredient form (wizard — no /ingredient/create navigation)
+  const [newIngName, setNewIngName] = useState('');
+  const [newIngPurchaseQty, setNewIngPurchaseQty] = useState('1');
+  const [newIngPurchaseUnit, setNewIngPurchaseUnit] = useState(defaultPurchaseUnit);
+  const [newIngPurchasePrice, setNewIngPurchasePrice] = useState('');
+  const [newIngWastePercent, setNewIngWastePercent] = useState('0');
+  const [newIngNotes, setNewIngNotes] = useState('');
+  const [newIngShowOptional, setNewIngShowOptional] = useState(false);
+  const [newIngUsedQty, setNewIngUsedQty] = useState('');
+  const [newIngUsedUnit, setNewIngUsedUnit] = useState(defaultPurchaseUnit);
+  const [newIngErrors, setNewIngErrors] = useState({});
+  const [newIngSaving, setNewIngSaving] = useState(false);
+  const [showPurchaseUnitPicker, setShowPurchaseUnitPicker] = useState(false);
+  const [showUsedUnitPicker, setShowUsedUnitPicker] = useState(false);
+  /** Local Metric/Imperial for purchase unit list — defaults to settings, not persisted */
+  const [purchaseUnitSystem, setPurchaseUnitSystem] = useState(settingsUnitSystem);
+  const purchaseUnitGroups = useMemo(
+    () => getUnitGroupsForSystem(purchaseUnitSystem),
+    [purchaseUnitSystem],
+  );
+  /** Create sheet opened with nothing left to pick — hide "Back to list" */
+  const [ingCreateOnly, setIngCreateOnly] = useState(false);
+  /**
+   * Ingredient sheet mode:
+   * - new: full create form (purchase + used qty)
+   * - add-existing: used qty first, purchase collapsed (pick from list or tap dish row)
+   * - edit-purchase: expand purchase fields from add-existing
+   */
+  const [ingFormMode, setIngFormMode] = useState('new');
+  /** Snapshot of library fields when opening an existing ingredient (detect edits) */
+  const ingFormBaselineRef = useRef(null);
+  const newIngNameRef = useRef(null);
+  const newIngPurchasePriceRef = useRef(null);
+  const newIngPurchaseQtyRef = useRef(null);
+  const newIngWasteRef = useRef(null);
+  const newIngUsedQtyRef = useRef(null);
+  const {
+    keyboardOffset: createKeyboardOffset,
+    bindField: bindCreateField,
+    clearFocus: clearCreateKeyboardFocus,
+  } = useSmartKeyboardOffset({
+    enabled: showIngSheet && ingSheetStep === 'create',
+    footerReserve: 96,
+  });
+
   const [showFmtSheet, setShowFmtSheet] = useState(false);
   const [fmtSheetUnit, setFmtSheetUnit] = useState(sellingUnitOptions[0]?.value ?? 'piece');
   const [fmtSheetQty, setFmtSheetQty] = useState('1');
   const [fmtSheetPrice, setFmtSheetPrice] = useState('');
   const [fmtPriceError, setFmtPriceError] = useState('');
   const [editingFmtId, setEditingFmtId] = useState(null);
+  /** User closed empty price sheet on step 3 — don't force it open again until they leave step 3 */
+  const fmtAutoOpenDismissedRef = useRef(false);
 
   const { control, handleSubmit, watch, trigger, reset, formState: { errors, isSubmitting } } = useForm({
     defaultValues: {
@@ -110,6 +199,7 @@ export default function CreateRecipeScreen() {
   const draftReadyRef = useRef(false);
 
   const persistDraft = useCallback(async (nextStep = step) => {
+    if (isEdit) return;
     await saveFoodCostDraft({
       step: nextStep,
       dish: {
@@ -120,12 +210,55 @@ export default function CreateRecipeScreen() {
       ingredients: recipeIngredients,
       sellingFormats,
     });
-  }, [step, watchName, watchCategory, watchTarget, recipeIngredients, sellingFormats, settings.default_food_cost_percent]);
+  }, [isEdit, step, watchName, watchCategory, watchTarget, recipeIngredients, sellingFormats, settings.default_food_cost_percent]);
 
-  // Restore unfinished draft once on mount (unless starting fresh after discard)
+  // Create: restore unfinished draft. Edit: load existing dish into the same wizard.
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (isEdit) {
+        setPageLoading(true);
+        setLoadError(null);
+        const { data, error } = await fetchRecipeWithIngredients(recipeId);
+        if (cancelled) return;
+        if (error || !data) {
+          setLoadError(typeof error === 'string' ? error : 'Could not load this dish.');
+          setPageLoading(false);
+          draftReadyRef.current = true;
+          return;
+        }
+        reset({
+          name: data.name ?? '',
+          category: data.category ?? 'other',
+          target_food_cost_percent: String(
+            data.target_food_cost_percent ?? settings.default_food_cost_percent ?? 30
+          ),
+        });
+        setRecipeIngredients(
+          (data.recipe_ingredients ?? []).map((ri) => ({
+            ingredient_id: ri.ingredient_id,
+            ingredient: ri.ingredient,
+            quantity: String(ri.quantity),
+            unit: ri.unit,
+          }))
+        );
+        setSellingFormats(
+          (data.selling_formats ?? []).map((f) => ({
+            id: newFmtId(),
+            selling_unit_name: f.selling_unit_name ?? f.selling_unit?.name ?? 'piece',
+            unit_quantity: String(f.unit_quantity ?? 1),
+            selling_price: String(f.selling_price ?? ''),
+          }))
+        );
+        setStep(1);
+        setIngredientError(false);
+        setSellingFormatError(false);
+        setPageLoading(false);
+        draftReadyRef.current = true;
+        trackFoodCost('step_1', { source: 'edit', recipeId });
+        return;
+      }
+
       if (startFresh) {
         await clearFoodCostDraft();
         if (cancelled) return;
@@ -163,7 +296,7 @@ export default function CreateRecipeScreen() {
       draftReadyRef.current = true;
     })();
     return () => { cancelled = true; };
-  }, [startFresh]);
+  }, [isEdit, recipeId, startFresh]);
 
   // Attach live library rows when ingredients finish loading / update
   useEffect(() => {
@@ -183,14 +316,14 @@ export default function CreateRecipeScreen() {
     });
   }, [ingredients]);
 
-  // Autosave draft while editing
+  // Autosave draft while creating (not while editing a saved dish)
   useEffect(() => {
-    if (!draftReadyRef.current) return undefined;
+    if (isEdit || !draftReadyRef.current) return undefined;
     const timer = setTimeout(() => {
       persistDraft(step);
     }, 450);
     return () => clearTimeout(timer);
-  }, [persistDraft, step]);
+  }, [isEdit, persistDraft, step]);
 
   const richIngredients = useMemo(() =>
     recipeIngredients
@@ -203,21 +336,206 @@ export default function CreateRecipeScreen() {
 
   const addedIds = useMemo(() => new Set(recipeIngredients.map((r) => r.ingredient_id)), [recipeIngredients]);
 
-  const filteredIngredients = useMemo(() =>
-    ingredients.filter(
-      (i) => !addedIds.has(i.id) && i.name.toLowerCase().includes(ingSearch.toLowerCase())
-    ),
-    [ingredients, ingSearch, addedIds]
+  const availableIngredients = useMemo(
+    () => ingredients.filter((i) => !addedIds.has(i.id)),
+    [ingredients, addedIds],
   );
 
-  const getCompatibleUnitsForIng = (ing) => {
-    if (!ing) return [];
-    return getCompatibleUnits(ing.purchase_unit);
+  const filteredIngredients = useMemo(() =>
+    availableIngredients.filter(
+      (i) => i.name.toLowerCase().includes(ingSearch.toLowerCase())
+    ),
+    [availableIngredients, ingSearch]
+  );
+
+  const resetNewIngredientForm = useCallback(() => {
+    setNewIngName('');
+    setNewIngPurchaseQty('1');
+    setNewIngPurchaseUnit(defaultPurchaseUnit);
+    setNewIngPurchasePrice('');
+    setNewIngWastePercent('0');
+    setNewIngNotes('');
+    setNewIngShowOptional(false);
+    setNewIngUsedQty('');
+    setNewIngUsedUnit(defaultPurchaseUnit);
+    setNewIngErrors({});
+    setNewIngSaving(false);
+    setShowPurchaseUnitPicker(false);
+    setShowUsedUnitPicker(false);
+    setPurchaseUnitSystem(settingsUnitSystem);
+    setIngFormMode('new');
+    ingFormBaselineRef.current = null;
+    clearCreateKeyboardFocus();
+  }, [defaultPurchaseUnit, settingsUnitSystem, clearCreateKeyboardFocus]);
+
+  const fillExistingIngredientForm = useCallback((ing, {
+    usedQty = '',
+    usedUnit = null,
+    dishEditingId = null,
+    createOnly = false,
+    mode = 'add-existing',
+  } = {}) => {
+    if (!ing) return;
+    const waste = ing.waste_percent != null ? String(ing.waste_percent) : '0';
+    const notes = ing.notes ?? '';
+    const purchaseUnit = ing.purchase_unit ?? defaultPurchaseUnit;
+    const compatible = compatibleUsedUnits(purchaseUnit);
+    const nextUsed = usedUnit
+      ?? compatible.find((u) => u.value === purchaseUnit)?.value
+      ?? compatible[0]?.value
+      ?? purchaseUnit;
+
+    setNewIngName(ing.name ?? '');
+    setNewIngPurchaseQty(String(ing.purchase_quantity ?? 1));
+    setNewIngPurchaseUnit(purchaseUnit);
+    setNewIngPurchasePrice(String(ing.purchase_price ?? ''));
+    setNewIngWastePercent(waste);
+    setNewIngNotes(notes);
+    setNewIngShowOptional(false);
+    setNewIngUsedQty(usedQty != null ? String(usedQty) : '');
+    setNewIngUsedUnit(nextUsed);
+    setNewIngErrors({});
+    setNewIngSaving(false);
+    setShowPurchaseUnitPicker(false);
+    setShowUsedUnitPicker(false);
+    setPurchaseUnitSystem(inferUnitSystem(purchaseUnit, settingsUnitSystem));
+    setIngFormMode(mode);
+    clearCreateKeyboardFocus();
+
+    ingFormBaselineRef.current = {
+      name: (ing.name ?? '').trim(),
+      purchase_price: Number(ing.purchase_price),
+      purchase_quantity: Number(ing.purchase_quantity),
+      purchase_unit: purchaseUnit,
+      waste_percent: parseFloat(waste) || 0,
+      notes: notes.trim() || null,
+    };
+
+    setIngSheetIngredient(ing);
+    setEditingIngId(dishEditingId);
+    setIngCreateOnly(createOnly || mode === 'edit-library');
+    setIngSheetStep('create');
+    setShowIngSheet(true);
+  }, [defaultPurchaseUnit, compatibleUsedUnits, settingsUnitSystem, clearCreateKeyboardFocus]);
+
+  const isLibraryEdit = ingFormMode === 'edit-library';
+  const isPurchaseEdit = isLibraryEdit || ingFormMode === 'edit-purchase';
+  const isAddExistingCollapsed = ingFormMode === 'add-existing';
+  /** Used qty only when creating a brand-new ingredient; never while editing purchase details. */
+  const showUsedQtyInPurchaseForm = ingFormMode === 'new';
+
+  const cancelPurchaseEdit = useCallback(() => {
+    if (ingFormMode === 'edit-library') {
+      setShowIngSheet(false);
+      setIngSheetIngredient(null);
+      setEditingIngId(null);
+      setIngCreateOnly(false);
+      resetNewIngredientForm();
+      return;
+    }
+    const baseline = ingFormBaselineRef.current;
+    if (baseline) {
+      setNewIngName(baseline.name);
+      setNewIngPurchasePrice(String(baseline.purchase_price));
+      setNewIngPurchaseQty(String(baseline.purchase_quantity));
+      setNewIngPurchaseUnit(baseline.purchase_unit);
+      setNewIngWastePercent(String(baseline.waste_percent ?? 0));
+      setNewIngNotes(baseline.notes ?? '');
+      setNewIngShowOptional(false);
+      setNewIngErrors((e) => ({
+        ...e,
+        name: undefined,
+        purchase_price: undefined,
+        purchase_quantity: undefined,
+      }));
+    }
+    setIngFormMode('add-existing');
+  }, [ingFormMode, resetNewIngredientForm]);
+
+  const recentPriceMoveHint = useMemo(
+    () => formatRecentPriceMoveHint(priceHistoryRows[0]),
+    [priceHistoryRows],
+  );
+
+  useEffect(() => {
+    const shouldLoadHistory = (
+      (ingFormMode === 'edit-library' || ingFormMode === 'edit-purchase')
+      && ingSheetIngredient?.id
+      && canViewPriceHistory
+    );
+    if (!shouldLoadHistory) {
+      setPriceHistoryRows([]);
+      setPriceHistoryLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setPriceHistoryLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('ingredient_price_history')
+          .select('id, old_price, new_price, changed_at, change_source')
+          .eq('ingredient_id', ingSheetIngredient.id)
+          .order('changed_at', { ascending: false })
+          .limit(8);
+        if (!cancelled && !error) setPriceHistoryRows(data ?? []);
+      } catch (_) {
+        if (!cancelled) setPriceHistoryRows([]);
+      } finally {
+        if (!cancelled) setPriceHistoryLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [ingFormMode, ingSheetIngredient?.id, canViewPriceHistory]);
+
+  const openPriceHistoryFromForm = () => {
+    if (!canViewPriceHistory) {
+      track(AnalyticsEvents.PAYWALL_VIEWED, {
+        reason: 'priceHistory',
+        source: 'recipe_wizard_inline',
+      });
+      setPaywallReason('priceHistory');
+      setShowPaywall(true);
+      return;
+    }
+    setShowPriceHistorySheet(true);
+    // Refetch so the sheet isn't stuck on a stale empty list
+    if (ingSheetIngredient?.id) {
+      (async () => {
+        setPriceHistoryLoading(true);
+        try {
+          const { data, error } = await supabase
+            .from('ingredient_price_history')
+            .select('id, old_price, new_price, changed_at, change_source')
+            .eq('ingredient_id', ingSheetIngredient.id)
+            .order('changed_at', { ascending: false })
+            .limit(8);
+          if (!error) setPriceHistoryRows(data ?? []);
+        } catch (_) {
+          setPriceHistoryRows([]);
+        } finally {
+          setPriceHistoryLoading(false);
+        }
+      })();
+    }
+  };
+
+  const openCreateIngredient = () => {
+    trackFoodCost('add_to_library_tapped', { wizard_step: step, flow: 'inline' });
+    resetNewIngredientForm();
+    setIngCreateOnly(false);
+    setIngFormMode('new');
+    setIngSheetStep('create');
+    setEditingIngId(null);
+    setIngSheetIngredient(null);
+    setAddToDishQueue([]);
+    addToDishQueueRef.current = [];
   };
 
   const openAddIngSheet = () => {
     trackFoodCost('ingredient_picker_opened', { wizard_step: step });
-    setIngSheetStep('search');
     setIngSheetIngredient(null);
     setIngSheetQty('');
     setIngSheetUnit('');
@@ -227,23 +545,26 @@ export default function CreateRecipeScreen() {
     addToDishQueueRef.current = [];
     setIngSearch('');
     setIngredientError(false);
+    const leftover = ingredients.filter((i) => !addedIds.has(i.id));
+    if (leftover.length === 0) {
+      resetNewIngredientForm();
+      setIngCreateOnly(true);
+      setIngSheetStep('create');
+      trackFoodCost('add_to_library_tapped', {
+        wizard_step: step,
+        flow: ingredients.length === 0 ? 'inline_empty_library' : 'inline_all_used',
+      });
+    } else {
+      setIngCreateOnly(false);
+      setIngSheetStep('search');
+    }
     setShowIngSheet(true);
   };
 
   const openConfigForIngredient = useCallback((ing) => {
     if (!ing) return;
-    setIngSheetIngredient(ing);
-    const compatible = getCompatibleUnits(ing.purchase_unit);
-    const defaultUnit = compatible.find((u) => u.value === ing.purchase_unit)?.value
-      ?? compatible[0]?.value
-      ?? ing.purchase_unit;
-    setIngSheetUnit(defaultUnit);
-    setIngSheetQty('');
-    setIngQtyError('');
-    setEditingIngId(null);
-    setIngSheetStep('config');
-    setShowIngSheet(true);
-  }, [getCompatibleUnits]);
+    fillExistingIngredientForm(ing, { createOnly: false });
+  }, [fillExistingIngredientForm]);
 
   const resolveIngredient = useCallback((id) => (
     ingredients.find((i) => i.id === id)
@@ -259,9 +580,9 @@ export default function CreateRecipeScreen() {
     setAddToDishQueue(pending);
 
     const openFirst = () => {
-      const ing = resolveIngredient(pending[0]);
-      if (ing) {
-        openConfigForIngredient(ing);
+      const next = resolveIngredient(pending[0]);
+      if (next) {
+        openConfigForIngredient(next);
         return true;
       }
       return false;
@@ -269,7 +590,6 @@ export default function CreateRecipeScreen() {
 
     if (openFirst()) return;
 
-    // Store may still be settling — brief retries
     let attempts = 0;
     const timer = setInterval(() => {
       attempts += 1;
@@ -302,104 +622,255 @@ export default function CreateRecipeScreen() {
     recipeIngredientsRef.current = recipeIngredients;
   }, [recipeIngredients]);
 
-  const openCreateIngredient = () => {
-    trackFoodCost('add_to_library_tapped', { wizard_step: step });
-    reopenIngredientPickerRef.current = true;
-    setShowIngSheet(false);
-    router.push({
-      pathname: '/ingredient/create',
-      params: { fromRecipe: '1' },
-    });
+  const setNewPurchaseUnit = (unit) => {
+    setNewIngPurchaseUnit(unit);
+    const compatible = compatibleUsedUnits(unit);
+    const nextUsed = compatible.find((u) => u.value === newIngUsedUnit)?.value
+      ?? compatible.find((u) => u.value === unit)?.value
+      ?? compatible[0]?.value
+      ?? unit;
+    setNewIngUsedUnit(nextUsed);
+    setShowPurchaseUnitPicker(false);
+  };
+
+  const switchPurchaseUnitSystem = (nextSystem) => {
+    if (nextSystem === purchaseUnitSystem) return;
+    setPurchaseUnitSystem(nextSystem);
+    if (!isUnitInSystem(newIngPurchaseUnit, nextSystem)) {
+      const nextUnit = getDefaultPurchaseUnit(nextSystem);
+      setNewIngPurchaseUnit(nextUnit);
+      const compatible = compatibleUsedUnits(nextUnit);
+      const nextUsed = compatible.find((u) => u.value === newIngUsedUnit)?.value
+        ?? compatible.find((u) => u.value === nextUnit)?.value
+        ?? compatible[0]?.value
+        ?? nextUnit;
+      setNewIngUsedUnit(nextUsed);
+    }
+  };
+
+  const handleInlineCreateConfirm = async () => {
+    const errors = {};
+    const name = newIngName.trim();
+    if (!name) errors.name = 'Enter a name';
+
+    const price = parseFloat(newIngPurchasePrice);
+    if (!newIngPurchasePrice.trim() || Number.isNaN(price) || price < 0) {
+      errors.purchase_price = 'Enter a valid price';
+    }
+
+    const purchaseQty = parseFloat(newIngPurchaseQty);
+    if (Number.isNaN(purchaseQty) || purchaseQty <= 0) {
+      errors.purchase_quantity = 'Enter a valid quantity';
+    }
+
+    const isDishIngredientEdit = ingFormMode === 'edit-library';
+    const isPurchaseOnlySave = isDishIngredientEdit || ingFormMode === 'edit-purchase';
+    const usedQty = parseFloat(newIngUsedQty);
+    if (!isPurchaseOnlySave) {
+      if (!newIngUsedQty.trim() || Number.isNaN(usedQty) || usedQty <= 0) {
+        errors.used_quantity = 'Enter how much you use';
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setNewIngErrors(errors);
+      return;
+    }
+
+    const isExisting = Boolean(ingSheetIngredient?.id);
+    if (!isExisting && !canAddIngredient(ingredients.length)) {
+      setPaywallReason('ingredient');
+      setShowPaywall(true);
+      return;
+    }
+
+    setNewIngSaving(true);
+    setNewIngErrors({});
+    try {
+      const wastePercent = parseFloat(newIngWastePercent) || 0;
+      const notes = newIngNotes.trim() || null;
+      const purchasePayload = {
+        name,
+        purchase_price: price,
+        purchase_quantity: purchaseQty,
+        purchase_unit: newIngPurchaseUnit,
+        waste_percent: wastePercent,
+        notes,
+      };
+
+      let saved = ingSheetIngredient;
+
+      if (isExisting) {
+        const baseline = ingFormBaselineRef.current;
+        const changed = !baseline || (
+          name !== baseline.name
+          || price !== baseline.purchase_price
+          || purchaseQty !== baseline.purchase_quantity
+          || newIngPurchaseUnit !== baseline.purchase_unit
+          || wastePercent !== baseline.waste_percent
+          || notes !== baseline.notes
+        );
+
+        if (changed) {
+          const { data, error } = await updateIngredient(ingSheetIngredient.id, purchasePayload);
+          if (error || !data) {
+            Alert.alert('Could not update', typeof error === 'string' ? error : 'Please try again.');
+            return;
+          }
+          saved = data;
+          track(AnalyticsEvents.INGREDIENT_UPDATED, {
+            price_changed: baseline ? price !== baseline.purchase_price : true,
+            source: 'recipe_wizard_inline',
+          });
+          // Refresh history so the sheet reflects the new change
+          if (canViewPriceHistory && baseline && price !== baseline.purchase_price) {
+            try {
+              const { data: hist } = await supabase
+                .from('ingredient_price_history')
+                .select('id, old_price, new_price, changed_at, change_source')
+                .eq('ingredient_id', saved.id)
+                .order('changed_at', { ascending: false })
+                .limit(8);
+              setPriceHistoryRows(hist ?? []);
+            } catch (_) { /* ignore */ }
+          }
+        }
+      } else {
+        const { data, error } = await addIngredient({
+          ...purchasePayload,
+          category_id: null,
+        });
+
+        if (error || !data) {
+          track(AnalyticsEvents.INGREDIENT_CREATE_FAILED, {
+            count: 1,
+            message: error ?? 'unknown',
+            source: 'recipe_wizard_inline',
+          });
+          Alert.alert('Could not save', typeof error === 'string' ? error : 'Please try again.');
+          return;
+        }
+
+        saved = data;
+        track(AnalyticsEvents.INGREDIENT_CREATED, {
+          count: 1,
+          failed_count: 0,
+          source: 'recipe_wizard_inline',
+          total_ingredients_after: ingredients.length + 1,
+        });
+      }
+
+      // Editing ingredient already on the dish — update library fields only, keep used qty/unit
+      if (isDishIngredientEdit) {
+        setRecipeIngredients((prev) => prev.map((r) => (
+          r.ingredient_id === saved.id
+            ? { ...r, ingredient: saved }
+            : r
+        )));
+        resetNewIngredientForm();
+        setIngSheetIngredient(null);
+        setEditingIngId(null);
+        setShowIngSheet(false);
+        return;
+      }
+
+      // Editing purchase while adding/editing on dish — save library fields, return to used-qty step
+      if (ingFormMode === 'edit-purchase') {
+        setIngSheetIngredient(saved);
+        ingFormBaselineRef.current = {
+          name,
+          purchase_price: price,
+          purchase_quantity: purchaseQty,
+          purchase_unit: newIngPurchaseUnit,
+          waste_percent: wastePercent,
+          notes,
+        };
+        setNewIngName(saved.name ?? name);
+        setNewIngPurchasePrice(String(saved.purchase_price ?? price));
+        setNewIngPurchaseQty(String(saved.purchase_quantity ?? purchaseQty));
+        setNewIngPurchaseUnit(saved.purchase_unit ?? newIngPurchaseUnit);
+        setNewIngWastePercent(String(saved.waste_percent ?? wastePercent));
+        setNewIngNotes(saved.notes ?? '');
+        setNewIngShowOptional(false);
+        if (editingIngId) {
+          setRecipeIngredients((prev) => prev.map((r) => (
+            r.ingredient_id === saved.id
+              ? { ...r, ingredient: saved }
+              : r
+          )));
+        }
+        setIngFormMode('add-existing');
+        return;
+      }
+
+      const qtyStr = String(usedQty);
+      const targetId = saved.id;
+
+      setRecipeIngredients((prev) => {
+        if (prev.some((r) => r.ingredient_id === targetId)) {
+          return prev.map((r) => r.ingredient_id === targetId
+            ? { ...r, quantity: qtyStr, unit: newIngUsedUnit, ingredient: saved }
+            : r);
+        }
+        return [
+          ...prev,
+          { ingredient_id: saved.id, ingredient: saved, quantity: qtyStr, unit: newIngUsedUnit },
+        ];
+      });
+      setIngredientError(false);
+
+      trackFoodCost('ingredient_added', {
+        wizard_step: step,
+        ingredient_id: saved.id,
+        recipe_ingredient_count: recipeIngredients.length + 1,
+        from_inline_create: !isExisting,
+        from_existing: isExisting,
+        from_queue: addToDishQueueRef.current.length > 0,
+      });
+
+      const queue = addToDishQueueRef.current;
+      if (queue.length > 1) {
+        const rest = queue.slice(1);
+        addToDishQueueRef.current = rest;
+        setAddToDishQueue(rest);
+        const nextIng = resolveIngredient(rest[0]);
+        if (nextIng) {
+          fillExistingIngredientForm(nextIng, { createOnly: false });
+          return;
+        }
+      }
+
+      addToDishQueueRef.current = [];
+      setAddToDishQueue([]);
+      resetNewIngredientForm();
+      setIngSheetIngredient(null);
+      setEditingIngId(null);
+      setIngSheetStep('search');
+      setShowIngSheet(false);
+    } catch (err) {
+      Alert.alert('Could not save', err?.message ?? 'Please try again.');
+    } finally {
+      setNewIngSaving(false);
+    }
   };
 
   const openEditIngSheet = (ri) => {
+    if (!ri?.ingredient) return;
     setAddToDishQueue([]);
     addToDishQueueRef.current = [];
-    setIngSheetStep('config');
-    setIngSheetIngredient(ri.ingredient);
-    setIngSheetQty(String(ri.quantity));
-    const compatible = getCompatibleUnits(ri.ingredient.purchase_unit);
-    const unit = compatible.find((u) => u.value === ri.unit)?.value
-      ?? compatible[0]?.value
-      ?? ri.unit;
-    setIngSheetUnit(unit);
-    setEditingIngId(ri.ingredient_id);
-    setIngQtyError('');
-    setShowIngSheet(true);
+    fillExistingIngredientForm(ri.ingredient, {
+      usedQty: ri.quantity,
+      usedUnit: ri.unit,
+      dishEditingId: ri.ingredient_id,
+      createOnly: true,
+      mode: 'add-existing',
+    });
   };
 
   const handleIngSelect = (ing) => {
     setAddToDishQueue([]);
     addToDishQueueRef.current = [];
-    setIngSheetIngredient(ing);
-    const compatible = getCompatibleUnits(ing.purchase_unit);
-    const defaultUnit = compatible.find((u) => u.value === ing.purchase_unit)?.value
-      ?? compatible[0]?.value
-      ?? ing.purchase_unit;
-    setIngSheetUnit(defaultUnit);
-    setIngSheetQty('');
-    setIngQtyError('');
-    setIngSheetStep('config');
-  };
-
-  const handleIngSheetConfirm = () => {
-    if (!ingSheetIngredient) return;
-    const qty = parseFloat(ingSheetQty);
-    if (!ingSheetQty.trim() || Number.isNaN(qty) || qty <= 0) {
-      setIngQtyError('Enter a quantity');
-      return;
-    }
-    setIngQtyError('');
-    const qtyStr = String(qty);
-    if (editingIngId) {
-      setRecipeIngredients((prev) =>
-        prev.map((r) => r.ingredient_id === editingIngId ? { ...r, quantity: qtyStr, unit: ingSheetUnit } : r)
-      );
-      setIngredientError(false);
-      setShowIngSheet(false);
-      return;
-    }
-
-    setRecipeIngredients((prev) => {
-      if (prev.some((r) => r.ingredient_id === ingSheetIngredient.id)) {
-        return prev.map((r) => r.ingredient_id === ingSheetIngredient.id
-          ? { ...r, quantity: qtyStr, unit: ingSheetUnit, ingredient: ingSheetIngredient }
-          : r);
-      }
-      return [
-        ...prev,
-        { ingredient_id: ingSheetIngredient.id, ingredient: ingSheetIngredient, quantity: qtyStr, unit: ingSheetUnit },
-      ];
-    });
-    setIngredientError(false);
-
-    if (!editingIngId) {
-      const isNew = !recipeIngredients.some((r) => r.ingredient_id === ingSheetIngredient.id);
-      if (isNew) {
-        trackFoodCost('ingredient_added', {
-          wizard_step: step,
-          ingredient_id: ingSheetIngredient.id,
-          recipe_ingredient_count: recipeIngredients.length + 1,
-          from_queue: addToDishQueueRef.current.length > 0,
-        });
-      }
-    }
-
-    const queue = addToDishQueueRef.current;
-    if (queue.length > 1) {
-      const rest = queue.slice(1);
-      addToDishQueueRef.current = rest;
-      setAddToDishQueue(rest);
-      const nextIng = resolveIngredient(rest[0]);
-      if (nextIng) {
-        openConfigForIngredient(nextIng);
-        return;
-      }
-    }
-
-    addToDishQueueRef.current = [];
-    setAddToDishQueue([]);
-    setShowIngSheet(false);
+    fillExistingIngredientForm(ing, { createOnly: false, mode: 'add-existing' });
   };
 
   const handleIngSheetClose = () => {
@@ -411,21 +882,93 @@ export default function CreateRecipeScreen() {
     setIngQtyError('');
     setAddToDishQueue([]);
     addToDishQueueRef.current = [];
+    setIngCreateOnly(false);
+    resetNewIngredientForm();
   };
 
   const removeIngredient = (ingredientId) => {
     setRecipeIngredients((prev) => prev.filter((r) => r.ingredient_id !== ingredientId));
   };
 
+  const applySuggestedFmtPrice = useCallback((qtyStr) => {
+    if (!(totalCost > 0)) return;
+    const metrics = calculateSellingFormatMetrics({
+      totalRecipeCost: totalCost,
+      unitQuantity: qtyStr || '1',
+      sellingPrice: null,
+      targetFoodCostPercent: targetPct,
+    });
+    if (metrics?.recommendedPrice != null && metrics.recommendedPrice > 0) {
+      setFmtSheetPrice(metrics.recommendedPrice.toFixed(2));
+      setFmtPriceError('');
+    }
+  }, [totalCost, targetPct]);
+
   const openAddFmtSheet = () => {
-    setFmtSheetUnit(sellingUnitOptions[0]?.value ?? 'piece');
-    setFmtSheetQty('1');
-    setFmtSheetPrice('');
+    const unit = sellingUnitOptions[0]?.value ?? 'piece';
+    const qty = '1';
+    let suggested = '';
+    if (totalCost > 0) {
+      const metrics = calculateSellingFormatMetrics({
+        totalRecipeCost: totalCost,
+        unitQuantity: qty,
+        sellingPrice: null,
+        targetFoodCostPercent: targetPct,
+      });
+      if (metrics?.recommendedPrice != null && metrics.recommendedPrice > 0) {
+        suggested = metrics.recommendedPrice.toFixed(2);
+      }
+    }
+    setFmtSheetUnit(unit);
+    setFmtSheetQty(qty);
+    setFmtSheetPrice(suggested);
     setFmtPriceError('');
     setEditingFmtId(null);
     setSellingFormatError(false);
+    fmtAutoOpenDismissedRef.current = false;
     setShowFmtSheet(true);
   };
+
+  const closeFmtSheet = () => {
+    setShowFmtSheet(false);
+    if (sellingFormats.length === 0 && !editingFmtId) {
+      fmtAutoOpenDismissedRef.current = true;
+    }
+  };
+
+  // Auto-open selling price sheet when landing on step 3 with no prices yet
+  useEffect(() => {
+    if (step !== 3) {
+      fmtAutoOpenDismissedRef.current = false;
+      return undefined;
+    }
+    if (!draftReadyRef.current) return undefined;
+    if (sellingFormats.length > 0) return undefined;
+    if (showFmtSheet) return undefined;
+    if (fmtAutoOpenDismissedRef.current) return undefined;
+
+    const frame = requestAnimationFrame(() => {
+      openAddFmtSheet();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [step, sellingFormats.length, showFmtSheet, totalCost]);
+
+  // If sheet opened before dish cost was ready (draft resume), fill suggested price when cost arrives
+  useEffect(() => {
+    if (!showFmtSheet || editingFmtId) return;
+    if (fmtSheetPrice.trim()) return;
+    if (!(totalCost > 0)) return;
+    const qty = fmtSheetQty || '1';
+    const metrics = calculateSellingFormatMetrics({
+      totalRecipeCost: totalCost,
+      unitQuantity: qty,
+      sellingPrice: null,
+      targetFoodCostPercent: targetPct,
+    });
+    if (metrics?.recommendedPrice != null && metrics.recommendedPrice > 0) {
+      setFmtSheetPrice(metrics.recommendedPrice.toFixed(2));
+    }
+  }, [totalCost, showFmtSheet, editingFmtId, fmtSheetPrice, fmtSheetQty, targetPct]);
 
   const openEditFmtSheet = (fmt) => {
     setFmtSheetUnit(fmt.selling_unit_name);
@@ -472,11 +1015,11 @@ export default function CreateRecipeScreen() {
       const prev = step - 1;
       await persistDraft(prev);
       setStep(prev);
-      trackFoodCost(`step_${prev}`, { direction: 'back' });
+      trackFoodCost(`step_${prev}`, { direction: 'back', source: isEdit ? 'edit' : 'create' });
       requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
       return;
     }
-    await persistDraft(1);
+    if (!isEdit) await persistDraft(1);
     router.back();
   };
 
@@ -548,7 +1091,11 @@ export default function CreateRecipeScreen() {
 
     if (!hasIngredients || !hasSellingFormat) {
       if (!hasIngredients) setStep(2);
-      else setStep(3);
+      else {
+        setStep(3);
+        fmtAutoOpenDismissedRef.current = false;
+        requestAnimationFrame(() => openAddFmtSheet());
+      }
       return;
     }
 
@@ -563,12 +1110,32 @@ export default function CreateRecipeScreen() {
       return { ...fmt, name: formatSellingFormatName(unitLabel, fmt.unit_quantity) };
     });
 
+    const recipePayload = {
+      name: data.name,
+      category: data.category,
+      target_food_cost_percent: targetPct,
+    };
+
+    if (isEdit) {
+      const { error } = await updateRecipe(
+        recipeId,
+        recipePayload,
+        submitIngredients,
+        namedFormats
+      );
+      if (error) { Alert.alert('Error', error); return; }
+      trackFoodCost('wizard_completed', {
+        recipeId,
+        ingredient_count: recipeIngredients.length,
+        selling_format_count: sellingFormats.length,
+        source: 'edit',
+      });
+      router.replace(`/recipe/${recipeId}`);
+      return;
+    }
+
     const { data: recipe, error } = await createRecipe(
-      {
-        name: data.name,
-        category: data.category,
-        target_food_cost_percent: targetPct,
-      },
+      recipePayload,
       submitIngredients,
       namedFormats
     );
@@ -578,6 +1145,7 @@ export default function CreateRecipeScreen() {
       recipeId: recipe.id,
       ingredient_count: recipeIngredients.length,
       selling_format_count: sellingFormats.length,
+      source: 'create',
     });
     router.replace({
       pathname: '/recipe/[id]',
@@ -590,17 +1158,91 @@ export default function CreateRecipeScreen() {
       return <Button title={C.action.continue} onPress={goNextFromDish} size="lg" />;
     }
     if (step === 2) {
-      return <Button title={C.action.continue} onPress={goNextFromIngredients} size="lg" />;
+      if (recipeIngredients.length === 0) {
+        return (
+          <Button
+            title={C.action.addIngredient}
+            onPress={openAddIngSheet}
+            size="lg"
+          />
+        );
+      }
+      return (
+        <View style={styles.footerStack}>
+          <Button
+            title={C.action.addAnotherIngredient}
+            onPress={openAddIngSheet}
+            variant="secondary"
+            size="lg"
+          />
+          <Button title={C.action.continue} onPress={goNextFromIngredients} size="lg" />
+        </View>
+      );
+    }
+    if (sellingFormats.length === 0) {
+      return (
+        <Button
+          title={C.action.addSellingPrice}
+          onPress={openAddFmtSheet}
+          size="lg"
+        />
+      );
     }
     return (
-      <Button
-        title={C.action.seeResult}
-        onPress={handleSubmit(onSubmit)}
-        loading={isSubmitting}
-        size="lg"
-      />
+      <View style={styles.footerStack}>
+        <Button
+          title={C.action.addAnotherSellingPrice}
+          onPress={openAddFmtSheet}
+          variant="secondary"
+          size="lg"
+        />
+        <Button
+          title={isEdit ? C.action.saveChanges : C.action.seeResult}
+          onPress={handleSubmit(onSubmit)}
+          loading={isSubmitting}
+          size="lg"
+        />
+      </View>
     );
   };
+
+  if (pageLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{isEdit ? C.edit.header : C.wizard.header}</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={styles.editLoadingBody}>
+          <Skeleton height={18} width="55%" style={{ marginBottom: SPACING.md }} />
+          <Skeleton height={44} style={{ borderRadius: RADIUS.md, marginBottom: SPACING.md }} />
+          <Skeleton height={44} style={{ borderRadius: RADIUS.md, marginBottom: SPACING.md }} />
+          <Skeleton height={120} style={{ borderRadius: RADIUS.lg }} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{C.edit.header}</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={styles.editLoadingBody}>
+          <Text style={styles.loadErrorText}>{loadError}</Text>
+          <Button title="Go back" onPress={() => router.back()} size="lg" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -608,7 +1250,7 @@ export default function CreateRecipeScreen() {
         <TouchableOpacity onPress={goBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{C.wizard.header}</Text>
+        <Text style={styles.headerTitle}>{isEdit ? C.edit.header : C.wizard.header}</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -619,8 +1261,12 @@ export default function CreateRecipeScreen() {
         contentContainerStyle={styles.scroll}
         footer={<View style={styles.stickyFooter}>{footerButton()}</View>}
       >
-        <Text style={styles.stepTitle}>{C.wizard.stepTitles[step]}</Text>
-        <Text style={styles.stepSub}>{C.wizard.stepSubs[step]}</Text>
+        <Text style={styles.stepTitle}>
+          {isEdit ? (C.edit.stepTitles?.[step] ?? C.wizard.stepTitles[step]) : C.wizard.stepTitles[step]}
+        </Text>
+        <Text style={styles.stepSub}>
+          {isEdit ? (C.edit.stepSubs?.[step] ?? C.wizard.stepSubs[step]) : C.wizard.stepSubs[step]}
+        </Text>
 
         {step === 1 && (
           <>
@@ -694,9 +1340,14 @@ export default function CreateRecipeScreen() {
           <>
             <View style={[styles.card, ingredientError && styles.cardError]}>
               {recipeIngredients.length === 0 ? (
-                <Text style={[styles.emptySectionHint, ingredientError && styles.emptySectionHintError]}>
-                  Add at least one ingredient to continue.
-                </Text>
+                <View style={styles.stepEmpty}>
+                  <Text style={[styles.stepEmptyTitle, ingredientError && styles.stepEmptyTitleError]}>
+                    No ingredients yet
+                  </Text>
+                  <Text style={styles.stepEmptySub}>
+                    Add each item this recipe uses — flour, butter, eggs, and so on.
+                  </Text>
+                </View>
               ) : (
                 recipeIngredients.map((ri, idx) => {
                   const usage = getIngredientUsageSummary(ri.ingredient, ri.quantity, ri.unit, symbol);
@@ -729,11 +1380,6 @@ export default function CreateRecipeScreen() {
                   );
                 })
               )}
-
-              <TouchableOpacity style={styles.addIngBtn} onPress={openAddIngSheet} activeOpacity={0.7}>
-                <Ionicons name="add" size={18} color={COLORS.primary} />
-                <Text style={styles.addIngText}>Add ingredient</Text>
-              </TouchableOpacity>
             </View>
           </>
         )}
@@ -742,9 +1388,21 @@ export default function CreateRecipeScreen() {
           <>
             <View style={[styles.card, sellingFormatError && styles.cardError]}>
               {sellingFormats.length === 0 ? (
-                <Text style={[styles.emptySectionHint, sellingFormatError && styles.emptySectionHintError]}>
-                  Add at least one selling price to see food cost and margins.
-                </Text>
+                <View style={styles.stepEmpty}>
+                  <View style={[styles.stepEmptyIcon, sellingFormatError && styles.stepEmptyIconError]}>
+                    <Ionicons
+                      name="pricetag-outline"
+                      size={28}
+                      color={sellingFormatError ? COLORS.error : COLORS.primary}
+                    />
+                  </View>
+                  <Text style={[styles.stepEmptyTitle, sellingFormatError && styles.stepEmptyTitleError]}>
+                    No selling price yet
+                  </Text>
+                  <Text style={styles.stepEmptySub}>
+                    Enter what you charge so we can show food cost % and profit.
+                  </Text>
+                </View>
               ) : (
                 sellingFormats.map((fmt, idx) => {
                   const unitLabel = sellingUnitOptions.find((u) => u.value === fmt.selling_unit_name)?.label ?? fmt.selling_unit_name;
@@ -772,13 +1430,6 @@ export default function CreateRecipeScreen() {
                   );
                 })
               )}
-
-              <TouchableOpacity style={styles.addIngBtn} onPress={openAddFmtSheet} activeOpacity={0.7}>
-                <Ionicons name="add" size={18} color={COLORS.primary} />
-                <Text style={styles.addIngText}>
-                  {sellingFormats.length === 0 ? 'Add selling price' : 'Add another selling format'}
-                </Text>
-              </TouchableOpacity>
             </View>
 
             {richIngredients.length > 0 && (
@@ -875,55 +1526,108 @@ export default function CreateRecipeScreen() {
         title={
           ingSheetStep === 'search'
             ? 'Add ingredient'
-            : editingIngId
-              ? (ingSheetIngredient?.name ?? 'Configure')
-              : howMuchTitle(ingSheetIngredient?.name)
+            : isPurchaseEdit
+              ? 'Edit ingredient'
+              : ingSheetIngredient
+                ? (ingSheetIngredient.name || 'Add to dish')
+                : 'New ingredient'
         }
-        scrollable={false}
-        footer={ingSheetStep === 'config' ? (
-          <>
-            {addToDishQueue.length > 1 ? (
-              <View style={styles.sheetQueueFooter}>
-                <Text style={styles.sheetQueueCount}>
-                  {addToDishQueue.length} ingredients left to add
-                </Text>
-                <Text style={styles.sheetQueueHint}>
-                  Tap Next to add another ingredient to this dish
-                </Text>
-              </View>
-            ) : null}
-            <Button
-              title={
-                editingIngId
-                  ? 'Update'
-                  : addToDishQueue.length > 1
-                    ? 'Next'
-                    : 'Add to dish'
-              }
-              onPress={handleIngSheetConfirm}
-              size="lg"
-            />
-            {editingIngId === null && addToDishQueue.length === 0 && (
-              <TouchableOpacity onPress={() => setIngSheetStep('search')} style={styles.sheetBackBtn}>
-                <Text style={styles.sheetBackText}>← Back to search</Text>
-              </TouchableOpacity>
-            )}
-          </>
-        ) : null}
+        scrollable={ingSheetStep === 'create'}
+        keyboardOffset={ingSheetStep === 'create' ? createKeyboardOffset : null}
+        footer={
+          ingSheetStep === 'create' ? (
+            <>
+              {addToDishQueue.length > 1 ? (
+                <View style={styles.sheetQueueFooter}>
+                  <Text style={styles.sheetQueueCount}>
+                    {addToDishQueue.length} ingredients left to add
+                  </Text>
+                  <Text style={styles.sheetQueueHint}>
+                    Tap Next to add another ingredient to this dish
+                  </Text>
+                </View>
+              ) : null}
+              <Button
+                title={
+                  newIngSaving
+                    ? 'Saving…'
+                    : isPurchaseEdit || editingIngId
+                      ? 'Update'
+                      : addToDishQueue.length > 1
+                        ? 'Next'
+                        : 'Add to dish'
+                }
+                onPress={handleInlineCreateConfirm}
+                loading={newIngSaving}
+                size="lg"
+              />
+              {!ingCreateOnly && !isPurchaseEdit && !editingIngId && addToDishQueue.length === 0 ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    resetNewIngredientForm();
+                    setIngSheetIngredient(null);
+                    setIngSheetStep('search');
+                  }}
+                  style={styles.sheetBackBtn}
+                >
+                  <Text style={styles.sheetBackText}>← Back to list</Text>
+                </TouchableOpacity>
+              ) : null}
+            </>
+          ) : null
+        }
       >
         {ingSheetStep === 'search' ? (
           <>
+            <Text style={styles.pickerIntro}>
+              Pick one you already saved, or add a new one if it’s not listed.
+            </Text>
+
+            <Text style={styles.pickerSectionLabel}>Your ingredients</Text>
             <View style={[styles.inputBox, { marginBottom: SPACING.sm }]}>
               <Ionicons name="search" size={16} color={COLORS.textTertiary} style={{ marginLeft: SPACING.md }} />
               <TextInput
                 style={styles.textInput}
                 value={ingSearch}
                 onChangeText={setIngSearch}
-                placeholder="Search ingredients..."
+                placeholder="Search..."
                 placeholderTextColor={COLORS.textTertiary}
                 autoCapitalize="none"
               />
             </View>
+            <FlatList
+              data={filteredIngredients}
+              keyExtractor={(i) => i.id}
+              style={{ maxHeight: 260 }}
+              keyboardShouldPersistTaps="always"
+              renderItem={({ item }) => (
+                <TouchableOpacity style={styles.listRow} onPress={() => handleIngSelect(item)}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.listRowText}>{item.name}</Text>
+                    <Text style={styles.listRowSub}>
+                      {symbol}{item.purchase_price} / {item.purchase_quantity} {formatUnitLabel(item.purchase_unit)}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <View style={styles.modalEmpty}>
+                  <Text style={styles.modalEmptyHint}>
+                    {ingSearch.trim()
+                      ? 'No match in your list.'
+                      : 'Nothing left to pick from your list.'}
+                  </Text>
+                </View>
+              }
+            />
+
+            <View style={styles.pickerOrDivider}>
+              <View style={styles.pickerOrLine} />
+              <Text style={styles.pickerOrText}>or</Text>
+              <View style={styles.pickerOrLine} />
+            </View>
+
             <TouchableOpacity
               style={styles.createIngredientBtn}
               onPress={openCreateIngredient}
@@ -933,103 +1637,477 @@ export default function CreateRecipeScreen() {
                 <Ionicons name="add" size={18} color={COLORS.primary} />
               </View>
               <View style={styles.createIngredientCopy}>
-                <Text style={styles.createIngredientTitle}>New ingredient</Text>
-                <Text style={styles.createIngredientHint}>Add one you haven’t used before</Text>
+                <Text style={styles.createIngredientTitle}>Add new ingredient</Text>
+                <Text style={styles.createIngredientHint}>Not in the list? Enter what you bought</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
             </TouchableOpacity>
-            {ingredients.length === 0 ? (
-              <View style={styles.modalEmpty}>
-                <Text style={styles.modalEmptyText}>No ingredients yet</Text>
-                <Text style={styles.modalEmptyHint}>Tap New ingredient above to add your first one.</Text>
-              </View>
-            ) : (
-              <FlatList
-                data={filteredIngredients}
-                keyExtractor={(i) => i.id}
-                style={{ maxHeight: 300 }}
-                keyboardShouldPersistTaps="always"
-                renderItem={({ item }) => (
-                  <TouchableOpacity style={styles.listRow} onPress={() => handleIngSelect(item)}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.listRowText}>{item.name}</Text>
-                      <Text style={styles.listRowSub}>
-                        {symbol}{item.purchase_price} / {item.purchase_quantity} {formatUnitLabel(item.purchase_unit)}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
-                  </TouchableOpacity>
-                )}
-                ListEmptyComponent={
-                  <View style={styles.modalEmpty}>
-                    <Text style={styles.modalEmptyHint}>No matching ingredients</Text>
-                  </View>
-                }
-              />
-            )}
           </>
-        ) : (
+        ) : ingSheetStep === 'create' ? (
           <>
-            {ingSheetIngredient && (
-              <Text style={styles.sheetSub}>
-                Purchased: {symbol}{ingSheetIngredient.purchase_price} / {ingSheetIngredient.purchase_quantity} {formatUnitLabel(ingSheetIngredient.purchase_unit)}
-              </Text>
-            )}
-            <View style={[styles.twoCol, { marginTop: SPACING.md }]}>
-              <View style={{ width: 88 }}>
-                <Text style={styles.sheetLabel}>Quantity</Text>
-                <View style={[styles.inputBox, ingQtyError ? styles.inputBoxError : null]}>
+            {isAddExistingCollapsed ? (
+              <>
+                <Text style={styles.inlineSectionLabel}>Used in this dish</Text>
+                <View style={[styles.twoCol, { marginBottom: SPACING.md }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.sheetLabel}>Used quantity</Text>
+                    <View
+                      ref={newIngUsedQtyRef}
+                      collapsable={false}
+                      style={[styles.inputBox, newIngErrors.used_quantity && styles.inputBoxError]}
+                    >
+                      <TextInput
+                        style={styles.textInput}
+                        value={newIngUsedQty}
+                        onChangeText={(v) => {
+                          setNewIngUsedQty(v);
+                          setNewIngErrors((e) => ({ ...e, used_quantity: undefined }));
+                        }}
+                        {...bindCreateField(newIngUsedQtyRef)}
+                        keyboardType="numeric"
+                        placeholder="0"
+                        placeholderTextColor={COLORS.textTertiary}
+                        autoFocus={!editingIngId}
+                      />
+                    </View>
+                    {newIngErrors.used_quantity ? (
+                      <Text style={styles.errorText}>{newIngErrors.used_quantity}</Text>
+                    ) : null}
+                  </View>
+                  <View style={{ width: SPACING.sm }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.sheetLabel}>Unit</Text>
+                    <TouchableOpacity
+                      style={[styles.inputBox, styles.unitBox]}
+                      onPress={() => setShowUsedUnitPicker(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.unitSelectText} numberOfLines={1}>
+                        {formatUnitLabel(newIngUsedUnit)}
+                      </Text>
+                      <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.boughtSummary}>
+                  <View style={styles.boughtSummaryText}>
+                    <Text style={styles.boughtSummaryLabel}>What you bought</Text>
+                    <Text style={styles.boughtSummaryValue} numberOfLines={2}>
+                      {newIngName.trim() || 'Ingredient'}
+                      {' · '}
+                      {symbol}{newIngPurchasePrice || '0'} / {newIngPurchaseQty || '1'}{' '}
+                      {formatUnitLabel(newIngPurchaseUnit)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setIngFormMode('edit-purchase')}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={styles.boughtSummaryEdit}
+                    accessibilityRole="button"
+                    accessibilityLabel="Edit what you bought"
+                  >
+                    <Text style={styles.boughtSummaryEditText}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                {ingSheetIngredient && isPurchaseEdit ? (
+                  <View style={styles.impactNotice}>
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={18}
+                      color={COLORS.warning}
+                      style={{ marginTop: 1 }}
+                    />
+                    <Text style={styles.impactNoticeTextActive}>
+                      Changing purchased cost, quantity, or unit updates this ingredient on every dish that uses it.
+                    </Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.purchaseEditHeader}>
+                  <Text style={[styles.inlineSectionLabel, { marginBottom: 0, flex: 1 }]}>
+                    What you bought
+                  </Text>
+                  {ingSheetIngredient && isPurchaseEdit ? (
+                    <TouchableOpacity onPress={cancelPurchaseEdit} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Text style={styles.boughtSummaryEditText}>
+                        {isLibraryEdit ? 'Close' : 'Cancel'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                <Text style={styles.sheetLabel}>Name</Text>
+                <View
+                  ref={newIngNameRef}
+                  collapsable={false}
+                  style={[styles.inputBox, newIngErrors.name && styles.inputBoxError, { marginBottom: SPACING.md }]}
+                >
                   <TextInput
-                    style={[styles.textInput, { textAlign: 'center' }]}
-                    value={ingSheetQty}
-                    onChangeText={(v) => { setIngSheetQty(v); setIngQtyError(''); }}
-                    keyboardType="numeric"
-                    placeholder="Qty"
+                    style={styles.textInput}
+                    value={newIngName}
+                    onChangeText={(v) => { setNewIngName(v); setNewIngErrors((e) => ({ ...e, name: undefined })); }}
+                    {...bindCreateField(newIngNameRef)}
+                    placeholder="e.g. Butter, Flour..."
                     placeholderTextColor={COLORS.textTertiary}
-                    autoFocus={editingIngId === null}
+                    autoCapitalize="words"
                   />
                 </View>
-                {ingQtyError ? <Text style={styles.errorText}>{ingQtyError}</Text> : null}
-                {(() => {
-                  const usage = getIngredientUsageSummary(ingSheetIngredient, ingSheetQty, ingSheetUnit, symbol);
-                  if (!usage) return null;
-                  return (
-                    <View style={styles.sheetUsageWrap}>
-                      <Text style={styles.sheetUsageLine}>{usage.usageLine}</Text>
-                      {usage.convertedLine ? (
-                        <Text style={styles.sheetConvertedLine}>{usage.convertedLine}</Text>
+                {newIngErrors.name ? <Text style={[styles.errorText, { marginTop: -SPACING.sm, marginBottom: SPACING.sm }]}>{newIngErrors.name}</Text> : null}
+
+                <View style={{ marginBottom: SPACING.sm }}>
+                  <Text style={styles.sheetLabel}>Purchased cost</Text>
+                  <View
+                    ref={newIngPurchasePriceRef}
+                    collapsable={false}
+                    style={[styles.inputBox, styles.priceBox, newIngErrors.purchase_price && styles.inputBoxError]}
+                  >
+                    <Text style={styles.currencyPrefix}>{symbol}</Text>
+                    <TextInput
+                      style={[styles.textInput, { flex: 1 }]}
+                      value={newIngPurchasePrice}
+                      onChangeText={(v) => {
+                        setNewIngPurchasePrice(v);
+                        setNewIngErrors((e) => ({ ...e, purchase_price: undefined }));
+                      }}
+                      {...bindCreateField(newIngPurchasePriceRef)}
+                      keyboardType="numeric"
+                      placeholder="0.00"
+                      placeholderTextColor={COLORS.textTertiary}
+                    />
+                  </View>
+                  {newIngErrors.purchase_price ? (
+                    <Text style={styles.errorText}>{newIngErrors.purchase_price}</Text>
+                  ) : null}
+
+                  {ingSheetIngredient && isPurchaseEdit ? (
+                    <View style={styles.priceHistoryBlock}>
+                      {canViewPriceHistory && recentPriceMoveHint ? (
+                        <Text style={styles.priceHistoryHint}>{recentPriceMoveHint}</Text>
                       ) : null}
+                      <TouchableOpacity
+                        style={styles.priceHistoryRow}
+                        onPress={openPriceHistoryFromForm}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.priceHistoryRowIcon}>
+                          <Ionicons
+                            name="trending-up-outline"
+                            size={18}
+                            color={canViewPriceHistory ? COLORS.primary : COLORS.textTertiary}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.priceHistoryRowTitle}>
+                            {canViewPriceHistory ? 'See price history' : 'Price history · Hobbyist'}
+                          </Text>
+                          <Text style={styles.priceHistoryRowSub}>
+                            {canViewPriceHistory
+                              ? (priceHistoryLoading
+                                ? 'Loading…'
+                                : priceHistoryRows.length > 0
+                                  ? `${priceHistoryRows.length} recent change${priceHistoryRows.length === 1 ? '' : 's'}`
+                                  : 'No changes recorded yet')
+                              : 'Unlock to see past price changes'}
+                          </Text>
+                        </View>
+                        <Ionicons
+                          name={canViewPriceHistory ? 'chevron-forward' : 'lock-closed-outline'}
+                          size={16}
+                          color={COLORS.textTertiary}
+                        />
+                      </TouchableOpacity>
                     </View>
+                  ) : null}
+                </View>
+
+                <View style={[styles.purchaseRow, { marginBottom: SPACING.sm }]}>
+                  <View style={[styles.purchaseCol, { flex: 1 }]}>
+                    <Text style={styles.sheetLabel}>Purchased quantity</Text>
+                    <View
+                      ref={newIngPurchaseQtyRef}
+                      collapsable={false}
+                      style={[styles.inputBox, newIngErrors.purchase_quantity && styles.inputBoxError]}
+                    >
+                      <TextInput
+                        style={styles.textInput}
+                        value={newIngPurchaseQty}
+                        onChangeText={(v) => {
+                          setNewIngPurchaseQty(v);
+                          setNewIngErrors((e) => ({ ...e, purchase_quantity: undefined }));
+                        }}
+                        {...bindCreateField(newIngPurchaseQtyRef)}
+                        keyboardType="numeric"
+                        placeholder="1"
+                        placeholderTextColor={COLORS.textTertiary}
+                      />
+                    </View>
+                    {newIngErrors.purchase_quantity ? (
+                      <Text style={styles.errorText}>{newIngErrors.purchase_quantity}</Text>
+                    ) : null}
+                  </View>
+                  <View style={styles.purchaseColGap} />
+                  <View style={[styles.purchaseCol, { flex: 1 }]}>
+                    <Text style={styles.sheetLabel}>Unit</Text>
+                    <TouchableOpacity
+                      style={[styles.inputBox, styles.unitBox]}
+                      onPress={() => setShowPurchaseUnitPicker(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.unitSelectText} numberOfLines={1}>
+                        {formatUnitLabel(newIngPurchaseUnit)}
+                      </Text>
+                      <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {(() => {
+                  const q = parseFloat(newIngPurchaseQty) || 1;
+                  const p = parseFloat(newIngPurchasePrice);
+                  if (!newIngPurchasePrice?.trim() || Number.isNaN(p) || p <= 0) return null;
+                  return (
+                    <Text style={styles.inlineCostHint}>
+                      Bought {q} {formatUnitLabel(newIngPurchaseUnit)} for {symbol}{p.toFixed(2)}
+                    </Text>
                   );
                 })()}
-              </View>
-              <View style={{ flex: 1, marginLeft: SPACING.sm }}>
-                <Text style={styles.sheetLabel}>Unit</Text>
-                <View style={styles.chipWrap}>
-                  {getCompatibleUnitsForIng(ingSheetIngredient).map((u) => (
-                    <TouchableOpacity
-                      key={u.value}
-                      style={[styles.chip, ingSheetUnit === u.value && styles.chipActive]}
-                      onPress={() => setIngSheetUnit(u.value)}
+
+                <TouchableOpacity
+                  style={styles.optionalToggle}
+                  onPress={() => setNewIngShowOptional((v) => !v)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={newIngShowOptional ? 'chevron-up' : 'chevron-down'}
+                    size={14}
+                    color={COLORS.textSecondary}
+                  />
+                  <Text style={styles.optionalToggleText}>
+                    {newIngShowOptional ? 'Hide optional fields' : 'Waste % & notes (optional)'}
+                  </Text>
+                </TouchableOpacity>
+
+                {newIngShowOptional ? (
+                  <View style={styles.optionalFields}>
+                    <Text style={styles.sheetLabel}>Waste %</Text>
+                    <View
+                      ref={newIngWasteRef}
+                      collapsable={false}
+                      style={[styles.inputBox, { marginBottom: SPACING.sm }]}
                     >
-                      <Text style={[styles.chipText, ingSheetUnit === u.value && styles.chipTextActive]}>{u.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </View>
+                      <TextInput
+                        style={styles.textInput}
+                        value={newIngWastePercent}
+                        onChangeText={setNewIngWastePercent}
+                        {...bindCreateField(newIngWasteRef)}
+                        keyboardType="numeric"
+                        placeholder="0"
+                        placeholderTextColor={COLORS.textTertiary}
+                      />
+                    </View>
+                    <Text style={styles.sheetLabel}>Notes</Text>
+                    <View style={[styles.inputBox, styles.multilineBox, { marginBottom: SPACING.sm }]}>
+                      <TextInput
+                        style={[styles.textInput, styles.multilineInput]}
+                        value={newIngNotes}
+                        onChangeText={setNewIngNotes}
+                        placeholder="Brand, supplier..."
+                        placeholderTextColor={COLORS.textTertiary}
+                        multiline
+                        numberOfLines={2}
+                        textAlignVertical="top"
+                      />
+                    </View>
+                  </View>
+                ) : null}
+
+                {showUsedQtyInPurchaseForm ? (
+                  <>
+                    <View style={styles.inlineDivider} />
+                    <Text style={styles.inlineSectionLabel}>Used in this dish</Text>
+                    <View style={styles.twoCol}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.sheetLabel}>Used quantity</Text>
+                        <View
+                          ref={newIngUsedQtyRef}
+                          collapsable={false}
+                          style={[styles.inputBox, newIngErrors.used_quantity && styles.inputBoxError]}
+                        >
+                          <TextInput
+                            style={styles.textInput}
+                            value={newIngUsedQty}
+                            onChangeText={(v) => {
+                              setNewIngUsedQty(v);
+                              setNewIngErrors((e) => ({ ...e, used_quantity: undefined }));
+                            }}
+                            {...bindCreateField(newIngUsedQtyRef)}
+                            keyboardType="numeric"
+                            placeholder="0"
+                            placeholderTextColor={COLORS.textTertiary}
+                          />
+                        </View>
+                        {newIngErrors.used_quantity ? (
+                          <Text style={styles.errorText}>{newIngErrors.used_quantity}</Text>
+                        ) : null}
+                      </View>
+                      <View style={{ width: SPACING.sm }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.sheetLabel}>Unit</Text>
+                        <TouchableOpacity
+                          style={[styles.inputBox, styles.unitBox]}
+                          onPress={() => setShowUsedUnitPicker(true)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.unitSelectText} numberOfLines={1}>
+                            {formatUnitLabel(newIngUsedUnit)}
+                          </Text>
+                          <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </>
+                ) : null}
+              </>
+            )}
           </>
+        ) : null}
+      </Modal>
+
+      <Modal
+        visible={showPurchaseUnitPicker}
+        onClose={() => setShowPurchaseUnitPicker(false)}
+        title="Select unit"
+        scrollable={false}
+      >
+        <UnitSystemToggle
+          value={purchaseUnitSystem}
+          onChange={switchPurchaseUnitSystem}
+        />
+        {purchaseUnitGroups.map((group) => (
+          <View key={group.label} style={styles.unitGroup}>
+            <Text style={styles.unitGroupLabel}>{group.label}</Text>
+            <View style={styles.chipWrap}>
+              {group.units.map((u) => (
+                <TouchableOpacity
+                  key={u.value}
+                  style={[styles.chip, newIngPurchaseUnit === u.value && styles.chipActive]}
+                  onPress={() => setNewPurchaseUnit(u.value)}
+                >
+                  <Text style={[styles.chipText, newIngPurchaseUnit === u.value && styles.chipTextActive]}>
+                    {u.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        ))}
+      </Modal>
+
+      <Modal
+        visible={showUsedUnitPicker}
+        onClose={() => setShowUsedUnitPicker(false)}
+        title="Select unit"
+        scrollable={false}
+      >
+        <View style={styles.chipWrap}>
+          {compatibleUsedUnits(newIngPurchaseUnit).map((u) => (
+            <TouchableOpacity
+              key={u.value}
+              style={[styles.chip, newIngUsedUnit === u.value && styles.chipActive]}
+              onPress={() => {
+                setNewIngUsedUnit(u.value);
+                setShowUsedUnitPicker(false);
+              }}
+            >
+              <Text style={[styles.chipText, newIngUsedUnit === u.value && styles.chipTextActive]}>
+                {u.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Modal>
+
+      <PaywallModal
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        reason={paywallReason}
+      />
+
+      <Modal
+        visible={showPriceHistorySheet}
+        onClose={() => setShowPriceHistorySheet(false)}
+        title="Price history"
+        scrollable={false}
+      >
+        {priceHistoryLoading ? (
+          <View style={styles.priceHistoryEmpty}>
+            <ActivityIndicator color={COLORS.primary} />
+          </View>
+        ) : priceHistoryRows.length === 0 ? (
+          <View style={styles.priceHistoryEmpty}>
+            <Text style={styles.modalEmptyHint}>No price changes recorded yet.</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={priceHistoryRows}
+            keyExtractor={(item) => item.id}
+            style={{ maxHeight: 320 }}
+            keyboardShouldPersistTaps="always"
+            renderItem={({ item }) => {
+              const oldP = Number(item.old_price);
+              const newP = Number(item.new_price);
+              const up = newP > oldP;
+              const down = newP < oldP;
+              const pct = oldP > 0 ? ((newP - oldP) / oldP) * 100 : null;
+              return (
+                <View style={styles.priceHistoryItem}>
+                  <View style={styles.priceHistoryItemTop}>
+                    <Text style={styles.priceHistoryOld}>
+                      {symbol}{oldP.toFixed(2)}
+                    </Text>
+                    <Ionicons
+                      name={up ? 'arrow-up' : down ? 'arrow-down' : 'remove'}
+                      size={14}
+                      color={up ? COLORS.error : down ? COLORS.success : COLORS.textTertiary}
+                      style={{ marginHorizontal: 6 }}
+                    />
+                    <Text style={[
+                      styles.priceHistoryNew,
+                      up && { color: COLORS.error },
+                      down && { color: COLORS.success },
+                    ]}>
+                      {symbol}{newP.toFixed(2)}
+                    </Text>
+                    {pct != null && Math.abs(pct) >= 0.5 ? (
+                      <Text style={[
+                        styles.priceHistoryPct,
+                        up && { color: COLORS.error },
+                        down && { color: COLORS.success },
+                      ]}>
+                        {up ? '+' : ''}{pct.toFixed(1)}%
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.priceHistoryDate}>{formatHistoryDate(item.changed_at)}</Text>
+                </View>
+              );
+            }}
+          />
         )}
       </Modal>
 
       <Modal
         visible={showFmtSheet}
-        onClose={() => setShowFmtSheet(false)}
-        title={editingFmtId ? 'Edit format' : 'Add selling format'}
+        onClose={closeFmtSheet}
+        title={editingFmtId ? 'Edit selling price' : 'Add selling price'}
         scrollable={false}
         footer={(
           <Button
-            title={editingFmtId ? 'Update format' : 'Add format'}
+            title={editingFmtId ? 'Update selling price' : 'Add selling price'}
             onPress={handleFmtSheetConfirm}
             size="lg"
           />
@@ -1055,7 +2133,10 @@ export default function CreateRecipeScreen() {
               <TextInput
                 style={styles.textInput}
                 value={fmtSheetQty}
-                onChangeText={setFmtSheetQty}
+                onChangeText={(v) => {
+                  setFmtSheetQty(v);
+                  applySuggestedFmtPrice(v);
+                }}
                 keyboardType="numeric"
                 placeholder="1"
                 placeholderTextColor={COLORS.textTertiary}
@@ -1110,6 +2191,18 @@ export default function CreateRecipeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
+  editLoadingBody: {
+    flex: 1,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.lg,
+    gap: SPACING.sm,
+  },
+  loadErrorText: {
+    fontSize: FONT_SIZE.base,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.md,
+    lineHeight: 22,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1218,6 +2311,165 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xs,
   },
   emptySectionHintError: { color: COLORS.error },
+  impactNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    padding: SPACING.sm + 2,
+    marginBottom: SPACING.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.warning,
+    backgroundColor: '#FFFBEB',
+  },
+  impactNoticeTextActive: {
+    flex: 1,
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  priceHistoryBlock: {
+    marginTop: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  priceHistoryHint: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  priceHistoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    minHeight: 48,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  priceHistoryRowIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: RADIUS.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surface,
+  },
+  priceHistoryRowTitle: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  priceHistoryRowSub: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  priceHistoryEmpty: {
+    paddingVertical: SPACING.xl,
+    alignItems: 'center',
+  },
+  priceHistoryItem: {
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  priceHistoryItemTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  priceHistoryOld: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+  },
+  priceHistoryNew: {
+    fontSize: FONT_SIZE.base,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  priceHistoryPct: {
+    marginLeft: 'auto',
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '700',
+  },
+  priceHistoryDate: {
+    marginTop: 4,
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.textTertiary,
+  },
+  purchaseEditHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  boughtSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  boughtSummaryText: { flex: 1 },
+  boughtSummaryLabel: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '700',
+    color: COLORS.textTertiary,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  boughtSummaryValue: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
+    lineHeight: 20,
+  },
+  boughtSummaryEdit: {
+    minHeight: 44,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.sm,
+  },
+  boughtSummaryEditText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  stepEmpty: {
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xs,
+    gap: SPACING.sm,
+  },
+  stepEmptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: RADIUS.full,
+    backgroundColor: '#F0FDF4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING.xs,
+  },
+  stepEmptyIconError: { backgroundColor: '#FEF2F2' },
+  stepEmptyTitle: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '700',
+    color: COLORS.text,
+    textAlign: 'center',
+  },
+  stepEmptyTitleError: { color: COLORS.error },
+  stepEmptySub: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
   previewFormatName: {
     fontSize: FONT_SIZE.sm,
     fontWeight: '700',
@@ -1236,20 +2488,6 @@ const styles = StyleSheet.create({
   ingName: { fontSize: FONT_SIZE.sm, color: COLORS.text, fontWeight: '500' },
   ingUsageLine: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginTop: 2 },
   ingMeta: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
-  addIngBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.xs,
-    paddingVertical: SPACING.sm,
-    marginTop: SPACING.sm,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: COLORS.primary,
-    borderRadius: RADIUS.md,
-    minHeight: 44,
-  },
-  addIngText: { fontSize: FONT_SIZE.sm, color: COLORS.primary, fontWeight: '600' },
 
   fmtDivider: { height: 1, backgroundColor: COLORS.border },
   fmtSummaryRow: {
@@ -1333,6 +2571,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
+  footerStack: {
+    gap: SPACING.sm,
+  },
 
   listRow: {
     flexDirection: 'row',
@@ -1372,6 +2613,104 @@ const styles = StyleSheet.create({
   createIngredientCopy: { flex: 1 },
   createIngredientTitle: { fontSize: FONT_SIZE.sm, color: COLORS.primary, fontWeight: '700' },
   createIngredientHint: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginTop: 2 },
+  pickerIntro: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+    marginBottom: SPACING.md,
+  },
+  pickerSectionLabel: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '700',
+    color: COLORS.textTertiary,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: SPACING.sm,
+  },
+  pickerOrDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginVertical: SPACING.md,
+  },
+  pickerOrLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
+  pickerOrText: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '700',
+    color: COLORS.textTertiary,
+    textTransform: 'uppercase',
+  },
+  inlineHint: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.md,
+    lineHeight: 20,
+  },
+  inlineSectionLabel: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '700',
+    color: COLORS.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: SPACING.sm,
+  },
+  inlineDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: SPACING.md,
+  },
+  purchaseRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  purchaseCol: {},
+  purchaseColGap: { width: SPACING.xs },
+  unitBox: { justifyContent: 'space-between', paddingHorizontal: SPACING.sm },
+  inlineCostHint: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.textTertiary,
+    fontStyle: 'italic',
+    marginBottom: SPACING.sm,
+  },
+  optionalToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingVertical: SPACING.xs,
+    marginBottom: SPACING.xs,
+  },
+  optionalToggleText: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary },
+  optionalFields: {
+    marginBottom: SPACING.sm,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  multilineBox: { alignItems: 'flex-start' },
+  multilineInput: { minHeight: 56, paddingTop: SPACING.sm, textAlignVertical: 'top' },
+  unitSelectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 48,
+    paddingHorizontal: SPACING.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface,
+  },
+  unitSelectText: {
+    flex: 1,
+    fontSize: FONT_SIZE.base,
+    color: COLORS.text,
+    fontWeight: '500',
+    marginRight: SPACING.xs,
+  },
+  unitGroup: { marginBottom: SPACING.md },
+  unitGroupLabel: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '700',
+    color: COLORS.textTertiary,
+    textTransform: 'uppercase',
+    marginBottom: SPACING.xs,
+  },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, paddingTop: SPACING.xs },
   chip: {
     paddingHorizontal: SPACING.md,

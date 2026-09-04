@@ -14,10 +14,17 @@ import useIngredientStore from '../../stores/ingredientStore';
 import useSettingsStore from '../../stores/settingsStore';
 import { useSubscription } from '../../hooks/useSubscription';
 import { useUnitSystem } from '../../hooks/useUnitSystem';
-import { formatUnitLabel } from '../../constants/units';
+import {
+  formatUnitLabel,
+  getUnitGroupsForSystem,
+  getDefaultPurchaseUnit,
+  isUnitInSystem,
+  inferUnitSystem,
+} from '../../constants/units';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from '../../constants/theme';
 import { setPendingAddToDishIngredientIds } from '../../lib/pendingRecipeIngredients';
 import { track, AnalyticsEvents } from '../../lib/analytics';
+import { UnitSystemToggle } from '../../components/ui/UnitSystemToggle';
 
 let _draftId = 0;
 function newDraftId() {
@@ -116,6 +123,8 @@ function IngredientDraftCard({
         )}
       </View>
 
+      <Text style={styles.purchaseLabel}>What you bought</Text>
+
       <View style={styles.fieldGroup}>
         <Text style={styles.fieldLabel}>Name</Text>
         <View style={[styles.inputBox, errors?.name && styles.inputBoxError]}>
@@ -131,28 +140,25 @@ function IngredientDraftCard({
         {errors?.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
       </View>
 
-      <Text style={styles.purchaseLabel}>Purchase info</Text>
-      <View style={styles.purchaseRow}>
-        <View style={[styles.purchaseCol, { flex: 1.1 }]}>
-          <Text style={styles.colLabel}>Price</Text>
-          <View style={[styles.inputBox, styles.priceBox, errors?.purchase_price && styles.inputBoxError]}>
-            <Text style={styles.currencyPrefix}>{symbol}</Text>
-            <TextInput
-              style={[styles.textInput, { flex: 1 }]}
-              value={card.purchase_price}
-              onChangeText={(v) => onChange('purchase_price', v)}
-              keyboardType="numeric"
-              placeholder="0.00"
-              placeholderTextColor={COLORS.textTertiary}
-            />
-          </View>
-          {errors?.purchase_price ? <Text style={styles.errorText}>{errors.purchase_price}</Text> : null}
+      <View style={styles.fieldGroup}>
+        <Text style={styles.fieldLabel}>Purchased cost</Text>
+        <View style={[styles.inputBox, styles.priceBox, errors?.purchase_price && styles.inputBoxError]}>
+          <Text style={styles.currencyPrefix}>{symbol}</Text>
+          <TextInput
+            style={[styles.textInput, { flex: 1 }]}
+            value={card.purchase_price}
+            onChangeText={(v) => onChange('purchase_price', v)}
+            keyboardType="numeric"
+            placeholder="0.00"
+            placeholderTextColor={COLORS.textTertiary}
+          />
         </View>
+        {errors?.purchase_price ? <Text style={styles.errorText}>{errors.purchase_price}</Text> : null}
+      </View>
 
-        <View style={styles.purchaseColGap} />
-
-        <View style={[styles.purchaseCol, { flex: 0.75 }]}>
-          <Text style={styles.colLabel}>Qty</Text>
+      <View style={styles.purchaseRow}>
+        <View style={[styles.purchaseCol, { flex: 1 }]}>
+          <Text style={styles.colLabel}>Purchased quantity</Text>
           <View style={[styles.inputBox, errors?.purchase_quantity && styles.inputBoxError]}>
             <TextInput
               style={styles.textInput}
@@ -167,7 +173,7 @@ function IngredientDraftCard({
 
         <View style={styles.purchaseColGap} />
 
-        <View style={[styles.purchaseCol, { flex: 0.75 }]}>
+        <View style={[styles.purchaseCol, { flex: 1 }]}>
           <Text style={styles.colLabel}>Unit</Text>
           <TouchableOpacity
             style={[styles.inputBox, styles.unitBox]}
@@ -241,14 +247,20 @@ export default function CreateIngredientScreen() {
   const { addIngredient, ingredients } = useIngredientStore();
   const getCurrencySymbol = useSettingsStore((s) => s.getCurrencySymbol);
   const { canAddIngredient } = useSubscription();
-  const { unitGroups, defaultPurchaseUnit } = useUnitSystem();
+  const { unitSystem: settingsUnitSystem, defaultPurchaseUnit } = useUnitSystem();
   const symbol = getCurrencySymbol();
 
   const [cards, setCards] = useState(() => [createEmptyCard(defaultPurchaseUnit)]);
   const [cardErrors, setCardErrors] = useState({});
   const [unitPickerDraftId, setUnitPickerDraftId] = useState(null);
+  const [pickerUnitSystem, setPickerUnitSystem] = useState(settingsUnitSystem);
   const [showPaywall, setShowPaywall] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const pickerUnitGroups = useMemo(
+    () => getUnitGroupsForSystem(pickerUnitSystem),
+    [pickerUnitSystem],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -261,6 +273,19 @@ export default function CreateIngredientScreen() {
 
   const filledCount = cards.filter(isCardFilled).length;
   const unitPickerCard = cards.find((c) => c.draftId === unitPickerDraftId);
+
+  const openUnitPicker = (card) => {
+    setPickerUnitSystem(inferUnitSystem(card.purchase_unit, settingsUnitSystem));
+    setUnitPickerDraftId(card.draftId);
+  };
+
+  const switchPickerUnitSystem = (nextSystem) => {
+    if (nextSystem === pickerUnitSystem) return;
+    setPickerUnitSystem(nextSystem);
+    if (unitPickerDraftId && unitPickerCard && !isUnitInSystem(unitPickerCard.purchase_unit, nextSystem)) {
+      updateCard(unitPickerDraftId, 'purchase_unit', getDefaultPurchaseUnit(nextSystem));
+    }
+  };
 
   const updateCard = (draftId, field, value) => {
     setCards((prev) => prev.map((c) => (c.draftId === draftId ? { ...c, [field]: value } : c)));
@@ -387,7 +412,7 @@ export default function CreateIngredientScreen() {
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Add ingredients</Text>
           <Text style={styles.headerSub}>
-            {isFromRecipe ? 'Save to your shared ingredient library' : 'Fill in each card, tap + for more'}
+            {isFromRecipe ? 'What you paid at the store' : 'What you buy — name, price, and pack size'}
           </Text>
         </View>
         <View style={{ width: 24 }} />
@@ -403,8 +428,8 @@ export default function CreateIngredientScreen() {
                 saving
                   ? 'Saving…'
                   : filledCount > 1
-                    ? `Save ${filledCount} to library`
-                    : 'Save to library'
+                    ? `Save ${filledCount} ingredients`
+                    : 'Save ingredient'
               }
               onPress={saveAll}
               loading={saving}
@@ -415,11 +440,11 @@ export default function CreateIngredientScreen() {
       >
           {isFromRecipe ? (
             <View style={styles.libraryHint}>
-              <Ionicons name="library-outline" size={20} color={COLORS.primary} />
+              <Ionicons name="cart-outline" size={20} color={COLORS.primary} />
               <View style={styles.libraryHintCopy}>
-                <Text style={styles.libraryHintTitle}>Add your purchase information</Text>
+                <Text style={styles.libraryHintTitle}>What you bought</Text>
                 <Text style={styles.libraryHintText}>
-                  This is what you buy, for example 1 kg of flour. Save it once, then reuse it in any recipe and choose how much that recipe uses.
+                  Enter the pack from the store — for example 1 kg of flour for $2.50. You’ll choose how much each recipe uses later.
                 </Text>
               </View>
             </View>
@@ -434,7 +459,7 @@ export default function CreateIngredientScreen() {
               errors={cardErrors[card.draftId]}
               onChange={(field, value) => updateCard(card.draftId, field, value)}
               onRemove={() => removeCard(card.draftId)}
-              onOpenUnitPicker={() => setUnitPickerDraftId(card.draftId)}
+              onOpenUnitPicker={() => openUnitPicker(card)}
             />
           ))}
 
@@ -452,7 +477,11 @@ export default function CreateIngredientScreen() {
         title="Select unit"
         scrollable={false}
       >
-          {unitGroups.map((group) => (
+          <UnitSystemToggle
+            value={pickerUnitSystem}
+            onChange={switchPickerUnitSystem}
+          />
+          {pickerUnitGroups.map((group) => (
             <View key={group.label} style={styles.unitGroup}>
               <Text style={styles.unitGroupLabel}>{group.label}</Text>
               <View style={styles.unitChipRow}>
@@ -544,8 +573,9 @@ const styles = StyleSheet.create({
   purchaseLabel: {
     fontSize: FONT_SIZE.xs,
     fontWeight: '700',
-    color: COLORS.textTertiary,
+    color: COLORS.primary,
     letterSpacing: 0.6,
+    textTransform: 'uppercase',
     marginBottom: SPACING.sm,
   },
 

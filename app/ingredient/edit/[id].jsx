@@ -20,7 +20,14 @@ import { formatFoodCostPercent } from '../../../utils/format';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from '../../../constants/theme';
 import { useSubscription } from '../../../hooks/useSubscription';
 import { useUnitSystem } from '../../../hooks/useUnitSystem';
-import { formatUnitLabel } from '../../../constants/units';
+import {
+  formatUnitLabel,
+  getUnitGroupsForSystem,
+  getDefaultPurchaseUnit,
+  isUnitInSystem,
+  inferUnitSystem,
+} from '../../../constants/units';
+import { UnitSystemToggle } from '../../../components/ui/UnitSystemToggle';
 
 function computeCostHint(price, qty, unit, symbol) {
   const q = parseFloat(qty) || 1;
@@ -39,8 +46,9 @@ export default function EditIngredientScreen() {
   const symbol = getCurrencySymbol();
 
   const { canViewPriceHistory } = useSubscription();
-  const { unitGroups, defaultPurchaseUnit } = useUnitSystem();
+  const { unitSystem: settingsUnitSystem, defaultPurchaseUnit } = useUnitSystem();
   const [showUnitPicker, setShowUnitPicker] = useState(false);
+  const [pickerUnitSystem, setPickerUnitSystem] = useState(settingsUnitSystem);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [impactData, setImpactData] = useState(null);
@@ -69,10 +77,29 @@ export default function EditIngredientScreen() {
         waste_percent: String(ingredient.waste_percent ?? 0),
         notes: ingredient.notes ?? '',
       });
+      setPickerUnitSystem(inferUnitSystem(ingredient.purchase_unit, settingsUnitSystem));
     }
   }, [ingredient]);
 
   const [watchPrice, watchQty, watchUnit] = watch(['purchase_price', 'purchase_quantity', 'purchase_unit']);
+
+  const pickerUnitGroups = useMemo(
+    () => getUnitGroupsForSystem(pickerUnitSystem),
+    [pickerUnitSystem],
+  );
+
+  const openUnitPicker = () => {
+    setPickerUnitSystem(inferUnitSystem(watchUnit, settingsUnitSystem));
+    setShowUnitPicker(true);
+  };
+
+  const switchPickerUnitSystem = (nextSystem) => {
+    if (nextSystem === pickerUnitSystem) return;
+    setPickerUnitSystem(nextSystem);
+    if (!isUnitInSystem(watchUnit, nextSystem)) {
+      setValue('purchase_unit', getDefaultPurchaseUnit(nextSystem));
+    }
+  };
 
   const costHint = useMemo(
     () => computeCostHint(watchPrice, watchQty, watchUnit, symbol),
@@ -178,7 +205,9 @@ export default function EditIngredientScreen() {
         )}
       >
 
-          {/* Name */}
+          {/* What you bought */}
+          <Text style={styles.sectionLabel}>WHAT YOU BOUGHT</Text>
+
           <Controller control={control} name="name" rules={{ required: 'Name is required' }}
             render={({ field: { onChange, value } }) => (
               <View style={styles.fieldGroup}>
@@ -188,7 +217,7 @@ export default function EditIngredientScreen() {
                     style={styles.textInput}
                     value={value}
                     onChangeText={onChange}
-                    placeholder="e.g. Butter, All-purpose flour..."
+                    placeholder="e.g. Butter, Flour..."
                     placeholderTextColor={COLORS.textTertiary}
                     autoCapitalize="words"
                   />
@@ -197,38 +226,30 @@ export default function EditIngredientScreen() {
               </View>
             )} />
 
-          {/* Purchase Info */}
-          <Text style={styles.sectionLabel}>PURCHASE INFO</Text>
-          <Text style={styles.sectionSub}>How much did you buy and what did you pay?</Text>
-
           <View style={styles.purchaseCard}>
-            <View style={styles.purchaseRow}>
-              {/* Price */}
-              <Controller control={control} name="purchase_price" rules={{ required: 'Required' }}
-                render={({ field: { onChange, value } }) => (
-                  <View style={[styles.purchaseCol, { flex: 1.1 }]}>
-                    <Text style={styles.colLabel}>Price paid</Text>
-                    <View style={[styles.inputBox, styles.priceBox, errors.purchase_price && styles.inputBoxError]}>
-                      <Text style={styles.currencyPrefix}>{symbol}</Text>
-                      <TextInput
-                        style={[styles.textInput, { flex: 1 }]}
-                        value={value}
-                        onChangeText={onChange}
-                        keyboardType="numeric"
-                        placeholder="0.00"
-                        placeholderTextColor={COLORS.textTertiary}
-                      />
-                    </View>
+            <Controller control={control} name="purchase_price" rules={{ required: 'Required' }}
+              render={({ field: { onChange, value } }) => (
+                <View style={[styles.fieldGroup, { marginBottom: SPACING.sm }]}>
+                  <Text style={styles.colLabel}>Purchased cost</Text>
+                  <View style={[styles.inputBox, styles.priceBox, errors.purchase_price && styles.inputBoxError]}>
+                    <Text style={styles.currencyPrefix}>{symbol}</Text>
+                    <TextInput
+                      style={[styles.textInput, { flex: 1 }]}
+                      value={value}
+                      onChangeText={onChange}
+                      keyboardType="numeric"
+                      placeholder="0.00"
+                      placeholderTextColor={COLORS.textTertiary}
+                    />
                   </View>
-                )} />
+                </View>
+              )} />
 
-              <View style={styles.purchaseColGap} />
-
-              {/* Quantity */}
+            <View style={styles.purchaseRow}>
               <Controller control={control} name="purchase_quantity"
                 render={({ field: { onChange, value } }) => (
-                  <View style={[styles.purchaseCol, { flex: 0.8 }]}>
-                    <Text style={styles.colLabel}>Quantity</Text>
+                  <View style={[styles.purchaseCol, { flex: 1 }]}>
+                    <Text style={styles.colLabel}>Purchased quantity</Text>
                     <View style={styles.inputBox}>
                       <TextInput
                         style={styles.textInput}
@@ -244,14 +265,13 @@ export default function EditIngredientScreen() {
 
               <View style={styles.purchaseColGap} />
 
-              {/* Unit */}
               <Controller control={control} name="purchase_unit"
                 render={({ field: { value } }) => (
-                  <View style={[styles.purchaseCol, { flex: 0.7 }]}>
+                  <View style={[styles.purchaseCol, { flex: 1 }]}>
                     <Text style={styles.colLabel}>Unit</Text>
                     <TouchableOpacity
                       style={[styles.inputBox, styles.unitBox]}
-                      onPress={() => setShowUnitPicker(true)}
+                      onPress={openUnitPicker}
                       activeOpacity={0.7}
                     >
                       <Text style={styles.unitText}>{formatUnitLabel(value)}</Text>
@@ -261,7 +281,6 @@ export default function EditIngredientScreen() {
                 )} />
             </View>
 
-            {/* Dynamic cost hint */}
             <Text style={styles.costHint}>{costHint}</Text>
           </View>
 
@@ -342,7 +361,11 @@ export default function EditIngredientScreen() {
         title="Select unit"
         scrollable={false}
       >
-          {unitGroups.map((group) => (
+          <UnitSystemToggle
+            value={pickerUnitSystem}
+            onChange={switchPickerUnitSystem}
+          />
+          {pickerUnitGroups.map((group) => (
             <View key={group.label} style={styles.unitGroup}>
               <Text style={styles.unitGroupLabel}>{group.label}</Text>
               <View style={styles.unitChipRow}>
