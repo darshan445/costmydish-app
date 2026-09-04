@@ -109,6 +109,13 @@ export default function RecipeDetailScreen() {
     return () => clearTimeout(timer);
   }, [reviewEligible]);
 
+  const openEdit = (step = 1) => {
+    router.push({
+      pathname: '/recipe/edit/[id]',
+      params: { id, step: String(step) },
+    });
+  };
+
   const handleDelete = async () => {
     setDeleting(true);
     try {
@@ -154,7 +161,7 @@ export default function RecipeDetailScreen() {
           <Ionicons name="arrow-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
         <View style={styles.headerActions}>
-          <TouchableOpacity onPress={() => router.push(`/recipe/edit/${id}`)} style={styles.headerBtn}>
+          <TouchableOpacity onPress={() => openEdit(1)} style={styles.headerBtn}>
             <Ionicons name="create-outline" size={22} color={COLORS.text} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} style={styles.headerBtn}>
@@ -209,7 +216,17 @@ export default function RecipeDetailScreen() {
         {/* Per-format selling analysis */}
         {!ingredientsLoading && formatMetrics.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>Selling Analysis</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, styles.sectionTitleInline]}>Selling Analysis</Text>
+              <TouchableOpacity
+                onPress={() => openEdit(3)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Edit selling prices"
+              >
+                <Text style={styles.sectionEdit}>Edit</Text>
+              </TouchableOpacity>
+            </View>
             {formatMetrics.map((fm) => {
               const unitLabel = formatUnitLabel(fm.selling_unit_name ?? 'piece');
               const qty = (fm.quantityMade ?? parseFloat(fm.unit_quantity)) || 1;
@@ -288,10 +305,27 @@ export default function RecipeDetailScreen() {
         {!ingredientsLoading && formatMetrics.length === 0 && (
           <View style={styles.noFormatsHint}>
             <Text style={styles.noFormatsText}>{C.result.noFormats}</Text>
+            <TouchableOpacity
+              onPress={() => openEdit(3)}
+              style={styles.noFormatsEditBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.sectionEdit}>Add selling price</Text>
+            </TouchableOpacity>
           </View>
         )}
 
-        <Text style={styles.sectionTitle}>Ingredients</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, styles.sectionTitleInline]}>Ingredients</Text>
+          <TouchableOpacity
+            onPress={() => openEdit(2)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Edit ingredients"
+          >
+            <Text style={styles.sectionEdit}>Edit</Text>
+          </TouchableOpacity>
+        </View>
         {ingredientsLoading ? (
           <>
             {[1, 2, 3].map((n) => (
@@ -362,6 +396,26 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.sm },
   batchInfo: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary },
   sectionTitle: { fontSize: FONT_SIZE.md, fontWeight: '700', color: COLORS.text, marginTop: SPACING.lg, marginBottom: SPACING.sm },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.sm,
+    minHeight: 44,
+  },
+  sectionTitleInline: { marginTop: 0, marginBottom: 0, flex: 1, paddingRight: SPACING.sm },
+  sectionEdit: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  noFormatsEditBtn: {
+    marginTop: SPACING.sm,
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
+  },
   errorText: { textAlign: 'center', color: COLORS.error, padding: SPACING.xl },
   exportBtn: { marginTop: SPACING.xl },
 

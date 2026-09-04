@@ -10,6 +10,7 @@ export const FOOD_COST_COPY = {
     calculateA11y: 'Calculate food cost',
     fabLabel: 'Calculate',
     continue: 'Continue',
+    continueToPricing: 'Continue to pricing',
     discard: 'Discard',
     keep: 'Keep it',
     keepDraft: 'Keep it',
@@ -88,6 +89,8 @@ export const FOOD_COST_COPY = {
     dishNameRequired: 'Dish name is required',
     dishNamePlaceholder: 'Dish name',
     totalDishCost: 'Total dish cost',
+    step2CostHint: 'Next you’ll set a selling price to see food cost % and profit.',
+    step2SuggestedPrefix: (pct) => `At ${pct}% food cost, sell from about`,
     stepTitles: {
       1: "What's the dish?",
       2: 'What ingredients do you use in this recipe?',

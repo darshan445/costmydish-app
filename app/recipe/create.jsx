@@ -69,13 +69,25 @@ function formatRecentPriceMoveHint(entry) {
   return `${dir} ${Math.abs(pct).toFixed(0)}% since ${when}`;
 }
 
-export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
+export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep: initialStepProp } = {}) {
   const router = useRouter();
-  const { fresh, editId: editIdParam } = useLocalSearchParams();
+  const { fresh, editId: editIdParam, step: stepParam } = useLocalSearchParams();
   const recipeId = recipeIdProp
     ?? (typeof editIdParam === 'string' ? editIdParam : editIdParam?.[0])
     ?? null;
   const isEdit = Boolean(recipeId);
+  const stepFromParams = (() => {
+    const raw = stepParam == null
+      ? null
+      : (typeof stepParam === 'string' ? stepParam : stepParam?.[0]);
+    const n = parseInt(raw, 10);
+    return n >= 1 && n <= 3 ? n : null;
+  })();
+  const editStartStep = (
+    initialStepProp >= 1 && initialStepProp <= 3
+      ? initialStepProp
+      : (stepFromParams ?? 1)
+  );
   const startFresh = !isEdit && fresh === '1';
   const { createRecipe, updateRecipe } = useRecipes();
   const { ingredients, addIngredient, updateIngredient } = useIngredients();
@@ -250,12 +262,12 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
             selling_price: String(f.selling_price ?? ''),
           }))
         );
-        setStep(1);
+        setStep(isEdit ? editStartStep : 1);
         setIngredientError(false);
         setSellingFormatError(false);
         setPageLoading(false);
         draftReadyRef.current = true;
-        trackFoodCost('step_1', { source: 'edit', recipeId });
+        trackFoodCost(`step_${isEdit ? editStartStep : 1}`, { source: 'edit', recipeId });
         return;
       }
 
@@ -287,7 +299,17 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
         });
         const restoredStep = draft.step >= 1 && draft.step <= 3 ? draft.step : 1;
         setStep(restoredStep);
-        setRecipeIngredients(draft.ingredients ?? []);
+        setRecipeIngredients(
+          (draft.ingredients ?? []).map((ri) => ({
+            ingredient_id: ri.ingredient_id,
+            quantity: String(ri.quantity ?? ''),
+            unit: ri.unit,
+            ingredient: ri.ingredient ?? {
+              id: ri.ingredient_id,
+              name: ri.name ?? 'Ingredient',
+            },
+          }))
+        );
         setSellingFormats(draft.sellingFormats ?? []);
         trackFoodCost(`step_${restoredStep}`, { source: 'draft' });
       } else {
@@ -296,7 +318,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
       draftReadyRef.current = true;
     })();
     return () => { cancelled = true; };
-  }, [isEdit, recipeId, startFresh]);
+  }, [isEdit, recipeId, startFresh, editStartStep]);
 
   // Attach live library rows when ingredients finish loading / update
   useEffect(() => {
@@ -316,12 +338,12 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
     });
   }, [ingredients]);
 
-  // Autosave draft while creating (not while editing a saved dish)
+  // Autosave draft to Supabase while creating (not while editing a saved dish)
   useEffect(() => {
     if (isEdit || !draftReadyRef.current) return undefined;
     const timer = setTimeout(() => {
       persistDraft(step);
-    }, 450);
+    }, 700);
     return () => clearTimeout(timer);
   }, [isEdit, persistDraft, step]);
 
@@ -332,7 +354,18 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
     [recipeIngredients]
   );
 
-  const { totalCost } = useRecipeCost({ recipeIngredients: richIngredients });
+  const { totalCost, ingredientCosts } = useRecipeCost({ recipeIngredients: richIngredients });
+
+  const step2SuggestedPrice = useMemo(() => {
+    if (!(totalCost > 0)) return null;
+    const metrics = calculateSellingFormatMetrics({
+      totalRecipeCost: totalCost,
+      unitQuantity: 1,
+      sellingPrice: null,
+      targetFoodCostPercent: targetPct,
+    });
+    return metrics?.recommendedPrice > 0 ? metrics.recommendedPrice : null;
+  }, [totalCost, targetPct]);
 
   const addedIds = useMemo(() => new Set(recipeIngredients.map((r) => r.ingredient_id)), [recipeIngredients]);
 
@@ -1011,15 +1044,20 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
   };
 
   const goBack = async () => {
+    // Edit always came from dish detail — exit the wizard instead of stepping back
+    if (isEdit) {
+      router.back();
+      return;
+    }
     if (step > 1) {
       const prev = step - 1;
       await persistDraft(prev);
       setStep(prev);
-      trackFoodCost(`step_${prev}`, { direction: 'back', source: isEdit ? 'edit' : 'create' });
+      trackFoodCost(`step_${prev}`, { direction: 'back', source: 'create' });
       requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
       return;
     }
-    if (!isEdit) await persistDraft(1);
+    await persistDraft(1);
     router.back();
   };
 
@@ -1175,7 +1213,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
             variant="secondary"
             size="lg"
           />
-          <Button title={C.action.continue} onPress={goNextFromIngredients} size="lg" />
+          <Button title={C.action.continueToPricing} onPress={goNextFromIngredients} size="lg" />
         </View>
       );
     }
@@ -1351,6 +1389,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
               ) : (
                 recipeIngredients.map((ri, idx) => {
                   const usage = getIngredientUsageSummary(ri.ingredient, ri.quantity, ri.unit, symbol);
+                  const costItem = ingredientCosts.find((c) => c.ingredientId === ri.ingredient_id);
                   return (
                     <View key={ri.ingredient_id}>
                       {idx > 0 && <View style={styles.ingRowDivider} />}
@@ -1366,6 +1405,11 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                           ) : null}
                         </View>
                         <View style={styles.ingMeta}>
+                          {costItem?.cost != null && !costItem?.error ? (
+                            <Text style={styles.ingRowCost}>
+                              {formatCurrency(costItem.cost, symbol)}
+                            </Text>
+                          ) : null}
                           <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
                         </View>
                         <TouchableOpacity
@@ -1381,6 +1425,25 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                 })
               )}
             </View>
+
+            {recipeIngredients.length > 0 && totalCost > 0 ? (
+              <View style={[styles.previewCard, { marginTop: SPACING.md }]}>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>{C.wizard.totalDishCost}</Text>
+                  <Text style={[styles.previewValue, styles.step2CostValue]}>
+                    {formatCurrency(totalCost, symbol)}
+                  </Text>
+                </View>
+                {step2SuggestedPrice != null ? (
+                  <Text style={styles.step2CostHint}>
+                    {C.wizard.step2SuggestedPrefix(targetPct)}{' '}
+                    {formatCurrency(step2SuggestedPrice, symbol)}
+                  </Text>
+                ) : (
+                  <Text style={styles.step2CostHint}>{C.wizard.step2CostHint}</Text>
+                )}
+              </View>
+            ) : null}
           </>
         )}
 
@@ -2488,6 +2551,22 @@ const styles = StyleSheet.create({
   ingName: { fontSize: FONT_SIZE.sm, color: COLORS.text, fontWeight: '500' },
   ingUsageLine: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginTop: 2 },
   ingMeta: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
+  ingRowCost: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  step2CostValue: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  step2CostHint: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
+    lineHeight: 17,
+  },
 
   fmtDivider: { height: 1, backgroundColor: COLORS.border },
   fmtSummaryRow: {

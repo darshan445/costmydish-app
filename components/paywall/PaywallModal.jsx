@@ -50,7 +50,7 @@ const REASON_TEXT = {
 export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upgrade' }) {
   const userId = useAuthStore((s) => s.user?.id);
 
-  const [billing, setBilling] = useState('monthly');
+  const [billing, setBilling] = useState('annual');
   const [currentBilling, setCurrentBilling] = useState(null);
   const [packages, setPackages] = useState({ monthly: null, annual: null });
   const [purchasing, setPurchasing] = useState(false);
@@ -71,6 +71,7 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upg
       fetchHobbyistEntitlementStatus().then((status) => {
         if (status.billingPeriod) {
           setCurrentBilling(status.billingPeriod);
+          // Pre-select the other plan so switching is one tap
           setBilling(status.billingPeriod === 'monthly' ? 'annual' : 'monthly');
         } else {
           setCurrentBilling(null);
@@ -79,7 +80,7 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upg
       });
     } else {
       setCurrentBilling(null);
-      setBilling('monthly');
+      setBilling('annual');
     }
   }, [visible, isChangePlan]);
 
