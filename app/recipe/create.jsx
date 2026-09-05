@@ -188,6 +188,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
   const newIngWasteRef = useRef(null);
   const newIngUsedQtyRef = useRef(null);
   /** Name / Purchased cost: no sheet lift (avoids pushing fields off the top). Other fields: full lift. */
+  const [ingSkipKeyboardLift, setIngSkipKeyboardLift] = useState(false);
 
   const [showFmtSheet, setShowFmtSheet] = useState(false);
   const [showSellingUnitPicker, setShowSellingUnitPicker] = useState(false);
@@ -507,6 +508,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
     setEditingIngId(dishEditingId);
     setIngCreateOnly(createOnly || mode === 'edit-library');
     setIngSheetStep('create');
+    setIngSkipKeyboardLift(false);
     setShowIngSheet(true);
   }, [defaultPurchaseUnit, compatibleUsedUnits, settingsUnitSystem]);
 
@@ -624,6 +626,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
     setIngSheetIngredient(null);
     setAddToDishQueue([]);
     addToDishQueueRef.current = [];
+    setIngSkipKeyboardLift(false);
   };
 
   const openAddIngSheet = () => {
@@ -967,6 +970,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
     setAddToDishQueue([]);
     addToDishQueueRef.current = [];
     setIngCreateOnly(false);
+    setIngSkipKeyboardLift(false);
     resetNewIngredientForm();
   };
 
@@ -1840,6 +1844,9 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
         }
         scrollable={ingSheetStep === 'create'}
         keyboardLift
+        keyboardOffset={
+          ingSheetStep === 'create' && ingSkipKeyboardLift ? 0 : null
+        }
         footer={
           ingSheetStep === 'create' ? (
             <>
@@ -1979,6 +1986,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
                         placeholder="0"
                         placeholderTextColor={COLORS.textTertiary}
                         autoFocus={!editingIngId}
+                        onFocus={() => setIngSkipKeyboardLift(false)}
                       />
                     </View>
                     {newIngErrors.used_quantity ? (
@@ -2064,6 +2072,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
                     placeholder="e.g. Butter, Flour..."
                     placeholderTextColor={COLORS.textTertiary}
                     autoCapitalize="words"
+                    onFocus={() => setIngSkipKeyboardLift(true)}
                   />
                 </View>
                 {newIngErrors.name ? <Text style={[styles.errorText, { marginTop: -SPACING.sm, marginBottom: SPACING.sm }]}>{newIngErrors.name}</Text> : null}
@@ -2086,6 +2095,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
                       keyboardType="numeric"
                       placeholder="0.00"
                       placeholderTextColor={COLORS.textTertiary}
+                      onFocus={() => setIngSkipKeyboardLift(true)}
                     />
                   </View>
                   {newIngErrors.purchase_price ? (
@@ -2151,6 +2161,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
                         keyboardType="numeric"
                         placeholder="1"
                         placeholderTextColor={COLORS.textTertiary}
+                        onFocus={() => setIngSkipKeyboardLift(false)}
                       />
                 </View>
                     {newIngErrors.purchase_quantity ? (
@@ -2214,6 +2225,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
                         keyboardType="numeric"
                         placeholder="0"
                         placeholderTextColor={COLORS.textTertiary}
+                        onFocus={() => setIngSkipKeyboardLift(false)}
                       />
               </View>
                     <Text style={styles.sheetLabel}>Notes</Text>
@@ -2227,6 +2239,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
                         multiline
                         numberOfLines={2}
                         textAlignVertical="top"
+                        onFocus={() => setIngSkipKeyboardLift(false)}
                       />
                     </View>
                   </View>
@@ -2254,6 +2267,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
                             keyboardType="numeric"
                             placeholder="0"
                             placeholderTextColor={COLORS.textTertiary}
+                            onFocus={() => setIngSkipKeyboardLift(false)}
                           />
                         </View>
                         {newIngErrors.used_quantity ? (
