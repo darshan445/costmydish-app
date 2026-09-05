@@ -3,6 +3,13 @@
  * Keep routes/DB named recipes — only UI language lives here.
  */
 
+function cleanDishName(dishName, maxLen = 40) {
+  const name = String(dishName ?? '').replace(/\s+/g, ' ').trim();
+  if (!name) return '';
+  if (name.length <= maxLen) return name;
+  return `${name.slice(0, maxLen - 1).trimEnd()}…`;
+}
+
 export const FOOD_COST_COPY = {
   action: {
     calculate: 'Calculate food cost',
@@ -22,7 +29,17 @@ export const FOOD_COST_COPY = {
     addIngredient: 'Add an ingredient',
     addAnotherIngredient: 'Add another ingredient',
     addSellingPrice: 'Add selling price',
+    addSellingPriceFor: (dishName) => {
+      const name = cleanDishName(dishName);
+      return name ? `Add selling price for ${name}` : 'Add selling price';
+    },
     addAnotherSellingPrice: 'Add another selling price',
+    editSellingPriceFor: (dishName) => {
+      const name = cleanDishName(dishName);
+      return name ? `Edit selling price for ${name}` : 'Edit selling price';
+    },
+    updateSellingPrice: 'Update selling price',
+    leaveWithoutSaving: 'Leave without saving',
   },
 
   nav: {
@@ -91,16 +108,33 @@ export const FOOD_COST_COPY = {
     totalDishCost: 'Total dish cost',
     step2CostHint: 'Next you’ll set a selling price to see food cost % and profit.',
     step2SuggestedPrefix: (pct) => `At ${pct}% food cost, sell from about`,
+    pricesUpdatedTitle: 'Suggested prices updated',
+    pricesUpdatedSub: 'Your selling prices were refreshed to match the new dish cost.',
+    priceUpdatedBadge: 'Updated',
+    sheetPriceRefreshed: 'Price refreshed from your latest dish cost',
+    unsavedPricesTitle: 'Food cost not saved',
+    unsavedPricesMessage:
+      'You’ve updated selling prices, but this dish isn’t saved yet. Save to keep your food cost result.',
+    scrollForMoreCategories: 'Scroll to see more categories',
+    scrollForMoreIngredients: 'Scroll to see more ingredients',
+    scrollForMoreLiveCost: 'Scroll to see full live food cost',
     stepTitles: {
       1: "What's the dish?",
-      2: 'What ingredients do you use in this recipe?',
-      3: "What's your selling price?",
+      2: 'What ingredients do you use in this dish?',
+      3: (dishName) => {
+        const name = cleanDishName(dishName, 36);
+        return name
+          ? `What's your selling price for ${name}?`
+          : "What's your selling price?";
+      },
     },
     stepSubs: {
       1: "We'll calculate food cost for this.",
-      2: 'Tap Add an ingredient for each item in the recipe.',
-      3: 'Add what you charge per serving or piece.',
+      2: 'Tap Add an ingredient for each item in the dish.',
+      3: 'Enter what customers pay so you can see food cost % and profit.',
     },
+    sellingFormatHint:
+      'Unit is just a label. Change quantity and price for each way you sell this dish.',
   },
 
   result: {
@@ -121,8 +155,13 @@ export const FOOD_COST_COPY = {
     header: 'Edit food cost',
     stepTitles: {
       1: "What's the dish?",
-      2: 'What ingredients do you use in this recipe?',
-      3: "What's your selling price?",
+      2: 'What ingredients do you use in this dish?',
+      3: (dishName) => {
+        const name = cleanDishName(dishName, 36);
+        return name
+          ? `What's your selling price for ${name}?`
+          : "What's your selling price?";
+      },
     },
     stepSubs: {
       1: 'Update the name, category, or food cost goal.',

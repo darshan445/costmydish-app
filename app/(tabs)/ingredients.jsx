@@ -29,9 +29,11 @@ export default function IngredientsScreen() {
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  const filtered = ingredients.filter((i) =>
-    i.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = ingredients.filter((i) => {
+    const q = search.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!q) return true;
+    return i.name.toLowerCase().trim().includes(q);
+  });
 
   const handleAdd = () => {
     track(AnalyticsEvents.INGREDIENT_ADD_TAPPED, {

@@ -115,6 +115,11 @@ const useAuthStore = create((set, get) => ({
   signOut: async () => {
     await supabase.auth.signOut();
     set({ user: null, profile: null });
+    // Drop previous account's in-memory library so counts aren't wrong for the next user
+    try {
+      const useRecipeStore = (await import('./recipeStore')).default;
+      useRecipeStore.setState({ recipes: [], costSummaries: {} });
+    } catch (_) { /* ignore */ }
   },
 
   deleteAccount: async () => {

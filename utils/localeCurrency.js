@@ -1,5 +1,10 @@
 import { getCalendars, getLocales } from 'expo-localization';
-import { CURRENCIES, DEFAULT_CURRENCY, REGION_CURRENCY } from '../constants/currencies';
+import {
+  CURRENCIES,
+  CURRENCY_PRIMARY_REGION,
+  DEFAULT_CURRENCY,
+  REGION_CURRENCY,
+} from '../constants/currencies';
 
 const LANGUAGE_CODES = new Set([
   'aa', 'ab', 'ae', 'af', 'ak', 'am', 'an', 'ar', 'as', 'av', 'ay', 'az',
@@ -34,7 +39,50 @@ const LANGUAGE_CODES = new Set([
 const TIMEZONE_REGION = {
   'Asia/Kolkata': 'IN',
   'Asia/Calcutta': 'IN',
+  'Asia/Dubai': 'AE',
+  'Asia/Riyadh': 'SA',
+  'Asia/Qatar': 'QA',
+  'Asia/Kuwait': 'KW',
+  'Asia/Bahrain': 'BH',
+  'Asia/Muscat': 'OM',
+  'Asia/Jerusalem': 'IL',
+  'Asia/Tokyo': 'JP',
+  'Asia/Shanghai': 'CN',
+  'Asia/Hong_Kong': 'HK',
+  'Asia/Singapore': 'SG',
+  'Asia/Kuala_Lumpur': 'MY',
+  'Asia/Jakarta': 'ID',
+  'Asia/Manila': 'PH',
+  'Asia/Bangkok': 'TH',
+  'Asia/Ho_Chi_Minh': 'VN',
+  'Asia/Seoul': 'KR',
+  'Asia/Taipei': 'TW',
+  'Asia/Karachi': 'PK',
+  'Asia/Dhaka': 'BD',
+  'Asia/Colombo': 'LK',
+  'Asia/Kathmandu': 'NP',
+  'Asia/Istanbul': 'TR',
   'Europe/London': 'GB',
+  'Europe/Dublin': 'IE',
+  'Europe/Paris': 'FR',
+  'Europe/Berlin': 'DE',
+  'Europe/Amsterdam': 'NL',
+  'Europe/Brussels': 'BE',
+  'Europe/Madrid': 'ES',
+  'Europe/Rome': 'IT',
+  'Europe/Lisbon': 'PT',
+  'Europe/Vienna': 'AT',
+  'Europe/Zurich': 'CH',
+  'Europe/Stockholm': 'SE',
+  'Europe/Oslo': 'NO',
+  'Europe/Copenhagen': 'DK',
+  'Europe/Warsaw': 'PL',
+  'Europe/Prague': 'CZ',
+  'Europe/Budapest': 'HU',
+  'Europe/Bucharest': 'RO',
+  'Europe/Moscow': 'RU',
+  'Europe/Kyiv': 'UA',
+  'Europe/Kiev': 'UA',
   'Australia/Sydney': 'AU',
   'Australia/Melbourne': 'AU',
   'Australia/Brisbane': 'AU',
@@ -42,6 +90,7 @@ const TIMEZONE_REGION = {
   'Australia/Adelaide': 'AU',
   'Australia/Darwin': 'AU',
   'Australia/Hobart': 'AU',
+  'Pacific/Auckland': 'NZ',
   'America/Toronto': 'CA',
   'America/Vancouver': 'CA',
   'America/Edmonton': 'CA',
@@ -53,6 +102,18 @@ const TIMEZONE_REGION = {
   'America/Denver': 'US',
   'America/Los_Angeles': 'US',
   'America/Phoenix': 'US',
+  'America/Mexico_City': 'MX',
+  'America/Sao_Paulo': 'BR',
+  'America/Argentina/Buenos_Aires': 'AR',
+  'America/Santiago': 'CL',
+  'America/Bogota': 'CO',
+  'America/Lima': 'PE',
+  'Africa/Johannesburg': 'ZA',
+  'Africa/Lagos': 'NG',
+  'Africa/Nairobi': 'KE',
+  'Africa/Cairo': 'EG',
+  'Africa/Accra': 'GH',
+  'Africa/Casablanca': 'MA',
 };
 
 function findSupportedCurrency(code) {
@@ -76,8 +137,11 @@ function getRegionFromExpoLocalization() {
   }
 
   if (locale.currencyCode) {
-    const match = CURRENCIES.find((c) => c.code === locale.currencyCode);
-    if (match) return match.region;
+    const match = findSupportedCurrency(locale.currencyCode);
+    if (match) {
+      if (locale.regionCode) return locale.regionCode;
+      return CURRENCY_PRIMARY_REGION[match.code] ?? null;
+    }
   }
 
   const fromTag = regionFromLanguageTag(locale.languageTag);
@@ -115,24 +179,30 @@ export function getDeviceRegion() {
     ?? 'US';
 }
 
-const REGION_UNIT_SYSTEM = {
-  US: 'imperial',
-  IN: 'metric',
-  GB: 'metric',
-  AU: 'metric',
-  CA: 'metric',
-};
+/** Only US defaults to imperial; everyone else metric. */
+const IMPERIAL_REGIONS = new Set(['US']);
 
 export function getUnitSystemFromDeviceLocale() {
   const region = getDeviceRegion();
-  return REGION_UNIT_SYSTEM[region] ?? 'metric';
+  return IMPERIAL_REGIONS.has(region) ? 'imperial' : 'metric';
 }
 
 /**
- * Maps the device locale to a supported market currency (USD, INR, GBP, AUD, CAD).
- * Subscription plan prices stay USD; this is for ingredient/recipe costs only.
+ * Maps the device locale to a supported currency for ingredient/recipe costs.
+ * Prefers device currency code, then region map; falls back to USD.
+ * Subscription plan prices stay USD.
  */
 export function getCurrencyFromDeviceLocale() {
+  try {
+    const locale = getLocales()[0];
+    if (locale?.currencyCode) {
+      const byCode = findSupportedCurrency(locale.currencyCode);
+      if (byCode) return byCode;
+    }
+  } catch (_) {
+    // ignore
+  }
+
   const region = getDeviceRegion();
   const code = REGION_CURRENCY[region] ?? DEFAULT_CURRENCY.code;
   return findSupportedCurrency(code) ?? DEFAULT_CURRENCY;

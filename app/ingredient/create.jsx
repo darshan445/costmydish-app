@@ -174,7 +174,7 @@ function IngredientDraftCard({
         <View style={styles.purchaseColGap} />
 
         <View style={[styles.purchaseCol, { flex: 1 }]}>
-          <Text style={styles.colLabel}>Unit</Text>
+          <Text style={styles.colLabel}>Purchased unit</Text>
           <TouchableOpacity
             style={[styles.inputBox, styles.unitBox]}
             onPress={onOpenUnitPicker}
@@ -474,7 +474,7 @@ export default function CreateIngredientScreen() {
       <Modal
         visible={unitPickerDraftId != null}
         onClose={() => setUnitPickerDraftId(null)}
-        title="Select unit"
+        title="Purchased unit"
         scrollable={false}
       >
           <UnitSystemToggle

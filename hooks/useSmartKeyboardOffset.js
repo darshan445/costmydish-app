@@ -2,17 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dimensions, Platform } from 'react-native';
 import { useKeyboardInset } from './useKeyboardInset';
 
-const SAFETY_PX = 16;
+const SAFETY_PX = 20;
 const OFFSET_EPSILON = 2;
 
 /**
- * Measures the focused field vs the keyboard and returns how much a bottom sheet
- * should lift — only what's needed, on any screen size.
- *
- * Measure math adds back the current lift so remounts don't oscillate
- * (lift → field moves up → "no overlap" → drop → flicker).
+ * Measured sheet lift for focused inputs. Falls back to full keyboard height when
+ * measure isn't ready — never returns a "stuck at 0 while keyboard is open" state
+ * for a focused field.
  */
-export function useSmartKeyboardOffset({ enabled = true, footerReserve = 88 } = {}) {
+export function useSmartKeyboardOffset({ enabled = true, footerReserve = 96 } = {}) {
   const keyboardInset = useKeyboardInset();
   const keyboardInsetRef = useRef(keyboardInset);
   keyboardInsetRef.current = keyboardInset;
@@ -36,36 +34,49 @@ export function useSmartKeyboardOffset({ enabled = true, footerReserve = 88 } = 
     setKeyboardOffset(clamped);
   }, []);
 
-  const reevaluate = useCallback(() => {
+  const reevaluate = useCallback((attempt = 0) => {
     if (!enabled) {
       applyOffset(0);
       return;
     }
 
-    const node = focusedRef.current;
     const kb = keyboardInsetRef.current;
-    const currentLift = offsetRef.current;
-
-    if (!node || typeof node.measureInWindow !== 'function') {
+    if (kb <= 0) {
       applyOffset(0);
       return;
     }
 
-    if (kb <= 0) return;
+    const node = focusedRef.current;
+    // Keyboard open + focused field: prefer full lift until measure succeeds
+    if (!node || typeof node.measureInWindow !== 'function') {
+      applyOffset(kb);
+      return;
+    }
 
+    const currentLift = offsetRef.current;
     node.measureInWindow((_x, y, _w, h) => {
-      if (y == null || h == null) return;
       if (focusedRef.current !== node) return;
 
-      // Field is already shifted up by currentLift — restore "unlifted" position
+      if (y == null || h == null || (h === 0 && attempt < 4)) {
+        applyOffset(kb);
+        clearTimer();
+        timerRef.current = setTimeout(() => {
+          timerRef.current = null;
+          reevaluate(attempt + 1);
+        }, Platform.OS === 'android' ? 90 : 40);
+        return;
+      }
+
       const fieldBottomUnlifted = y + h + currentLift;
       const windowH = Dimensions.get('window').height;
       const keyboardTop = windowH - kb;
       const overlap = fieldBottomUnlifted - (keyboardTop - footerReserve - SAFETY_PX);
-      const next = overlap <= 0 ? 0 : Math.min(kb, Math.ceil(overlap));
-      applyOffset(next);
+      const next = overlap <= 0 ? kb * 0.35 : Math.min(kb, Math.ceil(overlap));
+      // Even when measure says "no overlap", keep a floor on Android Modal (pan mode lies)
+      const floor = Platform.OS === 'android' ? Math.ceil(kb * 0.45) : 0;
+      applyOffset(Math.max(next, floor));
     });
-  }, [enabled, footerReserve, applyOffset]);
+  }, [enabled, footerReserve, applyOffset, clearTimer]);
 
   useEffect(() => {
     if (!enabled) {
@@ -87,15 +98,15 @@ export function useSmartKeyboardOffset({ enabled = true, footerReserve = 88 } = 
   const bindField = useCallback((ref) => ({
     onFocus: () => {
       focusedRef.current = ref?.current ?? null;
+      const kb = keyboardInsetRef.current;
+      if (kb > 0) applyOffset(kb);
       clearTimer();
-      // One short delay so layout/focus settle — avoid multi-hit remesures (flicker)
-      const delay = Platform.OS === 'ios' ? 32 : 64;
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
         reevaluate();
-      }, delay);
+      }, Platform.OS === 'android' ? 100 : 40);
     },
-  }), [clearTimer, reevaluate]);
+  }), [clearTimer, reevaluate, applyOffset]);
 
   const clearFocus = useCallback(() => {
     clearTimer();

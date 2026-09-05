@@ -257,6 +257,16 @@ const useRecipeStore = create((set, get) => ({
       }
 
       get().fetchRecipes();
+      // Optimistically include the new dish so soft-ask counts aren't stale
+      set((state) => {
+        if (state.recipes.some((r) => r.id === recipe.id)) return state;
+        return {
+          recipes: [
+            { ...recipe, selling_price: null, recipe_ingredients: recipeIngredients ?? [] },
+            ...state.recipes,
+          ],
+        };
+      });
       return { data: recipe, error: null };
     } catch (error) {
       console.error('Create recipe error:', error);

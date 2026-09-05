@@ -1,6 +1,8 @@
 /**
  * Formats a number as currency using the given symbol.
  */
+import { RECIPE_CATEGORIES } from '../constants/units';
+
 export function formatCurrency(amount, symbol = '$') {
   if (amount == null || isNaN(amount)) return `${symbol}0.00`;
   return `${symbol}${Number(amount).toFixed(2)}`;
@@ -35,6 +37,8 @@ export function formatFoodCostPercent(value) {
  */
 export function formatCategory(cat) {
   if (!cat) return '';
+  const fromList = RECIPE_CATEGORIES.find((c) => c.value === cat);
+  if (fromList) return fromList.label;
   const s = cat.replace(/_/g, ' ');
   return s.charAt(0).toUpperCase() + s.slice(1);
 }

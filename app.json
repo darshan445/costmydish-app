@@ -2,7 +2,7 @@
   "expo": {
     "name": "costmydish",
     "slug": "costmydish",
-    "version": "1.2.4",
+    "version": "1.2.5",
     "orientation": "portrait",
     "runtimeVersion": {
       "policy": "appVersion"
@@ -21,6 +21,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.costmydish.app",
+      "appStoreUrl": "https://apps.apple.com/us/app/costmydish/id6780339569",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -31,6 +32,7 @@
         "backgroundColor": "#1B4332"
       },
       "package": "com.costmydish.app",
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.costmydish.app",
       "softwareKeyboardLayoutMode": "pan"
     },
     "web": {

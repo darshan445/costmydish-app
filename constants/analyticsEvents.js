@@ -47,6 +47,18 @@ export const AnalyticsEvents = {
   SETTINGS_SUBSCRIPTION_TAPPED: 'settings_subscription_tapped',
   SETTINGS_UPGRADE_TAPPED: 'settings_upgrade_tapped',
   SETTINGS_RESTORE_PURCHASES_TAPPED: 'settings_restore_purchases_tapped',
+  SETTINGS_RATE_TAPPED: 'settings_rate_tapped',
+  SETTINGS_FEEDBACK_TAPPED: 'settings_feedback_tapped',
+
+  // Soft review prompt + native store review
+  REVIEW_SOFT_SHOWN: 'review_soft_shown',
+  REVIEW_SOFT_YES: 'review_soft_yes',
+  REVIEW_SOFT_DECLINED: 'review_soft_declined',
+  REVIEW_SOFT_LATER: 'review_soft_later',
+  REVIEW_FEEDBACK_SUBMITTED: 'review_feedback_submitted',
+  REVIEW_FEEDBACK_SKIPPED: 'review_feedback_skipped',
+  REVIEW_NATIVE_REQUESTED: 'review_native_requested',
+  SETTINGS_UPDATE_TAPPED: 'settings_update_tapped',
 
   // Paywall & subscription
   PAYWALL_VIEWED: 'paywall_viewed',

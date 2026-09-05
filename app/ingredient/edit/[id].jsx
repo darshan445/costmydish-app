@@ -268,7 +268,7 @@ export default function EditIngredientScreen() {
               <Controller control={control} name="purchase_unit"
                 render={({ field: { value } }) => (
                   <View style={[styles.purchaseCol, { flex: 1 }]}>
-                    <Text style={styles.colLabel}>Unit</Text>
+                    <Text style={styles.colLabel}>Purchased unit</Text>
                     <TouchableOpacity
                       style={[styles.inputBox, styles.unitBox]}
                       onPress={openUnitPicker}
@@ -358,7 +358,7 @@ export default function EditIngredientScreen() {
       <Modal
         visible={showUnitPicker}
         onClose={() => setShowUnitPicker(false)}
-        title="Select unit"
+        title="Purchased unit"
         scrollable={false}
       >
           <UnitSystemToggle

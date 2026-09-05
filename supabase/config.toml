@@ -32,3 +32,6 @@ enable_signup = true
 
 [edge_runtime]
 enabled = true
+
+[functions.sync-app-versions]
+verify_jwt = false

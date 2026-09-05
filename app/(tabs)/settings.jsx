@@ -19,9 +19,13 @@ import { showAppAlert } from '../../lib/appAlert';
 import { formatSubscriptionDate } from '../../utils/format';
 import { CURRENCIES } from '../../constants/currencies';
 import { UNIT_SYSTEMS } from '../../constants/units';
-import { PRIVACY_POLICY_URL, TERMS_URL, SUPPORT_EMAIL } from '../../constants/legal';
+import { PRIVACY_POLICY_URL, TERMS_URL } from '../../constants/legal';
 import { FOOD_COST_COPY as C } from '../../constants/copy';
 import { track, AnalyticsEvents } from '../../lib/analytics';
+import { openStoreListing } from '../../lib/storeReview';
+import { submitAppFeedback } from '../../lib/feedback';
+import { checkAppUpdateAvailable } from '../../lib/appVersion';
+import { FeedbackFormModal } from '../../components/review/FeedbackFormModal';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 export default function SettingsScreen() {
@@ -49,6 +53,9 @@ export default function SettingsScreen() {
   const [deleting, setDeleting] = useState(false);
   const [managing, setManaging] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [appUpdate, setAppUpdate] = useState(null);
   const pendingManageRefresh = useRef(false);
 
   const recipeCount = recipes.length;
@@ -65,7 +72,16 @@ export default function SettingsScreen() {
         pendingManageRefresh.current = false;
         refreshSubscriptionState(user.id, { showAlerts: true });
       }
-      return undefined;
+
+      let cancelled = false;
+      (async () => {
+        const result = await checkAppUpdateAvailable();
+        if (!cancelled) setAppUpdate(result);
+      })();
+
+      return () => {
+        cancelled = true;
+      };
     }, [user?.id]),
   );
 
@@ -238,19 +254,51 @@ export default function SettingsScreen() {
     }
   };
 
-  const contactSupport = async () => {
-    const subject = encodeURIComponent('CostMyDish — Help needed');
-    const body = encodeURIComponent(
-      `Hi CostMyDish team,\n\nI need help with:\n\n\n---\nMy account email: ${user?.email ?? 'not signed in'}`
-    );
-    const url = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+  const handleRateApp = async () => {
+    track(AnalyticsEvents.SETTINGS_RATE_TAPPED);
+    const ok = await openStoreListing();
+    if (!ok) {
+      Alert.alert('Could not open store', 'Please try again later.');
+    }
+  };
+
+  const handleUpdateApp = async () => {
+    track(AnalyticsEvents.SETTINGS_UPDATE_TAPPED, {
+      installed: appUpdate?.installedVersion,
+      latest: appUpdate?.latestVersion,
+    });
+    const ok = await openStoreListing();
+    if (!ok) {
+      Alert.alert('Could not open store', 'Please try again later.');
+    }
+  };
+
+  const handleOpenFeedback = () => {
+    track(AnalyticsEvents.SETTINGS_FEEDBACK_TAPPED);
+    setShowFeedbackModal(true);
+  };
+
+  const handleSubmitFeedback = async ({ message }) => {
+    setFeedbackSubmitting(true);
     try {
-      await Linking.openURL(url);
-    } catch {
-      Alert.alert(
-        'Could not open email app',
-        `Please email us at ${SUPPORT_EMAIL} — we're happy to help with any question.`,
-      );
+      const { error } = await submitAppFeedback({
+        userId: user?.id,
+        message,
+        source: 'settings',
+      });
+      if (error) {
+        showAppAlert({ title: 'Could not send', message: error, variant: 'error' });
+        return;
+      }
+      track(AnalyticsEvents.REVIEW_FEEDBACK_SUBMITTED, { source: 'settings' });
+      setShowFeedbackModal(false);
+      showAppAlert({
+        title: 'Thanks',
+        message: 'We got your feedback.',
+        variant: 'success',
+      });
+    } finally {
+      setFeedbackSubmitting(false);
     }
   };
 
@@ -262,6 +310,31 @@ export default function SettingsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>Settings</Text>
+
+        {appUpdate?.updateAvailable ? (
+          <TouchableOpacity
+            style={styles.updateBanner}
+            onPress={handleUpdateApp}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Update CostMyDish"
+          >
+            <View style={styles.updateIconWrap}>
+              <Ionicons name="arrow-up-circle" size={28} color={COLORS.primary} />
+            </View>
+            <View style={styles.updateCopy}>
+              <Text style={styles.updateTitle}>Update available</Text>
+              <Text style={styles.updateBody}>
+                {appUpdate.message
+                  ?? `You’re on ${appUpdate.installedVersion}. Version ${appUpdate.latestVersion} is ready — tap to update.`}
+              </Text>
+              <Text style={styles.updateMeta}>
+                {appUpdate.installedVersion} → {appUpdate.latestVersion}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
+          </TouchableOpacity>
+        ) : null}
 
         {/* Account */}
         <View style={styles.section}>
@@ -482,19 +555,33 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>HELP & SUPPORT</Text>
           <View style={styles.card}>
-            <TouchableOpacity style={styles.supportRow} onPress={contactSupport} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.supportRow} onPress={handleRateApp} activeOpacity={0.7}>
               <View style={styles.supportIconBadge}>
-                <Ionicons name="mail-outline" size={20} color={COLORS.primary} />
+                <Ionicons name="star-outline" size={20} color={COLORS.primary} />
               </View>
               <View style={styles.supportLabelWrap}>
-                <Text style={styles.rowLabel}>Contact Support</Text>
-                <Text style={styles.supportEmail} numberOfLines={1}>{SUPPORT_EMAIL}</Text>
+                <Text style={styles.rowLabel}>Rate CostMyDish</Text>
+                <Text style={styles.supportEmail}>Open the App Store or Google Play</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.supportRow, styles.rowBorder]}
+              onPress={handleOpenFeedback}
+              activeOpacity={0.7}
+            >
+              <View style={styles.supportIconBadge}>
+                <Ionicons name="chatbubble-ellipses-outline" size={20} color={COLORS.primary} />
+              </View>
+              <View style={styles.supportLabelWrap}>
+                <Text style={styles.rowLabel}>Send feedback</Text>
+                <Text style={styles.supportEmail}>Questions, bugs, or ideas</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
             </TouchableOpacity>
           </View>
           <Text style={styles.supportNote}>
-            Questions, something not working, or need help getting started? Email us anytime — we reply to every message.
+            We read every message — thanks for helping us improve.
           </Text>
         </View>
 
@@ -547,7 +634,7 @@ export default function SettingsScreen() {
         visible={showCurrencyModal}
         onClose={() => setShowCurrencyModal(false)}
         title="Select Currency"
-        scrollable={false}
+        scrollable
       >
           {CURRENCIES.map((c) => (
             <TouchableOpacity
@@ -556,7 +643,7 @@ export default function SettingsScreen() {
               onPress={() => handleSelectCurrency(c)}
             >
               <Text style={styles.currencySymbol}>{c.symbol}</Text>
-              <Text style={styles.currencyLabel}>{c.label}</Text>
+              <Text style={styles.currencyLabel}>{c.label} ({c.code})</Text>
               {settings.currency === c.code && <Ionicons name="checkmark" size={18} color={COLORS.primary} />}
             </TouchableOpacity>
           ))}
@@ -616,6 +703,14 @@ export default function SettingsScreen() {
         mode={paywallMode}
       />
 
+      <FeedbackFormModal
+        visible={showFeedbackModal}
+        variant="settings"
+        loading={feedbackSubmitting}
+        onClose={() => setShowFeedbackModal(false)}
+        onSubmit={handleSubmitFeedback}
+      />
+
       {/* Sign out confirm */}
       <ConfirmModal
         visible={showSignOutConfirm}
@@ -650,6 +745,40 @@ const styles = StyleSheet.create({
   scroll: { padding: SPACING.md, paddingBottom: SPACING.xxl },
   title: { fontSize: FONT_SIZE.xl, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.lg },
   section: { marginBottom: SPACING.lg },
+  updateBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.lg,
+    gap: SPACING.sm,
+  },
+  updateIconWrap: {
+    marginRight: SPACING.xs,
+  },
+  updateCopy: {
+    flex: 1,
+  },
+  updateTitle: {
+    fontSize: FONT_SIZE.base,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
+    marginBottom: 2,
+  },
+  updateBody: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+  },
+  updateMeta: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginTop: SPACING.xs,
+  },
   sectionLabel: { fontSize: FONT_SIZE.xs, fontWeight: '700', color: COLORS.textTertiary, letterSpacing: 0.8, marginBottom: SPACING.sm },
   card: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: SPACING.md, minHeight: 52 },
@@ -682,7 +811,7 @@ const styles = StyleSheet.create({
   supportEmail: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, marginTop: 2 },
   currencyRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.border, gap: SPACING.md },
   currencySelected: { backgroundColor: '#F0FDF4' },
-  currencySymbol: { width: 28, fontSize: FONT_SIZE.md, fontWeight: '700', color: COLORS.primary, textAlign: 'center' },
+  currencySymbol: { minWidth: 36, fontSize: FONT_SIZE.md, fontWeight: '700', color: COLORS.primary, textAlign: 'center' },
   currencyLabel: { flex: 1, fontSize: FONT_SIZE.base, color: COLORS.text },
 
   // Subscription section

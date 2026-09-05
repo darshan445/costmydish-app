@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { usePathname, useSegments } from 'expo-router';
 import { usePostHog } from 'posthog-react-native';
+import Constants from 'expo-constants';
 import {
   identifyUser,
   registerPostHogClient,
@@ -13,6 +15,10 @@ import useAuthStore from '../../stores/authStore';
 import useIngredientStore from '../../stores/ingredientStore';
 import useRecipeStore from '../../stores/recipeStore';
 import useSettingsStore from '../../stores/settingsStore';
+
+function getAnalyticsAppVersion() {
+  return Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? null;
+}
 
 /** Wires PostHog client + screen views + user identity. */
 export function AnalyticsBridge() {
@@ -42,6 +48,8 @@ export function AnalyticsBridge() {
       email: user.email ?? undefined,
       subscription_tier: profile?.subscription_tier ?? 'free',
       onboarding_completed: profile?.onboarding_completed ?? false,
+      app_version: getAnalyticsAppVersion(),
+      platform: Platform.OS,
     });
   }, [user?.id, user?.email, profile?.subscription_tier, profile?.onboarding_completed]);
 
@@ -55,6 +63,8 @@ export function AnalyticsBridge() {
       currency: settings?.currency ?? null,
       unit_system: settings?.unit_system ?? null,
       subscription_tier: profile?.subscription_tier ?? 'free',
+      app_version: getAnalyticsAppVersion(),
+      platform: Platform.OS,
     });
   }, [
     user?.id,

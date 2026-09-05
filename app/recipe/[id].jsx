@@ -13,7 +13,7 @@ import { Button } from '../../components/ui/Button';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { useRecipeCost } from '../../hooks/useRecipeCost';
 import { calculateSellingFormatMetrics } from '../../lib/calculations';
-import { maybeRequestStoreReview } from '../../lib/storeReview';
+import { ReviewPromptController } from '../../components/review/ReviewPromptController';
 import { useSubscription } from '../../hooks/useSubscription';
 import useRecipeStore from '../../stores/recipeStore';
 import useSettingsStore from '../../stores/settingsStore';
@@ -27,7 +27,10 @@ import { Skeleton } from '../../components/ui/Skeleton';
 const MARGIN_LABELS = { good: 'On Target', warning: 'Slightly Over', danger: 'Over Budget' };
 
 export default function RecipeDetailScreen() {
-  const { id, justSaved } = useLocalSearchParams();
+  const { id, justSaved: justSavedParam } = useLocalSearchParams();
+  const justSaved = justSavedParam === '1'
+    || justSavedParam === 1
+    || (Array.isArray(justSavedParam) && justSavedParam.includes('1'));
   const router = useRouter();
   const { fetchRecipeWithIngredients, deleteRecipe, getRecipeById } = useRecipeStore();
   const allRecipes = useRecipeStore((s) => s.recipes);
@@ -89,25 +92,17 @@ export default function RecipeDetailScreen() {
   );
   const foodCostPercents = formatMetrics.map((fm) => fm.fcp).filter((v) => v != null);
 
-  // Try after the first completed recipe. The persistent guard prevents any
-  // later recipe from asking again once the native request has run.
   const nonSampleCount = allRecipes.filter((r) => !r.is_sample).length;
-  const reviewEligible =
-    justSaved === '1'
+  const countIncludesCurrent = recipe && !recipe.is_sample
+    && allRecipes.some((r) => r.id === recipe.id);
+  const effectiveNonSampleCount = recipe && !recipe.is_sample && !countIncludesCurrent
+    ? nonSampleCount + 1
+    : nonSampleCount;
+  const hasOnTargetMargin = formatMetrics.some((fm) => fm.marginStatus === 'good');
+  const reviewPromptReady =
+    justSaved
     && !ingredientsLoading
-    && formatMetrics.length > 0
-    && nonSampleCount >= 1;
-
-  useEffect(() => {
-    if (!reviewEligible) return undefined;
-
-    // Let the user see the completed cost result before the native sheet appears.
-    const timer = setTimeout(() => {
-      maybeRequestStoreReview();
-    }, 1800);
-
-    return () => clearTimeout(timer);
-  }, [reviewEligible]);
+    && !recipe?.is_sample;
 
   const openEdit = (step = 1) => {
     router.push({
@@ -173,7 +168,7 @@ export default function RecipeDetailScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.titleSection}>
           <Text style={styles.resultEyebrow}>
-            {justSaved === '1' ? C.result.justSaved : C.result.default}
+            {justSaved ? C.result.justSaved : C.result.default}
           </Text>
           <Text style={styles.name}>{recipe.name}</Text>
           <View style={styles.metaRow}>
@@ -243,7 +238,7 @@ export default function RecipeDetailScreen() {
                 <View key={fm.id} style={styles.formatCard}>
                   <View style={styles.formatCardHeader}>
                     <Text style={styles.formatCardName}>
-                      {formatSellingFormatName(unitLabel, fm.unit_quantity)}
+                      {formatSellingFormatName(unitLabel, fm.unit_quantity, recipe?.name)}
                     </Text>
                     <View style={styles.formatCardPriceBlock}>
                       <Text style={styles.formatCardPriceLabel}>{labelPerSellingUnit('Selling price per', unitLabel)}</Text>
@@ -373,6 +368,13 @@ export default function RecipeDetailScreen() {
         cancelLabel={C.result.deleteCancel}
         variant="danger"
         loading={deleting}
+      />
+
+      <ReviewPromptController
+        justSaved={justSaved}
+        nonSampleCount={effectiveNonSampleCount}
+        hasOnTargetMargin={hasOnTargetMargin}
+        ready={reviewPromptReady}
       />
     </SafeAreaView>
   );

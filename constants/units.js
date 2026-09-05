@@ -177,6 +177,59 @@ export function getCompatibleUnitsForIngredient(purchaseUnit, unitSystem) {
   }));
 }
 
+/**
+ * Only bulk / wholesale purchase units step down to a smaller recipe unit.
+ * If the user already bought in a small unit (g, ml, cup, oz, …), used defaults to the same.
+ */
+const DEFAULT_USED_UNIT_WHEN_PURCHASE_IS_BULK = {
+  kg: 'g',
+  lb: 'oz',
+  l: 'ml',
+  gallon: 'cup',
+  quart: 'cup',
+  pint: 'cup',
+  dozen: 'piece',
+  pack: 'piece',
+};
+
+/** Smallest practical unit per family (fallback if preferred isn't in the picker). */
+const SMALLEST_USED_UNIT_BY_FAMILY = {
+  weight: { metric: 'g', imperial: 'oz' },
+  volume: { metric: 'ml', imperial: 'tsp' },
+  count: { metric: 'piece', imperial: 'piece' },
+};
+
+/**
+ * Default unit for "used in this dish" given how the ingredient was purchased.
+ * - Bulk buy (kg, L, lb, …) → smaller recipe unit (g, ml, oz, …)
+ * - Already small buy (g, ml, cup, …) → same as purchased unit
+ * Always stays in a compatible/available option when a list is provided.
+ */
+export function getDefaultUsedUnit(purchaseUnit, availableUnits = null, unitSystem = 'metric') {
+  const purchase = purchaseUnit || getDefaultPurchaseUnit(unitSystem);
+  const preferred = DEFAULT_USED_UNIT_WHEN_PURCHASE_IS_BULK[purchase] ?? purchase;
+  const names = Array.isArray(availableUnits)
+    ? availableUnits.map((u) => u.value ?? u).filter(Boolean)
+    : null;
+
+  if (names && names.length > 0) {
+    if (names.includes(preferred)) return preferred;
+    // Preferred missing from picker — keep purchased if allowed, else family smallest
+    if (names.includes(purchase)) return purchase;
+    const family = getUnitFamily(purchase);
+    const system = normalizeUnitSystem(
+      inferUnitSystem(purchase, unitSystem),
+    );
+    const smallest = family
+      ? SMALLEST_USED_UNIT_BY_FAMILY[family]?.[system]
+      : null;
+    if (smallest && names.includes(smallest)) return smallest;
+    return names[names.length - 1] ?? preferred;
+  }
+
+  return preferred;
+}
+
 // Units valid for recipe batch size — must match yield_units table in Supabase
 export const BATCH_UNITS = [
   { value: 'piece', label: 'piece' },
@@ -186,12 +239,72 @@ export const BATCH_UNITS = [
 
 // recipe_category enum values — must match Supabase enum exactly
 export const RECIPE_CATEGORIES = [
-  { value: 'bakery', label: 'Bakery' },
-  { value: 'beverage', label: 'Beverage' },
-  { value: 'breakfast', label: 'Breakfast' },
-  { value: 'dessert', label: 'Dessert' },
+  { value: 'appetizer', label: 'Appetizer' },
+  { value: 'salad', label: 'Salad' },
+  { value: 'soup', label: 'Soup' },
+  { value: 'sandwich', label: 'Sandwich' },
+  { value: 'pasta', label: 'Pasta' },
+  { value: 'pizza', label: 'Pizza' },
   { value: 'main_course', label: 'Main course' },
+  { value: 'side', label: 'Side' },
+  { value: 'breakfast', label: 'Breakfast' },
+  { value: 'bakery', label: 'Bakery' },
+  { value: 'bread', label: 'Bread' },
+  { value: 'dessert', label: 'Dessert' },
   { value: 'snack', label: 'Snack' },
+  { value: 'beverage', label: 'Beverage' },
   { value: 'sauce_condiment', label: 'Sauce / Condiment' },
   { value: 'other', label: 'Other' },
 ];
+
+/**
+ * Soft default selling-unit name for a dish category.
+ * Labels only — quantity should still default to 1.
+ */
+export const DEFAULT_SELLING_UNIT_BY_CATEGORY = {
+  appetizer: 'plate',
+  salad: 'plate',
+  soup: 'serving',
+  sandwich: 'piece',
+  pasta: 'plate',
+  pizza: 'whole',
+  main_course: 'plate',
+  side: 'serving',
+  breakfast: 'plate',
+  bakery: 'piece',
+  bread: 'piece',
+  dessert: 'slice',
+  snack: 'piece',
+  beverage: 'cup',
+  sauce_condiment: 'jar',
+  other: 'serving',
+};
+
+export function getDefaultSellingUnitForCategory(category, availableUnits = []) {
+  const preferred = DEFAULT_SELLING_UNIT_BY_CATEGORY[category] ?? 'serving';
+  const names = new Set(
+    (availableUnits ?? []).map((u) => u.value ?? u.name).filter(Boolean),
+  );
+  if (names.size === 0) return preferred;
+  if (names.has(preferred)) return preferred;
+  if (names.has('serving')) return 'serving';
+  if (names.has('piece')) return 'piece';
+  return availableUnits[0]?.value ?? availableUnits[0]?.name ?? preferred;
+}
+
+/** Dedupe selling units by label; drop showcase_* and prefer canonical names. */
+export function getUniqueSellingUnitOptions(sellingUnits = []) {
+  const sorted = [...sellingUnits]
+    .filter((u) => !String(u.name ?? '').startsWith('showcase_'))
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+
+  const byLabel = new Map();
+  for (const u of sorted) {
+    const label = String(u.label ?? u.name ?? '').trim();
+    if (!label) continue;
+    const key = label.toLowerCase();
+    if (byLabel.has(key)) continue;
+    byLabel.set(key, { value: u.name, label });
+  }
+  return [...byLabel.values()];
+}

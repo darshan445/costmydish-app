@@ -17,6 +17,8 @@ export function ConfirmModal({
   visible,
   onClose,
   onConfirm,
+  /** Optional — cancel button action. Defaults to onClose (dismiss). */
+  onCancel,
   title,
   message,
   confirmLabel = 'Confirm',
@@ -27,6 +29,7 @@ export function ConfirmModal({
   if (!visible) return null;
 
   const isDanger = variant === 'danger';
+  const handleCancel = onCancel ?? onClose;
 
   return (
     <RNModal
@@ -74,12 +77,12 @@ export function ConfirmModal({
 
             <TouchableOpacity
               style={styles.cancelBtn}
-              onPress={onClose}
+              onPress={handleCancel}
               disabled={loading}
               activeOpacity={0.6}
               accessibilityRole="button"
             >
-              <Text style={styles.cancelText}>{cancelLabel}</Text>
+              <Text style={[styles.cancelText, isDanger && styles.cancelTextMuted]}>{cancelLabel}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -172,5 +175,8 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     fontWeight: '600',
     color: COLORS.primary,
+  },
+  cancelTextMuted: {
+    color: COLORS.textSecondary,
   },
 });
