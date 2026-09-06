@@ -36,6 +36,9 @@ export default function SettingsScreen() {
   const recipes = useRecipeStore((s) => s.recipes);
   const fetchRecipes = useRecipeStore((s) => s.fetchRecipes);
   const ingredients = useIngredientStore((s) => s.ingredients);
+  const fetchIngredients = useIngredientStore((s) => s.fetchIngredients);
+  const ingredientsHydrated = useIngredientStore((s) => s.hydrated);
+  const recipesHydrated = useRecipeStore((s) => s.hydrated);
 
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showUnitSystemModal, setShowUnitSystemModal] = useState(false);
@@ -60,10 +63,14 @@ export default function SettingsScreen() {
 
   const recipeCount = recipes.length;
   const ingredientCount = ingredients.length;
+  const usageReady = recipesHydrated && ingredientsHydrated;
 
   useEffect(() => {
-    if (user?.id) fetchRecipes();
-  }, [user?.id, fetchRecipes]);
+    if (user?.id) {
+      fetchRecipes();
+      fetchIngredients();
+    }
+  }, [user?.id, fetchRecipes, fetchIngredients]);
 
   useFocusEffect(
     useCallback(() => {
@@ -387,13 +394,15 @@ export default function SettingsScreen() {
               <View style={styles.usageRow}>
                 <View style={styles.usageLabelRow}>
                   <Text style={styles.usageLabel}>{C.settings.usageDishes}</Text>
-                  <Text style={styles.usageCount}>{recipeCount} / 5</Text>
+                  <Text style={styles.usageCount}>
+                    {usageReady ? `${recipeCount} / 5` : '…'}
+                  </Text>
                 </View>
                 <View style={styles.usageBar}>
                   <View style={[
                     styles.usageBarFill,
-                    { width: `${Math.min((recipeCount / 5) * 100, 100)}%` },
-                    recipeCount >= 5 && { backgroundColor: COLORS.error },
+                    { width: usageReady ? `${Math.min((recipeCount / 5) * 100, 100)}%` : '0%' },
+                    usageReady && recipeCount >= 5 && { backgroundColor: COLORS.error },
                   ]} />
                 </View>
               </View>
@@ -402,13 +411,15 @@ export default function SettingsScreen() {
               <View style={styles.usageRow}>
                 <View style={styles.usageLabelRow}>
                   <Text style={styles.usageLabel}>{C.settings.usageLibrary}</Text>
-                  <Text style={styles.usageCount}>{ingredientCount} / 20</Text>
+                  <Text style={styles.usageCount}>
+                    {usageReady ? `${ingredientCount} / 20` : '…'}
+                  </Text>
                 </View>
                 <View style={styles.usageBar}>
                   <View style={[
                     styles.usageBarFill,
-                    { width: `${Math.min((ingredientCount / 20) * 100, 100)}%` },
-                    ingredientCount >= 20 && { backgroundColor: COLORS.error },
+                    { width: usageReady ? `${Math.min((ingredientCount / 20) * 100, 100)}%` : '0%' },
+                    usageReady && ingredientCount >= 20 && { backgroundColor: COLORS.error },
                   ]} />
                 </View>
               </View>

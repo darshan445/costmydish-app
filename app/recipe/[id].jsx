@@ -311,7 +311,11 @@ export default function RecipeDetailScreen() {
         )}
 
         <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, styles.sectionTitleInline]}>Ingredients</Text>
+          <Text style={[styles.sectionTitle, styles.sectionTitleInline]}>
+            {ingredientsLoading
+              ? 'Ingredients'
+              : `Ingredients · ${recipe.recipe_ingredients?.length ?? 0}`}
+          </Text>
           <TouchableOpacity
             onPress={() => openEdit(2)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

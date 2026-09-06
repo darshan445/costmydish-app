@@ -37,7 +37,7 @@ function createEmptyCard(defaultUnit) {
     draftId: newDraftId(),
     name: '',
     purchase_price: '',
-    purchase_quantity: '1',
+    purchase_quantity: '',
     purchase_unit: defaultUnit,
     waste_percent: '0',
     notes: '',
@@ -165,7 +165,7 @@ function IngredientDraftCard({
               value={card.purchase_quantity}
               onChangeText={(v) => onChange('purchase_quantity', v)}
               keyboardType="numeric"
-              placeholder="1"
+              placeholder="0"
               placeholderTextColor={COLORS.textTertiary}
             />
           </View>
@@ -244,7 +244,7 @@ export default function CreateIngredientScreen() {
   const { fromRecipe } = useLocalSearchParams();
   const isFromRecipe = fromRecipe === '1';
   const scrollRef = useRef(null);
-  const { addIngredient, ingredients } = useIngredientStore();
+  const { addIngredient, ingredients, ensureIngredientCount } = useIngredientStore();
   const getCurrencySymbol = useSettingsStore((s) => s.getCurrencySymbol);
   const { canAddIngredient } = useSubscription();
   const { unitSystem: settingsUnitSystem, defaultPurchaseUnit } = useUnitSystem();
@@ -343,7 +343,8 @@ export default function CreateIngredientScreen() {
       return;
     }
 
-    if (!canAddIngredient(ingredients.length + itemsToSave.length - 1)) {
+    const libraryCount = await ensureIngredientCount();
+    if (!canAddIngredient(libraryCount + itemsToSave.length - 1)) {
       track(AnalyticsEvents.PAYWALL_VIEWED, { reason: 'ingredient', source: 'ingredient_create' });
       setShowPaywall(true);
       return;

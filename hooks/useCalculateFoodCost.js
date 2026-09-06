@@ -15,15 +15,16 @@ import {
 /**
  * Shared entry point for "Calculate food cost" (Home, Dishes, FAB).
  * Always gates free plan before opening the wizard.
+ * Waits for hydrated recipe count so an empty in-memory [] cannot bypass the 5-dish limit.
  */
 export function useCalculateFoodCost() {
   const router = useRouter();
-  const recipes = useRecipeStore((s) => s.recipes);
+  const ensureRecipeCount = useRecipeStore((s) => s.ensureRecipeCount);
   const { canCreateRecipe } = useSubscription();
   const [showPaywall, setShowPaywall] = useState(false);
 
-  const openPaywall = () => {
-    trackFoodCost('paywall_shown', { reason: 'dish_limit', recipeCount: recipes.length });
+  const openPaywall = (recipeCount) => {
+    trackFoodCost('paywall_shown', { reason: 'dish_limit', recipeCount });
     setShowPaywall(true);
   };
 
@@ -37,18 +38,25 @@ export function useCalculateFoodCost() {
     router.push('/recipe/create');
   };
 
-  const resumeCalculate = () => {
-    if (!canCreateRecipe(recipes.length)) {
-      openPaywall();
+  const gateOrContinue = async (onAllowed) => {
+    const recipeCount = await ensureRecipeCount();
+    if (!canCreateRecipe(recipeCount)) {
+      openPaywall(recipeCount);
       return;
     }
-    openWizard({ source: 'resume' });
+    onAllowed();
+  };
+
+  const resumeCalculate = async () => {
+    await gateOrContinue(() => openWizard({ source: 'resume' }));
   };
 
   const startCalculate = async (options = {}) => {
     const source = options?.source ?? 'cta';
-    if (!canCreateRecipe(recipes.length)) {
-      openPaywall();
+
+    const recipeCount = await ensureRecipeCount();
+    if (!canCreateRecipe(recipeCount)) {
+      openPaywall(recipeCount);
       return;
     }
 

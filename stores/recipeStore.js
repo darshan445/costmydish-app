@@ -12,12 +12,21 @@ function transformRecipe(raw, defaultSellingPrice) {
   };
 }
 
+let recipeFetchFlight = null;
+
 const useRecipeStore = create((set, get) => ({
   recipes: [],
   costSummaries: {},
   sellingUnits: [],
+  /** True after at least one successful fetch for the current session/user. */
+  hydrated: false,
   loading: false,
   error: null,
+
+  reset: () => {
+    recipeFetchFlight = null;
+    set({ recipes: [], costSummaries: {}, hydrated: false, loading: false, error: null });
+  },
 
   fetchSellingUnits: async () => {
     try {
@@ -27,139 +36,175 @@ const useRecipeStore = create((set, get) => ({
   },
 
   fetchRecipes: async () => {
-    set({ loading: true, error: null });
-    try {
-      const { data: recipesRaw, error } = await supabase
-        .from('recipes')
-        .select(`
-          *,
-          recipe_ingredients (
+    if (recipeFetchFlight) return recipeFetchFlight;
+
+    recipeFetchFlight = (async () => {
+      set({ loading: true, error: null });
+      try {
+        const { data: recipesRaw, error } = await supabase
+          .from('recipes')
+          .select(`
             *,
-            ingredient:ingredients (*)
-          )
-        `)
-        .eq('is_archived', false)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
+            recipe_ingredients (
+              *,
+              ingredient:ingredients (*)
+            )
+          `)
+          .eq('is_archived', false)
+          .order('created_at', { ascending: false });
+        if (error) throw error;
 
-      // Fetch ALL selling formats for all recipes in one query
-      const recipeIds = (recipesRaw ?? []).map((r) => r.id);
-      let formatsMap = {}; // recipeId → [{ selling_price, unit_quantity, is_default }]
-      if (recipeIds.length > 0) {
-        const { data: allFormats } = await supabase
-          .from('recipe_selling_formats')
-          .select('recipe_id, selling_price, unit_quantity, is_default')
-          .in('recipe_id', recipeIds);
-        (allFormats ?? []).forEach((f) => {
-          if (!formatsMap[f.recipe_id]) formatsMap[f.recipe_id] = [];
-          formatsMap[f.recipe_id].push(f);
-        });
-      }
-
-      // Overall margin status across all formats:
-      // all green → 'good', all red → 'danger', all warning → 'warning', mixed → null (neutral)
-      const overallFormatStatus = (statuses) => {
-        if (!statuses?.length) return null;
-        const unique = [...new Set(statuses)];
-        return unique.length === 1 ? unique[0] : null;
-      };
-
-      const costSummaries = {};
-      const recipes = (recipesRaw ?? []).map((raw) => {
-        const formats = formatsMap[raw.id] ?? [];
-        const defaultFmt = formats.find((f) => f.is_default) ?? formats[0] ?? null;
-        const defaultSellingPrice = defaultFmt ? parseFloat(defaultFmt.selling_price) || null : null;
-        const recipe = transformRecipe(raw, defaultSellingPrice);
-
-        const { totalCost } = calculateTotalRecipeCost(raw.recipe_ingredients ?? []);
-
-        const pricedFormats = formats.filter((f) => parseFloat(f.selling_price) > 0);
-        const allFormatMetrics = pricedFormats.map((f) =>
-          calculateSellingFormatMetrics({
-            totalRecipeCost: totalCost,
-            unitQuantity: f.unit_quantity,
-            sellingPrice: f.selling_price,
-            targetFoodCostPercent: raw.target_food_cost_percent,
-          })
-        );
-
-        const defaultMetrics = defaultFmt && parseFloat(defaultFmt.selling_price) > 0
-          ? calculateSellingFormatMetrics({
-              totalRecipeCost: totalCost,
-              unitQuantity: defaultFmt.unit_quantity,
-              sellingPrice: defaultFmt.selling_price,
-              targetFoodCostPercent: raw.target_food_cost_percent,
-            })
-          : calculateSellingFormatMetrics({
-              totalRecipeCost: totalCost,
-              unitQuantity: 1,
-              sellingPrice: null,
-              targetFoodCostPercent: raw.target_food_cost_percent,
-            });
-
-        // Overall status = uniform status if all formats agree, null (neutral) if mixed
-        const overallMarginStatus = pricedFormats.length > 0
-          ? overallFormatStatus(allFormatMetrics.map((m) => m.marginStatus).filter(Boolean))
-          : null;
-
-        // Worst-performing format's food cost % + price (for Needs Attention display)
-        let worstFcp = null;
-        let worstFormatPrice = null;
-        if (allFormatMetrics.length > 0) {
-          let worstIdx = 0;
-          allFormatMetrics.forEach((m, i) => {
-            if ((m.foodCostPercent ?? 0) > (allFormatMetrics[worstIdx].foodCostPercent ?? 0)) {
-              worstIdx = i;
-            }
+        // Fetch ALL selling formats for all recipes in one query
+        const recipeIds = (recipesRaw ?? []).map((r) => r.id);
+        let formatsMap = {}; // recipeId → [{ selling_price, unit_quantity, is_default }]
+        if (recipeIds.length > 0) {
+          const { data: allFormats } = await supabase
+            .from('recipe_selling_formats')
+            .select('recipe_id, selling_price, unit_quantity, is_default')
+            .in('recipe_id', recipeIds);
+          (allFormats ?? []).forEach((f) => {
+            if (!formatsMap[f.recipe_id]) formatsMap[f.recipe_id] = [];
+            formatsMap[f.recipe_id].push(f);
           });
-          worstFcp = allFormatMetrics[worstIdx].foodCostPercent ?? null;
-          worstFormatPrice = parseFloat(pricedFormats[worstIdx]?.selling_price) || null;
         }
 
-        const formatProfits = allFormatMetrics
-          .map((m) => m.batchProfit)
-          .filter((p) => p != null);
-
-        const foodCostPercents = allFormatMetrics
-          .map((m) => m.foodCostPercent)
-          .filter((v) => v != null && !Number.isNaN(v));
-
-        const worstMarginStatus = allFormatMetrics.some((m) => m.marginStatus === 'danger')
-          ? 'danger'
-          : allFormatMetrics.some((m) => m.marginStatus === 'warning')
-            ? 'warning'
-            : allFormatMetrics.length > 0 && allFormatMetrics.every((m) => m.marginStatus === 'good')
-              ? 'good'
-              : null;
-
-        costSummaries[raw.id] = {
-          total_recipe_cost: totalCost,
-          recommended_price: defaultMetrics.recommendedBundlePrice ?? defaultMetrics.recommendedPrice,
-          cost_per_unit: defaultMetrics.costPerUnit,
-          actual_food_cost_percent: defaultMetrics.foodCostPercent,
-          worst_food_cost_percent: worstFcp,
-          worst_format_price: worstFormatPrice,
-          food_cost_percents: foodCostPercents,
-          has_danger_format: allFormatMetrics.some((m) => m.marginStatus === 'danger'),
-          gross_profit: defaultMetrics.batchProfit,
-          format_profits: formatProfits,
-          all_formats_on_target: allFormatMetrics.length > 0
-            && allFormatMetrics.every((m) => m.marginStatus === 'good' && (m.profit ?? 0) >= 0),
-          marginStatus: overallMarginStatus,
-          worst_margin_status: worstMarginStatus,
-          target_food_cost_percent: raw.target_food_cost_percent,
-          format_count: pricedFormats.length,
+        // Overall margin status across all formats:
+        // all green → 'good', all red → 'danger', all warning → 'warning', mixed → null (neutral)
+        const overallFormatStatus = (statuses) => {
+          if (!statuses?.length) return null;
+          const unique = [...new Set(statuses)];
+          return unique.length === 1 ? unique[0] : null;
         };
 
-        return recipe;
-      });
+        const costSummaries = {};
+        const recipes = (recipesRaw ?? []).map((raw) => {
+          const formats = formatsMap[raw.id] ?? [];
+          const defaultFmt = formats.find((f) => f.is_default) ?? formats[0] ?? null;
+          const defaultSellingPrice = defaultFmt ? parseFloat(defaultFmt.selling_price) || null : null;
+          const recipe = transformRecipe(raw, defaultSellingPrice);
 
-      set({ recipes, costSummaries });
-    } catch (error) {
-      console.error('Fetch recipes error:', error);
-      set({ error: 'Failed to load recipes.' });
-    } finally {
-      set({ loading: false });
+          const { totalCost } = calculateTotalRecipeCost(raw.recipe_ingredients ?? []);
+
+          const pricedFormats = formats.filter((f) => parseFloat(f.selling_price) > 0);
+          const allFormatMetrics = pricedFormats.map((f) =>
+            calculateSellingFormatMetrics({
+              totalRecipeCost: totalCost,
+              unitQuantity: f.unit_quantity,
+              sellingPrice: f.selling_price,
+              targetFoodCostPercent: raw.target_food_cost_percent,
+            })
+          );
+
+          const defaultMetrics = defaultFmt && parseFloat(defaultFmt.selling_price) > 0
+            ? calculateSellingFormatMetrics({
+                totalRecipeCost: totalCost,
+                unitQuantity: defaultFmt.unit_quantity,
+                sellingPrice: defaultFmt.selling_price,
+                targetFoodCostPercent: raw.target_food_cost_percent,
+              })
+            : calculateSellingFormatMetrics({
+                totalRecipeCost: totalCost,
+                unitQuantity: 1,
+                sellingPrice: null,
+                targetFoodCostPercent: raw.target_food_cost_percent,
+              });
+
+          // Overall status = uniform status if all formats agree, null (neutral) if mixed
+          const overallMarginStatus = pricedFormats.length > 0
+            ? overallFormatStatus(allFormatMetrics.map((m) => m.marginStatus).filter(Boolean))
+            : null;
+
+          // Worst-performing format's food cost % + price (for Needs Attention display)
+          let worstFcp = null;
+          let worstFormatPrice = null;
+          if (allFormatMetrics.length > 0) {
+            let worstIdx = 0;
+            allFormatMetrics.forEach((m, i) => {
+              if ((m.foodCostPercent ?? 0) > (allFormatMetrics[worstIdx].foodCostPercent ?? 0)) {
+                worstIdx = i;
+              }
+            });
+            worstFcp = allFormatMetrics[worstIdx].foodCostPercent ?? null;
+            worstFormatPrice = parseFloat(pricedFormats[worstIdx]?.selling_price) || null;
+          }
+
+          const formatProfits = allFormatMetrics
+            .map((m) => m.batchProfit)
+            .filter((p) => p != null);
+
+          const foodCostPercents = allFormatMetrics
+            .map((m) => m.foodCostPercent)
+            .filter((v) => v != null && !Number.isNaN(v));
+
+          const worstMarginStatus = allFormatMetrics.some((m) => m.marginStatus === 'danger')
+            ? 'danger'
+            : allFormatMetrics.some((m) => m.marginStatus === 'warning')
+              ? 'warning'
+              : allFormatMetrics.length > 0 && allFormatMetrics.every((m) => m.marginStatus === 'good')
+                ? 'good'
+                : null;
+
+          costSummaries[raw.id] = {
+            total_recipe_cost: totalCost,
+            recommended_price: defaultMetrics.recommendedBundlePrice ?? defaultMetrics.recommendedPrice,
+            cost_per_unit: defaultMetrics.costPerUnit,
+            actual_food_cost_percent: defaultMetrics.foodCostPercent,
+            worst_food_cost_percent: worstFcp,
+            worst_format_price: worstFormatPrice,
+            food_cost_percents: foodCostPercents,
+            has_danger_format: allFormatMetrics.some((m) => m.marginStatus === 'danger'),
+            gross_profit: defaultMetrics.batchProfit,
+            format_profits: formatProfits,
+            all_formats_on_target: allFormatMetrics.length > 0
+              && allFormatMetrics.every((m) => m.marginStatus === 'good' && (m.profit ?? 0) >= 0),
+            marginStatus: overallMarginStatus,
+            worst_margin_status: worstMarginStatus,
+            target_food_cost_percent: raw.target_food_cost_percent,
+            format_count: pricedFormats.length,
+          };
+
+          return recipe;
+        });
+
+        set({ recipes, costSummaries, hydrated: true, error: null });
+        return recipes;
+      } catch (error) {
+        console.error('Fetch recipes error:', error);
+        set({ error: 'Failed to load recipes.' });
+        return null;
+      } finally {
+        set({ loading: false });
+        recipeFetchFlight = null;
+      }
+    })();
+
+    return recipeFetchFlight;
+  },
+
+  /**
+   * Ensures dishes are loaded, then returns active recipe count.
+   * Prefer in-memory after hydrate; fall back to a cheap DB count if fetch failed.
+   */
+  ensureRecipeCount: async () => {
+    const state = get();
+    if (state.hydrated) return state.recipes.length;
+
+    await get().fetchRecipes();
+    if (get().hydrated) return get().recipes.length;
+
+    try {
+      const userId = useAuthStore.getState().user?.id;
+      if (!userId) return 0;
+      const { count, error } = await supabase
+        .from('recipes')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('is_archived', false);
+      if (error) throw error;
+      return count ?? 0;
+    } catch (e) {
+      console.error('ensureRecipeCount fallback:', e);
+      return Number.MAX_SAFE_INTEGER;
     }
   },
 
@@ -261,6 +306,7 @@ const useRecipeStore = create((set, get) => ({
       set((state) => {
         if (state.recipes.some((r) => r.id === recipe.id)) return state;
         return {
+          hydrated: true,
           recipes: [
             { ...recipe, selling_price: null, recipe_ingredients: recipeIngredients ?? [] },
             ...state.recipes,

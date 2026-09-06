@@ -31,6 +31,11 @@ async function runAuthSessionSideEffects(event, session) {
     authSideEffectsFlight = null;
     authSideEffectsUserId = null;
     useSubscriptionStore.getState().clearRcEntitlement();
+    try {
+      useRecipeStore.getState().reset();
+      const useIngredientStore = (await import('../stores/ingredientStore')).default;
+      useIngredientStore.getState().reset();
+    } catch (_) { /* ignore */ }
     if (event === 'SIGNED_OUT') {
       track(AnalyticsEvents.AUTH_SIGNED_OUT);
       bootLog('auth:event:revenuecat:logout:start');
@@ -52,14 +57,19 @@ async function runAuthSessionSideEffects(event, session) {
     try {
       const { fetchProfile } = useAuthStore.getState();
       const { fetchSettings, applyDeviceLocaleSettings } = useSettingsStore.getState();
-      const { fetchSellingUnits } = useRecipeStore.getState();
+      const { fetchSellingUnits, fetchRecipes } = useRecipeStore.getState();
+      const useIngredientStore = (await import('../stores/ingredientStore')).default;
+      const { fetchIngredients } = useIngredientStore.getState();
 
       await fetchProfile(userId);
       if (event === 'SIGNED_UP') {
         await applyDeviceLocaleSettings(userId);
       }
       await fetchSettings(userId);
+      // Non-blocking: warm dish + library caches for accurate free-tier gates
       fetchSellingUnits();
+      fetchRecipes();
+      fetchIngredients();
 
       const status = await syncRevenueCatForUser(userId);
       useSubscriptionStore.getState().applyRcStatus(status);

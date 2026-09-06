@@ -10,26 +10,73 @@ function sortIngredientsNewestFirst(list) {
   });
 }
 
+let fetchFlight = null;
+
 const useIngredientStore = create((set, get) => ({
   ingredients: [],
+  /** True after at least one successful fetch for the current session/user. */
+  hydrated: false,
   loading: false,
   error: null,
 
+  reset: () => {
+    fetchFlight = null;
+    set({ ingredients: [], hydrated: false, loading: false, error: null });
+  },
+
   fetchIngredients: async () => {
-    set({ loading: true, error: null });
+    if (fetchFlight) return fetchFlight;
+
+    fetchFlight = (async () => {
+      set({ loading: true, error: null });
+      try {
+        const { data, error } = await supabase
+          .from('ingredients')
+          .select('*')
+          .eq('is_archived', false)
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        set({ ingredients: data ?? [], hydrated: true, error: null });
+        return data ?? [];
+      } catch (error) {
+        console.error('Fetch ingredients error:', error);
+        set({ error: 'Failed to load ingredients.' });
+        return null;
+      } finally {
+        set({ loading: false });
+        fetchFlight = null;
+      }
+    })();
+
+    return fetchFlight;
+  },
+
+  /**
+   * Ensures library is loaded, then returns active ingredient count.
+   * Prefer in-memory after hydrate; fall back to a cheap DB count if fetch failed.
+   */
+  ensureIngredientCount: async () => {
+    const state = get();
+    if (state.hydrated) return state.ingredients.length;
+
+    const fetched = await get().fetchIngredients();
+    if (get().hydrated) return get().ingredients.length;
+
+    // Fetch failed — do not treat [] as under-limit
     try {
-      const { data, error } = await supabase
+      const userId = useAuthStore.getState().user?.id;
+      if (!userId) return fetched?.length ?? 0;
+      const { count, error } = await supabase
         .from('ingredients')
-        .select('*')
-        .eq('is_archived', false)
-        .order('created_at', { ascending: false });
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('is_archived', false);
       if (error) throw error;
-      set({ ingredients: data ?? [] });
-    } catch (error) {
-      console.error('Fetch ingredients error:', error);
-      set({ error: 'Failed to load ingredients.' });
-    } finally {
-      set({ loading: false });
+      return count ?? 0;
+    } catch (e) {
+      console.error('ensureIngredientCount fallback:', e);
+      // Fail closed for free-tier safety: assume at limit if we cannot count
+      return Number.MAX_SAFE_INTEGER;
     }
   },
 
@@ -45,6 +92,7 @@ const useIngredientStore = create((set, get) => ({
       if (error) throw error;
       set((state) => ({
         ingredients: sortIngredientsNewestFirst([...state.ingredients, data]),
+        hydrated: true,
       }));
       return { data, error: null };
     } catch (error) {

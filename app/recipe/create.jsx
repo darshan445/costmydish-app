@@ -92,6 +92,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
   const startFresh = !isEdit && fresh === '1';
   const { createRecipe, updateRecipe } = useRecipes();
   const { ingredients, addIngredient, updateIngredient } = useIngredients();
+  const ensureIngredientCount = useIngredientStore((s) => s.ensureIngredientCount);
   const { fetchRecipeWithIngredients, sellingUnits } = useRecipeStore();
   const settings = useSettingsStore((s) => s.settings);
   const getCurrencySymbol = useSettingsStore((s) => s.getCurrencySymbol);
@@ -153,7 +154,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
 
   // Inline new-ingredient form (wizard — no /ingredient/create navigation)
   const [newIngName, setNewIngName] = useState('');
-  const [newIngPurchaseQty, setNewIngPurchaseQty] = useState('1');
+  const [newIngPurchaseQty, setNewIngPurchaseQty] = useState('');
   const [newIngPurchaseUnit, setNewIngPurchaseUnit] = useState(defaultPurchaseUnit);
   const [newIngPurchasePrice, setNewIngPurchasePrice] = useState('');
   const [newIngWastePercent, setNewIngWastePercent] = useState('0');
@@ -446,7 +447,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
 
   const resetNewIngredientForm = useCallback(() => {
     setNewIngName('');
-    setNewIngPurchaseQty('1');
+    setNewIngPurchaseQty('');
     setNewIngPurchaseUnit(defaultPurchaseUnit);
     setNewIngPurchasePrice('');
     setNewIngWastePercent('0');
@@ -765,10 +766,13 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
     }
 
     const isExisting = Boolean(ingSheetIngredient?.id);
-    if (!isExisting && !canAddIngredient(ingredients.length)) {
-      setPaywallReason('ingredient');
-      setShowPaywall(true);
-      return;
+    if (!isExisting) {
+      const libraryCount = await ensureIngredientCount();
+      if (!canAddIngredient(libraryCount)) {
+        setPaywallReason('ingredient');
+        setShowPaywall(true);
+        return;
+      }
     }
 
     setNewIngSaving(true);
@@ -1511,6 +1515,13 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
             ? resolveStepCopy(C.edit.stepSubs) ?? resolveStepCopy(C.wizard.stepSubs)
             : resolveStepCopy(C.wizard.stepSubs)}
         </Text>
+        {step === 2 ? (
+          <Text style={styles.stepCountHint}>
+            {recipeIngredients.length === 0
+              ? '0 ingredients in this dish'
+              : `${recipeIngredients.length} ingredient${recipeIngredients.length === 1 ? '' : 's'} in this dish`}
+          </Text>
+        ) : null}
 
         {step === 1 && (
           <>
@@ -2159,7 +2170,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp, initialStep
                           setNewIngErrors((e) => ({ ...e, purchase_quantity: undefined }));
                         }}
                         keyboardType="numeric"
-                        placeholder="1"
+                        placeholder="0"
                         placeholderTextColor={COLORS.textTertiary}
                         onFocus={() => setIngSkipKeyboardLift(false)}
                       />
@@ -2598,6 +2609,13 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     lineHeight: 22,
     marginBottom: SPACING.lg,
+  },
+  stepCountHint: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '600',
+    color: COLORS.primary,
+    marginTop: -SPACING.md,
+    marginBottom: SPACING.md,
   },
   hint: {
     fontSize: FONT_SIZE.sm,

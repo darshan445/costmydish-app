@@ -118,7 +118,11 @@ const useAuthStore = create((set, get) => ({
     // Drop previous account's in-memory library so counts aren't wrong for the next user
     try {
       const useRecipeStore = (await import('./recipeStore')).default;
-      useRecipeStore.setState({ recipes: [], costSummaries: {} });
+      useRecipeStore.getState().reset();
+    } catch (_) { /* ignore */ }
+    try {
+      const useIngredientStore = (await import('./ingredientStore')).default;
+      useIngredientStore.getState().reset();
     } catch (_) { /* ignore */ }
   },
 
