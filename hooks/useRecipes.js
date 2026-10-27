@@ -4,11 +4,11 @@ import useAuthStore from '../stores/authStore';
 
 export function useRecipes() {
   const user = useAuthStore((s) => s.user);
-  const { recipes, costSummaries, loading, error, fetchRecipes, createRecipe, updateRecipe, deleteRecipe } = useRecipeStore();
+  const { recipes, costSummaries, loading, error, fetchRecipes, deleteRecipe } = useRecipeStore();
 
   useEffect(() => {
     if (user) fetchRecipes();
   }, [user]);
 
-  return { recipes, costSummaries, loading, error, createRecipe, updateRecipe, deleteRecipe, refetch: fetchRecipes };
+  return { recipes, costSummaries, loading, error, deleteRecipe, refetch: fetchRecipes };
 }

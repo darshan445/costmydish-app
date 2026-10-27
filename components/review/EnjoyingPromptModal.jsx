@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
+import { useNativeModalVisible } from '../../lib/nativeModal';
 
 /**
  * Soft ask before native store review — Yes / Not really / Maybe later.
@@ -18,7 +19,8 @@ export function EnjoyingPromptModal({
   onMaybeLater,
   onSendFeedback,
 }) {
-  if (!visible) return null;
+  const shown = useNativeModalVisible(visible);
+  if (!shown) return null;
 
   return (
     <RNModal
@@ -106,8 +108,15 @@ const styles = StyleSheet.create({
   sheet: {
     backgroundColor: COLORS.surface,
     borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     padding: SPACING.lg,
     zIndex: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 24,
   },
   title: {
     fontSize: FONT_SIZE.lg,

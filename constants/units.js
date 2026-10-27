@@ -119,6 +119,22 @@ export function formatUnitLabel(unit) {
   return UNIT_LABELS[unit] ?? String(unit).replace(/_/g, ' ');
 }
 
+const PLURAL_UNIT_LABELS = {
+  cup: 'cups',
+  gallon: 'gallons',
+  quart: 'quarts',
+  pint: 'pints',
+  piece: 'pieces',
+  pack: 'packs',
+};
+
+/** Unit label that agrees with the amount: 2 piece → "pieces"; abbreviations stay as is */
+export function formatUnitLabelFor(unit, qty) {
+  const n = parseFloat(qty);
+  if (n !== 1 && PLURAL_UNIT_LABELS[unit]) return PLURAL_UNIT_LABELS[unit];
+  return formatUnitLabel(unit);
+}
+
 export function getUnitFamily(unit) {
   for (const [family, units] of Object.entries(UNIT_FAMILIES)) {
     if (units.includes(unit)) return family;

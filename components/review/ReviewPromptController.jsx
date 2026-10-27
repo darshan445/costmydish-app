@@ -90,12 +90,16 @@ export function ReviewPromptController({
     };
   }, [ready, justSaved, nonSampleCountHint, hasOnTargetMargin, userId]);
 
-  const finishNative = useCallback(async () => {
+  const closeFeedback = useCallback(() => {
     setFeedbackVariant(null);
     setFeedbackSource(null);
+  }, []);
+
+  const finishNative = useCallback(async () => {
+    closeFeedback();
     const requested = await requestNativeStoreReview(userId);
     track(AnalyticsEvents.REVIEW_NATIVE_REQUESTED, { requested: !!requested });
-  }, [userId]);
+  }, [userId, closeFeedback]);
 
   const openFeedback = useCallback((variant, source) => {
     setFeedbackVariant(variant);
@@ -158,8 +162,7 @@ export function ReviewPromptController({
       if (feedbackVariant === 'yes') {
         await finishNative();
       } else {
-        setFeedbackVariant(null);
-        setFeedbackSource(null);
+        closeFeedback();
         showAppAlert({
           title: 'Thanks',
           message: 'We got your feedback.',
@@ -169,7 +172,7 @@ export function ReviewPromptController({
     } finally {
       setSubmitting(false);
     }
-  }, [feedbackVariant, feedbackSource, userId, finishNative]);
+  }, [feedbackVariant, feedbackSource, userId, finishNative, closeFeedback]);
 
   const handleFeedbackSkip = useCallback(async () => {
     track(AnalyticsEvents.REVIEW_FEEDBACK_SKIPPED, { source: 'yes_prompt' });
@@ -181,9 +184,8 @@ export function ReviewPromptController({
       finishNative();
       return;
     }
-    setFeedbackVariant(null);
-    setFeedbackSource(null);
-  }, [feedbackVariant, finishNative]);
+    closeFeedback();
+  }, [feedbackVariant, finishNative, closeFeedback]);
 
   return (
     <>

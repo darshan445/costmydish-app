@@ -12,7 +12,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useKeyboardInset } from '../../hooks/useKeyboardInset';
+import { useNativeModalVisible } from '../../lib/nativeModal';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 const KEYBOARD_LIFT_MS = Platform.OS === 'ios' ? 250 : 200;
@@ -23,14 +25,22 @@ const KEYBOARD_LIFT_MS = Platform.OS === 'ios' ? 250 : 200;
  * Keyboard: lift the whole sheet with marginBottom (= keyboard height) so the form
  * pushes up above the keyboard (same on iOS and Android).
  * Pass keyboardOffset={0} only when you intentionally want no lift.
+ *
+ * Never open a second modal on top of this one (iOS won't show it). Instead:
+ * - onBack: show an inner view (e.g. a unit list) in this sheet with a back arrow
+ * - overlay: show a dialog (e.g. <ConfirmModal inline />) in place of this sheet;
+ *   the sheet (and its parent's state) comes back when the overlay is cleared
  */
 export function Modal({
-  visible,
+  visible: visibleProp,
   onClose,
   title,
   children,
   footer,
   style,
+  onBack,
+  overlay,
+  onOverlayClose,
   scrollable = true,
   /** When false, sheet does not rise with the keyboard. Ignored if keyboardOffset is set. */
   keyboardLift = true,
@@ -40,6 +50,7 @@ export function Modal({
    */
   keyboardOffset = null,
 }) {
+  const visible = useNativeModalVisible(visibleProp);
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const sheetLift = useRef(new Animated.Value(0)).current;
   const trackKeyboard = visible && (keyboardOffset != null || keyboardLift);
@@ -84,6 +95,18 @@ export function Modal({
     onCloseRef.current();
   };
 
+  const handleHardwareBack = () => {
+    if (overlay) {
+      onOverlayClose?.();
+      return;
+    }
+    if (onBack) {
+      onBack();
+      return;
+    }
+    handleClose();
+  };
+
   if (!visible) return null;
 
   return (
@@ -91,13 +114,14 @@ export function Modal({
       visible
       transparent
       animationType="fade"
-      onRequestClose={handleClose}
+      onRequestClose={handleHardwareBack}
       statusBarTranslucent
     >
+      {overlay ?? (
       <View style={styles.container}>
         <Pressable
           style={styles.backdropPressable}
-          onPress={handleClose}
+          onPress={onBack ?? handleClose}
           accessibilityRole="button"
           accessibilityLabel="Close modal"
         >
@@ -110,16 +134,30 @@ export function Modal({
         <Animated.View style={[styles.sheet, { marginBottom: sheetLift }, style]}>
           {title ? (
             <View style={styles.header}>
+              {onBack ? (
+                <TouchableOpacity
+                  onPress={onBack}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  activeOpacity={0.6}
+                  style={styles.backBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back"
+                >
+                  <Ionicons name="chevron-back" size={22} color={COLORS.text} />
+                </TouchableOpacity>
+              ) : null}
               <Text style={styles.title} numberOfLines={2}>{title}</Text>
-              <TouchableOpacity
-                onPress={handleClose}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                activeOpacity={0.6}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-              >
-                <Text style={styles.closeBtn}>✕</Text>
-              </TouchableOpacity>
+              {onBack ? null : (
+                <TouchableOpacity
+                  onPress={handleClose}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  activeOpacity={0.6}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                >
+                  <Text style={styles.closeBtn}>✕</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : null}
 
@@ -141,6 +179,7 @@ export function Modal({
           {footer ? <View style={styles.footer}>{footer}</View> : null}
         </Animated.View>
       </View>
+      )}
     </RNModal>
   );
 }
@@ -174,6 +213,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: SPACING.lg,
+  },
+  backBtn: {
+    marginRight: SPACING.sm,
+    marginLeft: -SPACING.xs,
   },
   title: {
     fontSize: FONT_SIZE.md,

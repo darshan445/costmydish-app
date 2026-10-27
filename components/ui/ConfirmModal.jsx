@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
+import { useNativeModalVisible } from '../../lib/nativeModal';
 
 /**
  * Lightweight confirm dialog — does not use the swipeable Modal sheet.
@@ -25,20 +26,16 @@ export function ConfirmModal({
   cancelLabel = 'Cancel',
   variant = 'danger',
   loading = false,
+  /** Render inside an open Modal's `overlay` instead of as its own native modal. */
+  inline = false,
 }) {
-  if (!visible) return null;
+  const nativeVisible = useNativeModalVisible(visible && !inline);
+  if (inline ? !visible : !nativeVisible) return null;
 
   const isDanger = variant === 'danger';
   const handleCancel = onCancel ?? onClose;
 
-  return (
-    <RNModal
-      visible
-      transparent
-      animationType="fade"
-      onRequestClose={loading ? undefined : onClose}
-      statusBarTranslucent
-    >
+  const dialog = (
       <View style={styles.root}>
         <Pressable
           style={styles.backdropPressable}
@@ -87,6 +84,19 @@ export function ConfirmModal({
           </View>
         </View>
       </View>
+  );
+
+  if (inline) return dialog;
+
+  return (
+    <RNModal
+      visible
+      transparent
+      animationType="fade"
+      onRequestClose={loading ? undefined : onClose}
+      statusBarTranslucent
+    >
+      {dialog}
     </RNModal>
   );
 }

@@ -3,11 +3,13 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
+import { Skeleton } from '../ui/Skeleton';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 import { FOOD_COST_COPY as C } from '../../constants/copy';
-import { formatCurrency, formatFoodCostPercent, formatPercent, formatCategory } from '../../utils/format';
-
-const MARGIN_LABELS = { good: 'On Target', warning: 'Slightly Over', danger: 'Over Budget' };
+import {
+  formatCurrency, formatFoodCostPercent, formatPercent, formatCategory, isWithinOnePercent, marginStatusLabel,
+} from '../../utils/format';
+import { yieldUnitText } from '../../utils/sellingFormat';
 
 function getFoodCostDisplay(costSummary) {
   const fcps = costSummary?.food_cost_percents?.filter((v) => v != null && !Number.isNaN(v)) ?? [];
@@ -19,12 +21,12 @@ function getFoodCostDisplay(costSummary) {
 
   const min = Math.min(...resolved);
   const max = Math.max(...resolved);
-  const isRange = resolved.length > 1 && Math.abs(max - min) >= 0.01;
+  const isRange = resolved.length > 1 && !isWithinOnePercent(min, max);
 
   return {
     text: isRange
       ? `${formatFoodCostPercent(min)} – ${formatFoodCostPercent(max)}`
-      : formatFoodCostPercent(min),
+      : formatFoodCostPercent(max),
     isRange,
   };
 }
@@ -40,7 +42,7 @@ function getProfitDisplay(costSummary, currencySymbol) {
 
   const min = Math.min(...profits);
   const max = Math.max(...profits);
-  const isRange = profits.length > 1 && Math.abs(max - min) >= 0.01;
+  const isRange = profits.length > 1 && !isWithinOnePercent(min, max);
   const status = costSummary?.worst_margin_status;
 
   let color = COLORS.text;
@@ -65,13 +67,28 @@ function getProfitDisplay(costSummary, currencySymbol) {
 function getStatusBadge(costSummary) {
   const status = costSummary?.worst_margin_status;
   if (!status || costSummary?.format_count < 1) return null;
-  return { label: MARGIN_LABELS[status], variant: status };
+  const profits = costSummary?.format_profits ?? [];
+  const worstProfit = profits.length > 0 ? Math.min(...profits) : null;
+  return { label: marginStatusLabel(status, worstProfit), variant: status };
+}
+
+/** No owner-set selling price on any format → show the suggested price per yield unit. */
+function getSuggestedDisplay(costSummary, currencySymbol) {
+  if (!costSummary || costSummary.format_count > 0 || !costSummary.has_any_cost) return null;
+  if (costSummary.suggested_price == null) return null;
+  const unit = yieldUnitText(costSummary.yield_unit_name, costSummary.yield_unit_label);
+  return {
+    text: formatCurrency(costSummary.suggested_price, currencySymbol),
+    label: `Suggested / ${unit}`,
+  };
 }
 
 export const RecipeCard = memo(function RecipeCard({ recipe, costSummary, currencySymbol, onPress, onDelete }) {
   const foodCostDisplay = getFoodCostDisplay(costSummary);
   const profitDisplay = getProfitDisplay(costSummary, currencySymbol);
   const statusBadge = getStatusBadge(costSummary);
+  const suggestedDisplay = foodCostDisplay == null ? getSuggestedDisplay(costSummary, currencySymbol) : null;
+  const noSellingPrice = costSummary != null && costSummary.format_count < 1;
 
   const profitRowStyle = profitDisplay?.status === 'danger'
     ? styles.profitRowBad
@@ -97,8 +114,23 @@ export const RecipeCard = memo(function RecipeCard({ recipe, costSummary, curren
         <View style={styles.metricsRow}>
           <View style={styles.metricHalf}>
             <Text style={styles.metricLabel}>{C.result.dishCost}</Text>
-            <Text style={styles.metricValue}>{formatCurrency(costSummary?.total_recipe_cost, currencySymbol)}</Text>
+            {costSummary == null ? (
+              <Skeleton height={17} width={72} style={styles.metricSkeleton} />
+            ) : (
+              <Text style={styles.metricValue}>
+                {costSummary.has_any_cost === false ? '—' : formatCurrency(costSummary.total_recipe_cost, currencySymbol)}
+              </Text>
+            )}
           </View>
+          {suggestedDisplay != null && (
+            <>
+              <View style={styles.metricDivider} />
+              <View style={styles.metricHalf}>
+                <Text style={styles.metricLabel}>{suggestedDisplay.label}</Text>
+                <Text style={[styles.metricValue, styles.metricValueSuggested]}>{suggestedDisplay.text}</Text>
+              </View>
+            </>
+          )}
           {foodCostDisplay != null && (
             <>
               <View style={styles.metricDivider} />
@@ -139,11 +171,13 @@ export const RecipeCard = memo(function RecipeCard({ recipe, costSummary, curren
           </View>
         )}
 
-        {costSummary?.total_recipe_cost > 0 && (
+        {costSummary != null && costSummary.ingredient_count > 0 && (
           <View style={styles.footer}>
             <View style={styles.footerLeft}>
               {statusBadge ? (
                 <Badge label={statusBadge.label} variant={statusBadge.variant} />
+              ) : noSellingPrice ? (
+                <Badge label={C.result.noSellingPriceBadge} variant="neutral" />
               ) : (
                 <Badge
                   label={`${formatPercent(costSummary.target_food_cost_percent ?? recipe.target_food_cost_percent)} target`}
@@ -195,9 +229,11 @@ const styles = StyleSheet.create({
   metricLabel: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginBottom: 2, textAlign: 'center' },
   metricValue: { fontSize: FONT_SIZE.sm, fontWeight: '700', color: COLORS.text, textAlign: 'center' },
   metricValueRange: { fontSize: FONT_SIZE.sm, lineHeight: 18 },
+  metricSkeleton: { alignSelf: 'center', marginTop: 2 },
   metricValueGood: { color: COLORS.success },
   metricValueWarning: { color: COLORS.warning },
   metricValueDanger: { color: COLORS.error },
+  metricValueSuggested: { color: COLORS.primary },
   metricDivider: { width: 1, height: 28, backgroundColor: COLORS.border },
   profitRow: {
     flexDirection: 'row',

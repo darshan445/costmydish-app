@@ -2,8 +2,8 @@
  * PostHog event names — use these for funnels & dashboards.
  *
  * Suggested PostHog funnels:
- * 1. signup_completed → ingredient_created → food_cost_wizard_completed
- * 2. signup_completed → tab_viewed(home) → food_cost_wizard_started → food_cost_wizard_completed
+ * 1. signup_completed → food_cost_wizard_started → food_cost_dish_created → food_cost_dish_saved
+ * 2. food_cost_dish_created → food_cost_price_added
  * 3. paywall_viewed → paywall_purchase_completed
  */
 
@@ -28,18 +28,22 @@ export const AnalyticsEvents = {
   INGREDIENT_CREATE_FAILED: 'ingredient_create_failed',
   INGREDIENT_UPDATED: 'ingredient_updated',
 
-  // Food cost wizard
+  // Food cost (single-screen dish editor)
+  FOOD_COST_HOME_START: 'food_cost_home_start',
+  FOOD_COST_SAMPLE_RESULT_OPENED: 'food_cost_sample_result_opened',
   FOOD_COST_WIZARD_STARTED: 'food_cost_wizard_started',
-  FOOD_COST_STEP_VIEWED: 'food_cost_step_viewed',
+  FOOD_COST_EDITOR_OPENED: 'food_cost_editor_opened',
+  FOOD_COST_FIRST_INGREDIENT_ADDED: 'food_cost_first_ingredient_added',
+  FOOD_COST_PRICE_ADDED: 'food_cost_price_added',
+  /** Autosave created the dish row (first ingredient added) */
+  FOOD_COST_DISH_CREATED: 'food_cost_dish_created',
+  /** Owner tapped Save dish */
+  FOOD_COST_DISH_SAVED: 'food_cost_dish_saved',
   FOOD_COST_INGREDIENT_PICKER_OPENED: 'food_cost_ingredient_picker_opened',
   FOOD_COST_ADD_TO_LIBRARY_TAPPED: 'food_cost_add_to_library_tapped',
   FOOD_COST_RETURNED_FROM_LIBRARY: 'food_cost_returned_from_library',
   FOOD_COST_INGREDIENT_ADDED: 'food_cost_ingredient_added',
   FOOD_COST_SELLING_FORMAT_ADDED: 'food_cost_selling_format_added',
-  FOOD_COST_DRAFT_RESUMED: 'food_cost_draft_resumed',
-  FOOD_COST_DRAFT_DISCARDED: 'food_cost_draft_discarded',
-  FOOD_COST_WIZARD_COMPLETED: 'food_cost_wizard_completed',
-
   // Settings
   SETTINGS_FOOD_COST_TARGET_CHANGED: 'settings_food_cost_target_changed',
   SETTINGS_CURRENCY_CHANGED: 'settings_currency_changed',

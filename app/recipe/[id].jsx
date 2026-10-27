@@ -1,66 +1,122 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
+  ActivityIndicator, Alert,
   ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RecipeCostSummary } from '../../components/recipe/RecipeCostSummary';
 import { IngredientRow } from '../../components/recipe/IngredientRow';
+import { SellingFormatSheet } from '../../components/recipe/SellingFormatSheet';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { useRecipeCost } from '../../hooks/useRecipeCost';
-import { calculateSellingFormatMetrics } from '../../lib/calculations';
+import { calculateDishSummary, calculateSellingFormatMetrics, roundPriceUp } from '../../lib/calculations';
 import { ReviewPromptController } from '../../components/review/ReviewPromptController';
+import { trackFoodCost } from '../../lib/foodCostAnalytics';
 import { useSubscription } from '../../hooks/useSubscription';
 import useRecipeStore from '../../stores/recipeStore';
 import useSettingsStore from '../../stores/settingsStore';
 import { FOOD_COST_COPY as C } from '../../constants/copy';
 import { COLORS, FONT_SIZE, SPACING, RADIUS } from '../../constants/theme';
-import { formatCategory, formatCurrency, formatFoodCostPercent } from '../../utils/format';
-import { formatSellingFormatName, labelPerSellingUnit } from '../../utils/sellingFormat';
-import { formatUnitLabel } from '../../constants/units';
+import {
+  capitalize, formatCategory, formatCurrency, formatFoodCostPercent, formatQuantity, marginStatusLabel,
+} from '../../utils/format';
+import { formatSellingFormatName, labelPerSellingUnit, pluralizeUnitWord, yieldUnitText } from '../../utils/sellingFormat';
+import { formatUnitLabel, getDefaultSellingUnitForCategory, getUniqueSellingUnitOptions } from '../../constants/units';
 import { Skeleton } from '../../components/ui/Skeleton';
 
-const MARGIN_LABELS = { good: 'On Target', warning: 'Slightly Over', danger: 'Over Budget' };
-
-export default function RecipeDetailScreen() {
+/**
+ * sampleRecipe: a read-only showcase dish (never stored) rendered exactly like a real result,
+ * with edit, delete and selling-format actions hidden.
+ */
+export default function RecipeDetailScreen({ sampleRecipe = null, sampleCurrencySymbol = null } = {}) {
+  const isSample = sampleRecipe != null;
   const { id, justSaved: justSavedParam } = useLocalSearchParams();
   const justSaved = justSavedParam === '1'
     || justSavedParam === 1
     || (Array.isArray(justSavedParam) && justSavedParam.includes('1'));
   const router = useRouter();
-  const { fetchRecipeWithIngredients, deleteRecipe, getRecipeById } = useRecipeStore();
+  const {
+    fetchRecipeWithIngredients, deleteRecipe, getRecipeById, waitForDishSave,
+    fetchSellingUnits, saveSellingFormat, deleteSellingFormat,
+  } = useRecipeStore();
   const allRecipes = useRecipeStore((s) => s.recipes);
+  const sellingUnits = useRecipeStore((s) => s.sellingUnits);
   const getCurrencySymbol = useSettingsStore((s) => s.getCurrencySymbol);
-  const symbol = getCurrencySymbol();
+  const symbol = isSample ? sampleCurrencySymbol : getCurrencySymbol();
   const { canExportPDF } = useSubscription();
 
   // Seed immediately from the cached store list so the screen is never blank
-  const cachedRecipe = getRecipeById(id);
+  const cachedRecipe = isSample ? sampleRecipe : getRecipeById(id);
   const [recipe, setRecipe] = useState(cachedRecipe ?? null);
-  const [ingredientsLoading, setIngredientsLoading] = useState(true);
+  const [ingredientsLoading, setIngredientsLoading] = useState(!isSample);
   const [error, setError] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // null when closed, else { mode: 'add' | 'edit', format }
+  const [formatSheet, setFormatSheet] = useState(null);
+  const [formatSaving, setFormatSaving] = useState(false);
 
   useEffect(() => {
-    loadRecipe();
-  }, [id]);
+    if (sellingUnits.length === 0) fetchSellingUnits();
+  }, []);
+
+  const sellingUnitOptions = useMemo(() => {
+    const opts = getUniqueSellingUnitOptions(sellingUnits);
+    if (opts.length > 0) return opts;
+    return [
+      { value: 'piece', label: 'Piece' },
+      { value: 'serving', label: 'Serving' },
+      { value: 'plate', label: 'Plate' },
+      { value: 'slice', label: 'Slice' },
+      { value: 'cup', label: 'Cup' },
+    ];
+  }, [sellingUnits]);
+
+  // Reload on every focus: the editor autosaves, so returning from it may bring changes
+  useFocusEffect(
+    useCallback(() => {
+      if (!isSample) loadRecipe();
+    }, [id, isSample]),
+  );
+
+  // Once the full dish is on screen, later reloads refresh it quietly instead of
+  // flashing the skeleton or replacing it with an error
+  const hasDetailRef = useRef(false);
 
   const loadRecipe = async () => {
-    setIngredientsLoading(true);
+    if (!hasDetailRef.current) setIngredientsLoading(true);
+    await waitForDishSave();
     const { data, error: err } = await fetchRecipeWithIngredients(id);
-    if (err) setError(err);
-    else setRecipe(data);
+    if (data) {
+      hasDetailRef.current = true;
+      setRecipe(data);
+      setError(null);
+    } else if (!hasDetailRef.current) {
+      setError(err);
+    }
     setIngredientsLoading(false);
   };
 
   const { totalCost, ingredientCosts } = useRecipeCost({
     recipeIngredients: recipe?.recipe_ingredients ?? [],
   });
+
+  const defaultFormat = (recipe?.selling_formats ?? []).find((f) => f.is_default)
+    ?? recipe?.selling_formats?.[0]
+    ?? null;
+  const dish = useMemo(() => calculateDishSummary({
+    recipeIngredients: recipe?.recipe_ingredients ?? [],
+    defaultFormat,
+    targetFoodCostPercent: recipe?.target_food_cost_percent,
+  }), [recipe?.recipe_ingredients, defaultFormat, recipe?.target_food_cost_percent]);
+  const defaultUnitWord = yieldUnitText(
+    defaultFormat?.selling_unit_name,
+    defaultFormat?.selling_unit_label ?? (defaultFormat ? formatUnitLabel(defaultFormat.selling_unit_name) : null),
+  );
 
   const formatMetrics = (recipe?.selling_formats ?? [])
     .filter((f) => parseFloat(f.selling_price) > 0)
@@ -104,11 +160,60 @@ export default function RecipeDetailScreen() {
     && !ingredientsLoading
     && !recipe?.is_sample;
 
-  const openEdit = (step = 1) => {
-    router.push({
-      pathname: '/recipe/edit/[id]',
-      params: { id, step: String(step) },
+  const openEdit = () => {
+    router.push({ pathname: '/recipe/edit/[id]', params: { id } });
+  };
+
+  const openFormatSheet = (format) => {
+    if (!format) {
+      setFormatSheet({
+        mode: 'add',
+        format: { selling_unit_name: getDefaultSellingUnitForCategory(recipe?.category, sellingUnitOptions) },
+      });
+    } else {
+      setFormatSheet({ mode: 'edit', format });
+    }
+  };
+
+  const closeFormatSheet = () => {
+    if (!formatSaving) setFormatSheet(null);
+  };
+
+  const handleFormatSubmit = async (values) => {
+    setFormatSaving(true);
+    const { error: saveError } = await saveSellingFormat({
+      recipeId: id,
+      formatId: formatSheet?.format?.id ?? null,
+      dishName: recipe?.name,
+      format: values,
     });
+    setFormatSaving(false);
+    if (saveError) {
+      Alert.alert(saveError);
+      return;
+    }
+    if (formatSheet?.mode === 'add') {
+      trackFoodCost('selling_format_added', {
+        selling_format_count: (recipe?.selling_formats?.length ?? 0) + 1,
+        unit: values.selling_unit_name,
+      });
+    }
+    setFormatSheet(null);
+    loadRecipe();
+  };
+
+  const handleFormatDelete = async () => {
+    const formatId = formatSheet?.format?.id;
+    if (!formatId) return;
+    setFormatSaving(true);
+    const { error: deleteError } = await deleteSellingFormat({ recipeId: id, formatId });
+    setFormatSaving(false);
+    if (deleteError) {
+      Alert.alert(deleteError);
+      return;
+    }
+    setFormatSheet(null);
+    loadRecipe();
   };
 
   const handleDelete = async () => {
@@ -155,27 +260,39 @@ export default function RecipeDetailScreen() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
-        <View style={styles.headerActions}>
-          <TouchableOpacity onPress={() => openEdit(1)} style={styles.headerBtn}>
-            <Ionicons name="create-outline" size={22} color={COLORS.text} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} style={styles.headerBtn}>
-            <Ionicons name="trash-outline" size={22} color={COLORS.error} />
-          </TouchableOpacity>
-        </View>
+        {isSample ? null : (
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={openEdit} style={styles.headerBtn} accessibilityRole="button" accessibilityLabel="Edit dish">
+              <Ionicons name="create-outline" size={22} color={COLORS.text} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} style={styles.headerBtn}>
+              <Ionicons name="trash-outline" size={22} color={COLORS.error} />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
+        {isSample ? (
+          <View style={styles.sampleNote}>
+            <Ionicons name="information-circle-outline" size={18} color={COLORS.primary} />
+            <Text style={styles.sampleNoteText}>{C.sample.note}</Text>
+          </View>
+        ) : null}
         <View style={styles.titleSection}>
           <Text style={styles.resultEyebrow}>
-            {justSaved ? C.result.justSaved : C.result.default}
+            {isSample ? C.sample.eyebrow : justSaved ? C.result.justSaved : C.result.default}
           </Text>
           <Text style={styles.name}>{recipe.name}</Text>
           <View style={styles.metaRow}>
             {recipe.category && <Badge label={formatCategory(recipe.category)} variant="neutral" />}
-            {recipe.is_sample && <Badge label="Sample" variant="info" style={{ marginLeft: SPACING.xs }} />}
           </View>
-          <Text style={styles.batchInfo}>Target: {recipe.target_food_cost_percent}% food cost</Text>
+          <Text style={styles.batchInfo}>
+            {dish.yieldQuantity != null
+              ? `Makes ${formatQuantity(dish.yieldQuantity)} ${pluralizeUnitWord(defaultUnitWord, dish.yieldQuantity)} · `
+              : ''}
+            Target: {recipe.target_food_cost_percent}% food cost
+          </Text>
         </View>
 
         <Text style={styles.sectionTitle}>{C.result.summary}</Text>
@@ -209,21 +326,14 @@ export default function RecipeDetailScreen() {
         )}
 
         {/* Per-format selling analysis */}
+        {!ingredientsLoading && (formatMetrics.length > 0 || defaultFormat) && (
+          <Text style={styles.sectionTitle}>Selling analysis</Text>
+        )}
+
         {!ingredientsLoading && formatMetrics.length > 0 && (
           <>
-            <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, styles.sectionTitleInline]}>Selling Analysis</Text>
-              <TouchableOpacity
-                onPress={() => openEdit(3)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel="Edit selling prices"
-              >
-                <Text style={styles.sectionEdit}>Edit</Text>
-              </TouchableOpacity>
-            </View>
             {formatMetrics.map((fm) => {
-              const unitLabel = formatUnitLabel(fm.selling_unit_name ?? 'piece');
+              const unitLabel = fm.selling_unit_label ?? formatUnitLabel(fm.selling_unit_name ?? 'piece');
               const qty = (fm.quantityMade ?? parseFloat(fm.unit_quantity)) || 1;
               const profitColor = fm.profitPerFormat < 0
                 ? COLORS.error
@@ -234,8 +344,18 @@ export default function RecipeDetailScreen() {
                 : fm.marginStatus === 'warning' ? COLORS.warning
                 : COLORS.error;
 
+              const sourceFormat = recipe.selling_formats.find((f) => f.id === fm.id);
+
               return (
-                <View key={fm.id} style={styles.formatCard}>
+                <TouchableOpacity
+                  key={fm.id}
+                  style={styles.formatCard}
+                  onPress={() => openFormatSheet(sourceFormat)}
+                  disabled={isSample}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={C.action.editSellingPrice}
+                >
                   <View style={styles.formatCardHeader}>
                     <Text style={styles.formatCardName}>
                       {formatSellingFormatName(unitLabel, fm.unit_quantity, recipe?.name)}
@@ -248,7 +368,7 @@ export default function RecipeDetailScreen() {
 
                   <View style={styles.formatMetricsRow}>
                     <View style={styles.formatMetric}>
-                      <Text style={styles.formatMetricLabel}>Cost / unit</Text>
+                      <Text style={styles.formatMetricLabel}>{capitalize(labelPerSellingUnit('Cost per', unitLabel))}</Text>
                       <Text style={styles.formatMetricValue}>{formatCurrency(fm.costPerUnit, symbol)}</Text>
                     </View>
                     <View style={styles.formatMetricDivider} />
@@ -262,7 +382,7 @@ export default function RecipeDetailScreen() {
 
                   <View style={styles.formatDetailBlock}>
                     <View style={styles.formatDetailRow}>
-                      <Text style={styles.formatDetailLabel}>Profit per {unitLabel}:</Text>
+                      <Text style={styles.formatDetailLabel}>{`${labelPerSellingUnit('Profit per', unitLabel)}:`}</Text>
                       <Text style={[styles.formatDetailValue, { color: profitColor }]}>
                         {formatCurrency(fm.profitPerFormat, symbol)}
                       </Text>
@@ -280,34 +400,72 @@ export default function RecipeDetailScreen() {
                       <View style={styles.formatDetailRow}>
                         <Text style={styles.formatDetailLabel}>Suggested min price:</Text>
                         <Text style={styles.formatDetailValuePrimary}>
-                          {formatCurrency(fm.recommendedPrice, symbol)}
+                          {formatCurrency(roundPriceUp(fm.recommendedPrice), symbol)}
                         </Text>
                       </View>
                     )}
                   </View>
 
                   <View style={styles.formatCardFooter}>
-                    {fm.marginStatus && (
-                      <Badge label={MARGIN_LABELS[fm.marginStatus]} variant={fm.marginStatus} />
-                    )}
+                    {fm.marginStatus ? (
+                      <Badge label={marginStatusLabel(fm.marginStatus, fm.profitPerFormat)} variant={fm.marginStatus} />
+                    ) : <View />}
+                    {isSample ? null : <Text style={styles.sectionEdit}>Edit</Text>}
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </>
         )}
 
-        {!ingredientsLoading && formatMetrics.length === 0 && (
-          <View style={styles.noFormatsHint}>
-            <Text style={styles.noFormatsText}>{C.result.noFormats}</Text>
+        {!ingredientsLoading && !dish.hasSellingPrice && (
+          <View style={styles.formatCard}>
+            <View style={styles.formatCardHeader}>
+              <Text style={styles.formatCardName}>{capitalize(labelPerSellingUnit('Price per', defaultUnitWord))}</Text>
+              <Badge label={C.result.noSellingPriceBadge} variant="neutral" />
+            </View>
+            <View style={styles.formatMetricsRow}>
+              <View style={styles.formatMetric}>
+                <Text style={styles.formatMetricLabel}>{labelPerSellingUnit('Cost per', defaultUnitWord)}</Text>
+                <Text style={styles.formatMetricValue}>
+                  {dish.hasAnyCost ? formatCurrency(dish.costPerUnit, symbol) : '—'}
+                </Text>
+              </View>
+              <View style={styles.formatMetricDivider} />
+              <View style={styles.formatMetric}>
+                <Text style={styles.formatMetricLabel}>
+                  Suggested
+                </Text>
+                <Text style={[styles.formatMetricValue, { color: COLORS.primary }]}>
+                  {dish.hasAnyCost ? formatCurrency(dish.suggestedPrice, symbol) : '—'}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.noFormatsText}>{C.result.noSellingPrice}</Text>
             <TouchableOpacity
-              onPress={() => openEdit(3)}
+              onPress={() => (defaultFormat ? openFormatSheet(defaultFormat) : openEdit())}
               style={styles.noFormatsEditBtn}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
             >
-              <Text style={styles.sectionEdit}>Add selling price</Text>
+              <Text style={styles.sectionEdit}>{C.action.setMyPrice}</Text>
             </TouchableOpacity>
           </View>
+        )}
+
+        {!isSample && !ingredientsLoading && defaultFormat && (
+          <TouchableOpacity
+            style={styles.addFormatBtn}
+            onPress={() => openFormatSheet(null)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+          >
+            <View style={styles.addFormatRow}>
+              <Ionicons name="add-circle-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.addFormatText}>{C.result.addAnotherWay}</Text>
+            </View>
+            <Text style={styles.addFormatHint}>{C.result.addAnotherWayHint}</Text>
+          </TouchableOpacity>
         )}
 
         <View style={styles.sectionHeader}>
@@ -316,14 +474,16 @@ export default function RecipeDetailScreen() {
               ? 'Ingredients'
               : `Ingredients · ${recipe.recipe_ingredients?.length ?? 0}`}
           </Text>
-          <TouchableOpacity
-            onPress={() => openEdit(2)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityRole="button"
-            accessibilityLabel="Edit ingredients"
-          >
-            <Text style={styles.sectionEdit}>Edit</Text>
-          </TouchableOpacity>
+          {isSample ? null : (
+            <TouchableOpacity
+              onPress={openEdit}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Edit ingredients"
+            >
+              <Text style={styles.sectionEdit}>Edit</Text>
+            </TouchableOpacity>
+          )}
         </View>
         {ingredientsLoading ? (
           <>
@@ -352,7 +512,7 @@ export default function RecipeDetailScreen() {
           })
         )}
 
-        {canExportPDF && (
+        {canExportPDF && !isSample && (
           <Button
             title="Export PDF"
             variant="secondary"
@@ -360,6 +520,15 @@ export default function RecipeDetailScreen() {
             style={styles.exportBtn}
           />
         )}
+
+        {isSample ? (
+          <Button
+            title={C.sample.cta}
+            onPress={() => router.back()}
+            size="lg"
+            style={styles.exportBtn}
+          />
+        ) : null}
       </ScrollView>
 
       <ConfirmModal
@@ -372,6 +541,22 @@ export default function RecipeDetailScreen() {
         cancelLabel={C.result.deleteCancel}
         variant="danger"
         loading={deleting}
+      />
+
+      <SellingFormatSheet
+        visible={formatSheet != null}
+        mode={formatSheet?.mode ?? 'add'}
+        initialFormat={formatSheet?.format ?? null}
+        unitOptions={sellingUnitOptions}
+        totalRecipeCost={totalCost}
+        hasAnyCost={dish.hasAnyCost}
+        targetFoodCostPercent={recipe.target_food_cost_percent}
+        dishName={recipe.name}
+        currencySymbol={symbol}
+        saving={formatSaving}
+        onSubmit={handleFormatSubmit}
+        onDelete={formatSheet?.format?.is_default ? undefined : handleFormatDelete}
+        onClose={closeFormatSheet}
       />
 
       <ReviewPromptController
@@ -422,6 +607,31 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
   },
+  sampleNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    padding: SPACING.sm,
+    marginBottom: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  sampleNoteText: { flex: 1, fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, lineHeight: 18 },
+  addFormatBtn: {
+    minHeight: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.sm + 2,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    backgroundColor: 'rgba(45, 106, 79, 0.06)',
+    marginBottom: SPACING.sm,
+  },
+  addFormatRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
+  addFormatText: { fontSize: FONT_SIZE.base, fontWeight: '700', color: COLORS.primary },
+  addFormatHint: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginTop: 2, textAlign: 'center' },
   errorText: { textAlign: 'center', color: COLORS.error, padding: SPACING.xl },
   exportBtn: { marginTop: SPACING.xl },
 
@@ -497,13 +707,7 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   formatBatchLine: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary },
-  noFormatsHint: {
-    backgroundColor: COLORS.surfaceAlt,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
-  },
-  noFormatsText: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, textAlign: 'center' },
+  noFormatsText: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary },
 
   // Cost summary skeleton
   costSkeletonCard: {

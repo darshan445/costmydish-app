@@ -1,6 +1,8 @@
 import { useRouter, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator, Alert, FlatList, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Modal } from '../../components/ui/Modal';
@@ -17,7 +19,7 @@ import { identifyRevenueCatUser, openManageSubscriptions, restorePurchases } fro
 import { refreshSubscriptionState } from '../../lib/subscriptionSync';
 import { showAppAlert } from '../../lib/appAlert';
 import { formatSubscriptionDate } from '../../utils/format';
-import { CURRENCIES } from '../../constants/currencies';
+import { searchCurrencies } from '../../constants/currencies';
 import { UNIT_SYSTEMS } from '../../constants/units';
 import { PRIVACY_POLICY_URL, TERMS_URL } from '../../constants/legal';
 import { FOOD_COST_COPY as C } from '../../constants/copy';
@@ -41,6 +43,12 @@ export default function SettingsScreen() {
   const recipesHydrated = useRecipeStore((s) => s.hydrated);
 
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  const [currencySearch, setCurrencySearch] = useState('');
+  const currencyResults = useMemo(() => searchCurrencies(currencySearch), [currencySearch]);
+
+  useEffect(() => {
+    if (!showCurrencyModal) setCurrencySearch('');
+  }, [showCurrencyModal]);
   const [showUnitSystemModal, setShowUnitSystemModal] = useState(false);
   const [showCurrencyWarning, setShowCurrencyWarning] = useState(false);
   const [pendingCurrency, setPendingCurrency] = useState(null);
@@ -111,7 +119,6 @@ export default function SettingsScreen() {
 
     if (recipeCount > 0) {
       setPendingCurrency(currency);
-      setShowCurrencyModal(false);
       setShowCurrencyWarning(true);
       return;
     }
@@ -122,7 +129,6 @@ export default function SettingsScreen() {
   const handleCancelCurrencyWarning = () => {
     setShowCurrencyWarning(false);
     setPendingCurrency(null);
-    setShowCurrencyModal(true);
   };
 
   const handleSelectUnitSystem = async (system) => {
@@ -645,11 +651,53 @@ export default function SettingsScreen() {
         visible={showCurrencyModal}
         onClose={() => setShowCurrencyModal(false)}
         title="Select Currency"
-        scrollable
+        scrollable={false}
+        overlay={showCurrencyWarning ? (
+          <ConfirmModal
+            inline
+            visible
+            onClose={handleCancelCurrencyWarning}
+            onConfirm={() => pendingCurrency && applyCurrency(pendingCurrency)}
+            title="Change Currency?"
+            message={"Changing currency won't convert your existing dish prices.\nYou'll need to update them manually."}
+            confirmLabel="Change Currency"
+            cancelLabel="Cancel"
+            variant="danger"
+          />
+        ) : null}
+        onOverlayClose={handleCancelCurrencyWarning}
       >
-          {CURRENCIES.map((c) => (
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={16} color={COLORS.textTertiary} />
+          <TextInput
+            style={styles.searchInput}
+            value={currencySearch}
+            onChangeText={setCurrencySearch}
+            placeholder="Search currency or country"
+            placeholderTextColor={COLORS.textTertiary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            accessibilityLabel="Search currency or country"
+          />
+          {currencySearch.length > 0 ? (
             <TouchableOpacity
-              key={c.code}
+              onPress={() => setCurrencySearch('')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityLabel="Clear search"
+            >
+              <Ionicons name="close-circle" size={18} color={COLORS.textTertiary} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <FlatList
+          data={currencyResults}
+          keyExtractor={(c) => c.code}
+          style={styles.currencyList}
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="on-drag"
+          renderItem={({ item: c }) => (
+            <TouchableOpacity
               style={[styles.currencyRow, settings.currency === c.code && styles.currencySelected]}
               onPress={() => handleSelectCurrency(c)}
             >
@@ -657,7 +705,11 @@ export default function SettingsScreen() {
               <Text style={styles.currencyLabel}>{c.label} ({c.code})</Text>
               {settings.currency === c.code && <Ionicons name="checkmark" size={18} color={COLORS.primary} />}
             </TouchableOpacity>
-          ))}
+          )}
+          ListEmptyComponent={(
+            <Text style={styles.searchEmpty}>No currency matches “{currencySearch.trim()}”</Text>
+          )}
+        />
       </Modal>
 
       <Modal
@@ -677,17 +729,6 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         ))}
       </Modal>
-
-      <ConfirmModal
-        visible={showCurrencyWarning}
-        onClose={handleCancelCurrencyWarning}
-        onConfirm={() => pendingCurrency && applyCurrency(pendingCurrency)}
-        title="Change Currency?"
-        message={"Changing currency won't convert your existing dish prices.\nYou'll need to update them manually."}
-        confirmLabel="Change Currency"
-        cancelLabel="Cancel"
-        variant="danger"
-      />
 
       {/* Food cost % editor */}
       <Modal
@@ -822,6 +863,26 @@ const styles = StyleSheet.create({
   supportEmail: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, marginTop: 2 },
   currencyRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.border, gap: SPACING.md },
   currencySelected: { backgroundColor: '#F0FDF4' },
+  currencyList: { maxHeight: 420 },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    minHeight: 44,
+    paddingHorizontal: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface,
+  },
+  searchInput: { flex: 1, fontSize: FONT_SIZE.base, color: COLORS.text, paddingVertical: SPACING.sm },
+  searchEmpty: {
+    textAlign: 'center',
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    paddingVertical: SPACING.lg,
+  },
   currencySymbol: { minWidth: 36, fontSize: FONT_SIZE.md, fontWeight: '700', color: COLORS.primary, textAlign: 'center' },
   currencyLabel: { flex: 1, fontSize: FONT_SIZE.base, color: COLORS.text },
 

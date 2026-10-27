@@ -2,10 +2,19 @@
  * Formats a number as currency using the given symbol.
  */
 import { RECIPE_CATEGORIES } from '../constants/units';
+import { FOOD_COST_COPY } from '../constants/copy';
 
 export function formatCurrency(amount, symbol = '$') {
   if (amount == null || isNaN(amount)) return `${symbol}0.00`;
-  return `${symbol}${Number(amount).toFixed(2)}`;
+  const fixed = Number(amount).toFixed(2);
+  if (Number(fixed) < 0) return `−${symbol}${fixed.slice(1)}`;
+  return `${symbol}${fixed.replace(/^-/, '')}`;
+}
+
+/** Badge text for a margin status; a negative profit reads as a loss rather than "Over budget". */
+export function marginStatusLabel(status, profit = null) {
+  if (profit != null && profit < 0) return FOOD_COST_COPY.wizard.sellingAtLoss;
+  return FOOD_COST_COPY.wizard.marginStatus[status] ?? null;
 }
 
 /**
@@ -22,13 +31,16 @@ export function formatPercent(value) {
  * Formats food cost % for display — value should already be normalized in calculations.js.
  * Strips trailing zeros only (30% not 30.00%, 30.01% unchanged).
  */
+/** Formats priced the same way differ by cents of rounding; don't show that as a range */
+export function isWithinOnePercent(min, max) {
+  return Math.abs(max - min) <= Math.max(Math.abs(max), Math.abs(min)) * 0.01;
+}
+
 export function formatFoodCostPercent(value) {
   if (value == null || isNaN(value)) return '—';
-  const num = Number(value);
-  const whole = Math.round(num * 100);
-  const normalized = whole / 100;
-  const s = normalized.toFixed(2).replace(/\.?0+$/, '');
-  return `${s}%`;
+  // One decimal, rounded up, so the figure never reads below the margin status (30.04 → 30.1%)
+  const hundredths = Math.round(Number(value) * 100);
+  return `${(Math.ceil(hundredths / 10) / 10).toFixed(1)}%`;
 }
 
 /**

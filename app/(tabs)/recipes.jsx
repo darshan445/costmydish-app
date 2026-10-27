@@ -12,13 +12,14 @@ import { PaywallModal } from '../../components/paywall/PaywallModal';
 import { useRecipes } from '../../hooks/useRecipes';
 import { useCalculateFoodCost } from '../../hooks/useCalculateFoodCost';
 import useSettingsStore from '../../stores/settingsStore';
+import useRecipeStore from '../../stores/recipeStore';
 import { FOOD_COST_COPY as C } from '../../constants/copy';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'All' },
-  { key: 'on_target', label: 'On Target' },
-  { key: 'over_target', label: 'Over Target' },
+  { key: 'on_target', label: 'On target' },
+  { key: 'over_target', label: 'Over target' },
 ];
 
 function getDishStatus(summary) {
@@ -34,7 +35,10 @@ function getDishStatus(summary) {
 
 export default function DishesScreen() {
   const router = useRouter();
-  const { recipes, costSummaries, loading } = useRecipes();
+  const { recipes, costSummaries, error, refetch } = useRecipes();
+  // "Loaded at least once", not `loading`: before the first fetch starts `loading` is
+  // false with no dishes, which would flash the empty state (or show it when loading failed)
+  const hydrated = useRecipeStore((s) => s.hydrated);
   const { startCalculate, showPaywall, closePaywall } = useCalculateFoodCost();
   const getCurrencySymbol = useSettingsStore((s) => s.getCurrencySymbol);
   const symbol = getCurrencySymbol();
@@ -42,7 +46,8 @@ export default function DishesScreen() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const showSkeleton = loading && recipes.length === 0;
+  const showSkeleton = !hydrated && !error;
+  const showLoadError = !hydrated && Boolean(error);
 
   const filteredDishes = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -81,6 +86,13 @@ export default function DishesScreen() {
         <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
           {[1, 2, 3, 4, 5].map((n) => <RecipeCardSkeleton key={n} />)}
         </ScrollView>
+      ) : showLoadError ? (
+        <EmptyState
+          icon="📡"
+          title={C.home.loadError}
+          actionLabel={C.home.retry}
+          onAction={refetch}
+        />
       ) : recipes.length === 0 ? (
         <EmptyState
           icon="🍽️"
@@ -247,7 +259,6 @@ const styles = StyleSheet.create({
   },
 
   list: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.md, flexGrow: 1 },
-
   ctaFooter: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -165,6 +165,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="recipe/[id]" />
           <Stack.Screen name="recipe/create" />
+          <Stack.Screen name="recipe/sample" />
           <Stack.Screen name="recipe/edit/[id]" />
           <Stack.Screen name="ingredient/create" />
           <Stack.Screen name="ingredient/edit/[id]" />

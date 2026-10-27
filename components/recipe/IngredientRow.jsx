@@ -3,7 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONT_SIZE, SPACING } from '../../constants/theme';
 import { formatCurrency, formatQuantity } from '../../utils/format';
-import { formatUnitLabel } from '../../constants/units';
+import { formatUnitLabelFor } from '../../constants/units';
 
 export const IngredientRow = memo(function IngredientRow({ item, cost, error, currencySymbol, onRemove }) {
   return (
@@ -11,7 +11,7 @@ export const IngredientRow = memo(function IngredientRow({ item, cost, error, cu
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={1}>{item.ingredient?.name ?? item.name}</Text>
         <Text style={styles.quantity}>
-          {formatQuantity(item.quantity)} {formatUnitLabel(item.unit)}
+          {formatQuantity(item.quantity)} {formatUnitLabelFor(item.unit, item.quantity)}
         </Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>

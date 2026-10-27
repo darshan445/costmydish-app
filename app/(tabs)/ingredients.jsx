@@ -18,7 +18,9 @@ import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
 export default function IngredientsScreen() {
   const router = useRouter();
-  const { ingredients, loading } = useIngredients();
+  const { ingredients, error, refetch } = useIngredients();
+  // "Loaded at least once", not `loading` (see Dishes tab)
+  const hydrated = useIngredientStore((s) => s.hydrated);
   const { deleteIngredient, ensureIngredientCount } = useIngredientStore();
   const { canAddIngredient } = useSubscription();
   const getCurrencySymbol = useSettingsStore((s) => s.getCurrencySymbol);
@@ -57,7 +59,8 @@ export default function IngredientsScreen() {
     setPendingDelete(null);
   };
 
-  const showSkeleton = loading && ingredients.length === 0;
+  const showSkeleton = !hydrated && !error;
+  const showLoadError = !hydrated && Boolean(error);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -65,7 +68,7 @@ export default function IngredientsScreen() {
         <View style={styles.headerText}>
           <Text style={styles.title}>{C.library.title}</Text>
           <Text style={styles.headerSub}>
-            {loading && ingredients.length === 0
+            {!hydrated
               ? C.library.subtitle
               : `${ingredients.length} item${ingredients.length === 1 ? '' : 's'} · ${C.library.subtitle}`}
           </Text>
@@ -95,6 +98,13 @@ export default function IngredientsScreen() {
         <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
           {[1, 2, 3, 4, 5, 6, 7].map((n) => <IngredientCardSkeleton key={n} />)}
         </ScrollView>
+      ) : showLoadError ? (
+        <EmptyState
+          icon="📡"
+          title={C.library.loadError}
+          actionLabel={C.home.retry}
+          onAction={refetch}
+        />
       ) : (
         <FlatList
           data={filtered}

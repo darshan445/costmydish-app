@@ -3,43 +3,24 @@
  * Keep routes/DB named recipes — only UI language lives here.
  */
 
-function cleanDishName(dishName, maxLen = 40) {
-  const name = String(dishName ?? '').replace(/\s+/g, ' ').trim();
-  if (!name) return '';
-  if (name.length <= maxLen) return name;
-  return `${name.slice(0, maxLen - 1).trimEnd()}…`;
-}
-
 export const FOOD_COST_COPY = {
   action: {
     calculate: 'Calculate food cost',
     calculateAnother: 'Calculate another food cost',
     calculateA11y: 'Calculate food cost',
     fabLabel: 'Calculate',
-    continue: 'Continue',
-    continueToPricing: 'Continue to pricing',
-    discard: 'Discard',
-    keep: 'Keep it',
-    keepDraft: 'Keep it',
-    resume: 'Resume',
-    discardAndStartNew: 'Discard and start new',
-    seeResult: 'Save & see food cost',
+    saveDish: 'See full result',
     saveChanges: 'Save changes',
     addToDish: 'Add to dish',
-    addIngredient: 'Add an ingredient',
+    addIngredient: 'Add ingredient',
     addAnotherIngredient: 'Add another ingredient',
+    setMyPrice: 'Set my price',
+    editMyPrice: 'Edit my price',
     addSellingPrice: 'Add selling price',
-    addSellingPriceFor: (dishName) => {
-      const name = cleanDishName(dishName);
-      return name ? `Add selling price for ${name}` : 'Add selling price';
-    },
-    addAnotherSellingPrice: 'Add another selling price',
-    editSellingPriceFor: (dishName) => {
-      const name = cleanDishName(dishName);
-      return name ? `Edit selling price for ${name}` : 'Edit selling price';
-    },
-    updateSellingPrice: 'Update selling price',
-    leaveWithoutSaving: 'Leave without saving',
+    addAnotherWayToSell: 'Add another way to sell',
+    editSellingPrice: 'Edit selling price',
+    editWayToSell: 'Edit way to sell',
+    save: 'Save',
   },
 
   nav: {
@@ -50,21 +31,26 @@ export const FOOD_COST_COPY = {
   },
 
   home: {
-    coachTitle: 'Calculate food cost for your dish',
-    coachSub:
-      'See what your dish costs and how much you make, so you can set a confident menu price.',
-    coachSteps: [
-      { n: 1, title: 'Dish', hint: 'Name it & set your food cost goal' },
-      { n: 2, title: 'Ingredients', hint: 'What you use in the dish' },
-      { n: 3, title: 'Price', hint: 'Set your selling price & see your profit' },
-    ],
+    startTitle: 'What does your dish really cost?',
+    startSub: 'Get your cost and a selling price in 2 minutes.',
+    startLabel: 'What are you making?',
+    startPlaceholder: 'e.g. Brownies',
+    orPick: 'Or pick one:',
+    nextAddIngredients: 'Next: add ingredients →',
+    yieldInvalid: 'Enter a number above 0',
+    sampleTitle: 'See an example result',
+    sampleSub: 'Chocolate chip cookies, worked out for you',
+    loadError: 'Couldn’t load your dishes.',
+    retry: 'Try again',
     greetingSubtitle: 'A quick look at your recent food costs',
     recentTitle: 'Recent food costs',
     totalDishes: 'Total dishes',
-    draftEyebrow: 'UNFINISHED',
-    draftTitle: 'Finish calculating food cost',
-    discardTitle: 'Discard unfinished calculation?',
-    discardMessage: 'This clears your saved progress for this food cost. You can’t undo this.',
+  },
+
+  sample: {
+    eyebrow: 'Example food cost result',
+    note: 'This is an example. Your own dish shows the same breakdown with your ingredients and prices.',
+    cta: 'Calculate my own dish',
   },
 
   dishes: {
@@ -78,6 +64,7 @@ export const FOOD_COST_COPY = {
   library: {
     title: 'Library',
     subtitle: 'Your buy prices — reuse across dishes',
+    loadError: 'Couldn’t load your library.',
     emptyTitle: 'Library is empty',
     emptyDescription:
       'Add buy prices here, or save ingredients while you calculate food cost for a dish.',
@@ -88,53 +75,45 @@ export const FOOD_COST_COPY = {
     usageLibrary: 'Library',
   },
 
-  draft: {
-    conflictTitle: 'Unfinished calculation',
-    conflictMessage: (name) =>
-      `You have an unfinished food cost for "${name}". Resume it, or discard and start fresh.`,
-    untitled: 'Untitled dish',
-    stepLabels: {
-      1: 'Step 1 of 3 — Dish',
-      2: 'Step 2 of 3 — Ingredients',
-      3: 'Step 3 of 3 — Price',
-    },
-  },
-
   wizard: {
     header: 'Calculate food cost',
     dishName: 'Dish name',
-    dishNameRequired: 'Dish name is required',
-    dishNamePlaceholder: 'Dish name',
-    totalDishCost: 'Total dish cost',
-    step2CostHint: 'Next you’ll set a selling price to see food cost % and profit.',
-    step2SuggestedPrefix: (pct) => `At ${pct}% food cost, sell from about`,
-    pricesUpdatedTitle: 'Suggested prices updated',
-    pricesUpdatedSub: 'Your selling prices were refreshed to match the new dish cost.',
-    priceUpdatedBadge: 'Updated',
-    sheetPriceRefreshed: 'Price refreshed from your latest dish cost',
-    unsavedPricesTitle: 'Food cost not saved',
-    unsavedPricesMessage:
-      'You’ve updated selling prices, but this dish isn’t saved yet. Save to keep your food cost result.',
+    untitledDish: 'Untitled dish',
+    dishNamePlaceholder: 'e.g. Chocolate chip cookies',
+    yieldLabel: 'Yield',
+    yieldPlaceholder: 'e.g. 12',
+    yieldHelper: 'How many this recipe makes',
+    yieldUnitLabel: 'Unit',
+    categoryLabel: 'Category',
+    targetLabel: 'Food cost target',
+    targetHint: 'A common food cost target is 25–35%.',
+    ingredientsTitle: 'Ingredients',
+    ingredientsEmptyTitle: 'No ingredients yet',
+    ingredientsEmptySub: 'Add what goes into this dish.',
+    totalCost: 'Total cost',
+    costPer: (unit) => `Cost per ${unit}`,
+    suggestedPer: (unit) => `Suggested per ${unit}`,
+    yourPricePer: (unit) => `Your price per ${unit}`,
+    foodCost: 'Food cost',
+    priceSheetTitle: (unit) => `Your price per ${unit}`,
+    priceSheetHint: (qty, unit) => (qty != null && unit !== 'whole dish'
+      ? `Your dish makes ${qty} ${unit}. Enter the price for 1 ${unit}. Leave empty to use the suggested price.`
+      : 'Leave empty to use the suggested price.'),
+    useSuggested: (price) => `Use suggested ${price}`,
+    removePrice: 'Remove my price',
+    formatPreviewCost: (cost, price) => `cost ${cost} · price ${price}`,
+    waysToSellTitle: 'Ways you sell it',
+    usedUnitMismatch: (family, unit) => (family === 'count'
+      ? `You bought this by count (${unit}). Use piece, each or dozen.`
+      : `You bought this by ${family} (${unit}). Pick a ${family} unit to work out the cost.`),
+    marginStatus: { good: 'On target', warning: 'Slightly over', danger: 'Over budget' },
+    sellingAtLoss: 'Selling at a loss',
+    formatsOnTarget: 'All on target',
+    formatsOverTarget: (n) => `${n} over target`,
+    saveNeedsIngredient: 'Add an ingredient — your dish saves automatically',
+    saveFailedStatus: 'Couldn’t save. Tap to retry',
     scrollForMoreCategories: 'Scroll to see more categories',
     scrollForMoreIngredients: 'Scroll to see more ingredients',
-    scrollForMoreLiveCost: 'Scroll to see full live food cost',
-    stepTitles: {
-      1: "What's the dish?",
-      2: 'What ingredients do you use in this dish?',
-      3: (dishName) => {
-        const name = cleanDishName(dishName, 36);
-        return name
-          ? `What's your selling price for ${name}?`
-          : "What's your selling price?";
-      },
-    },
-    stepSubs: {
-      1: "We'll calculate food cost for this.",
-      2: 'Tap Add an ingredient for each item in the dish.',
-      3: 'Enter what customers pay so you can see food cost % and profit.',
-    },
-    sellingFormatHint:
-      'Unit is just a label. Change quantity and price for each way you sell this dish.',
   },
 
   result: {
@@ -143,31 +122,32 @@ export const FOOD_COST_COPY = {
     summary: 'Food cost summary',
     totalDishCost: 'Total dish cost',
     dishCost: 'Dish cost',
-    noFormats: 'No selling prices set yet. Edit this food cost to add formats.',
+    noSellingPrice: 'No selling price set yet. Showing the suggested price for your target.',
+    noSellingPriceBadge: 'No selling price',
     deleteTitle: 'Delete this food cost?',
     deleteMessage:
       'This permanently removes this dish and its cost breakdown. This cannot be undone.',
     deleteConfirm: 'Delete food cost',
     deleteCancel: 'Keep it',
+    addAnotherWay: 'Sell it another way',
+    addAnotherWayHint: 'e.g. by the slice and as a whole cake',
+  },
+
+  sellingFormat: {
+    hint: 'Unit is just a label. Enter how many this dish makes in that unit and your price for one.',
+    unitLabel: 'Unit',
+    qtyLabel: 'How many this dish makes',
+    qtyRequired: 'Enter how many this dish makes',
+    priceRequired: 'Enter a price above 0',
+    remove: 'Remove this way to sell',
+    removeConfirm: 'Remove',
+    removeTitle: 'Remove this way to sell?',
+    removeMessage: (name) => `${name} will be removed from this dish. Your ingredients and other ways to sell stay as they are.`,
+    removeCancel: 'Keep it',
   },
 
   edit: {
     header: 'Edit food cost',
-    stepTitles: {
-      1: "What's the dish?",
-      2: 'What ingredients do you use in this dish?',
-      3: (dishName) => {
-        const name = cleanDishName(dishName, 36);
-        return name
-          ? `What's your selling price for ${name}?`
-          : "What's your selling price?";
-      },
-    },
-    stepSubs: {
-      1: 'Update the name, category, or food cost goal.',
-      2: 'Change used amounts, or add and remove ingredients.',
-      3: 'Update selling prices and check your margins.',
-    },
   },
 
   paywall: {

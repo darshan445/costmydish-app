@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
+import { useNativeModalVisible } from '../../lib/nativeModal';
 
 const VARIANTS = {
   success: {
@@ -52,7 +53,8 @@ export function AppAlertModal({
   onSecondary,
   loading = false,
 }) {
-  if (!visible) return null;
+  const shown = useNativeModalVisible(visible);
+  if (!shown) return null;
 
   const v = VARIANTS[variant] ?? VARIANTS.info;
 

@@ -11,6 +11,9 @@ function sortIngredientsNewestFirst(list) {
 }
 
 let fetchFlight = null;
+/** Bumped around every write; a reload that overlapped one is re-run instead of applied. */
+let writeVersion = 0;
+const MAX_FETCH_ATTEMPTS = 3;
 
 const useIngredientStore = create((set, get) => ({
   ingredients: [],
@@ -30,14 +33,23 @@ const useIngredientStore = create((set, get) => ({
     fetchFlight = (async () => {
       set({ loading: true, error: null });
       try {
-        const { data, error } = await supabase
-          .from('ingredients')
-          .select('*')
-          .eq('is_archived', false)
-          .order('created_at', { ascending: false });
-        if (error) throw error;
-        set({ ingredients: data ?? [], hydrated: true, error: null });
-        return data ?? [];
+        let rows = [];
+        let fresh = false;
+        for (let attempt = 1; attempt <= MAX_FETCH_ATTEMPTS && !fresh; attempt += 1) {
+          const startedAt = writeVersion;
+          const { data, error } = await supabase
+            .from('ingredients')
+            .select('*')
+            .eq('is_archived', false)
+            .order('created_at', { ascending: false });
+          if (error) throw error;
+          rows = data ?? [];
+          fresh = startedAt === writeVersion;
+        }
+        // Still overlapping writes: the list already has them applied locally, keep it
+        if (!fresh && get().hydrated) return get().ingredients;
+        set({ ingredients: rows, hydrated: true, error: null });
+        return rows;
       } catch (error) {
         console.error('Fetch ingredients error:', error);
         set({ error: 'Failed to load ingredients.' });
@@ -81,6 +93,7 @@ const useIngredientStore = create((set, get) => ({
   },
 
   addIngredient: async (ingredientData) => {
+    writeVersion += 1;
     try {
       const userId = useAuthStore.getState().user?.id;
       if (!userId) throw new Error('Not authenticated');
@@ -101,10 +114,13 @@ const useIngredientStore = create((set, get) => ({
         return { data: null, error: `An ingredient named "${ingredientData.name}" already exists. Use a different name.` };
       }
       return { data: null, error: 'Failed to save ingredient. Please try again.' };
+    } finally {
+      writeVersion += 1;
     }
   },
 
   updateIngredient: async (id, updates) => {
+    writeVersion += 1;
     try {
       const { data, error } = await supabase
         .from('ingredients')
@@ -123,10 +139,13 @@ const useIngredientStore = create((set, get) => ({
         return { data: null, error: `An ingredient named "${updates.name}" already exists. Use a different name.` };
       }
       return { data: null, error: 'Failed to update ingredient. Please try again.' };
+    } finally {
+      writeVersion += 1;
     }
   },
 
   deleteIngredient: async (id) => {
+    writeVersion += 1;
     try {
       // Remove from any recipes first to avoid FK constraint violation
       await supabase.from('recipe_ingredients').delete().eq('ingredient_id', id);
@@ -137,6 +156,8 @@ const useIngredientStore = create((set, get) => ({
     } catch (error) {
       console.error('Delete ingredient error:', error);
       return { error: 'Failed to delete ingredient. Please try again.' };
+    } finally {
+      writeVersion += 1;
     }
   },
 

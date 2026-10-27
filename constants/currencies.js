@@ -59,6 +59,79 @@ export const CURRENCIES = [
 
 export const DEFAULT_CURRENCY = CURRENCIES[0];
 
+/** Country names (and common short names) people search by in the currency picker. */
+const CURRENCY_COUNTRIES = {
+  USD: 'United States USA US America Ecuador Panama El Salvador Puerto Rico',
+  EUR: 'Europe Eurozone Germany France Spain Italy Netherlands Ireland Portugal Belgium Austria Finland Greece Luxembourg Malta Cyprus Slovakia Slovenia Estonia Latvia Lithuania Croatia Montenegro Kosovo Monaco',
+  GBP: 'United Kingdom UK Britain England Scotland Wales Northern Ireland Great Britain',
+  INR: 'India',
+  AUD: 'Australia',
+  CAD: 'Canada',
+  NZD: 'New Zealand',
+  SGD: 'Singapore',
+  HKD: 'Hong Kong Macau',
+  JPY: 'Japan',
+  CNY: 'China',
+  KRW: 'South Korea Korea',
+  THB: 'Thailand',
+  MYR: 'Malaysia',
+  IDR: 'Indonesia',
+  PHP: 'Philippines',
+  VND: 'Vietnam',
+  AED: 'United Arab Emirates UAE Dubai Abu Dhabi',
+  SAR: 'Saudi Arabia KSA',
+  QAR: 'Qatar',
+  KWD: 'Kuwait',
+  BHD: 'Bahrain',
+  OMR: 'Oman',
+  ILS: 'Israel',
+  TRY: 'Turkey Türkiye',
+  ZAR: 'South Africa',
+  NGN: 'Nigeria',
+  KES: 'Kenya',
+  EGP: 'Egypt',
+  GHS: 'Ghana',
+  MAD: 'Morocco',
+  BRL: 'Brazil',
+  MXN: 'Mexico',
+  ARS: 'Argentina',
+  CLP: 'Chile',
+  COP: 'Colombia',
+  PEN: 'Peru',
+  CHF: 'Switzerland Liechtenstein',
+  SEK: 'Sweden',
+  NOK: 'Norway',
+  DKK: 'Denmark Greenland Faroe Islands',
+  PLN: 'Poland',
+  CZK: 'Czech Republic Czechia',
+  HUF: 'Hungary',
+  RON: 'Romania',
+  RUB: 'Russia',
+  UAH: 'Ukraine',
+  TWD: 'Taiwan',
+  PKR: 'Pakistan',
+  BDT: 'Bangladesh',
+  LKR: 'Sri Lanka',
+  NPR: 'Nepal',
+};
+
+const normalizeSearch = (text) => text
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+/** Currencies matching a search by name, code, symbol or country. */
+export function searchCurrencies(query) {
+  const q = normalizeSearch(query ?? '');
+  if (!q) return CURRENCIES;
+  return CURRENCIES.filter((c) => {
+    const haystack = normalizeSearch(`${c.label} ${c.code} ${c.symbol} ${CURRENCY_COUNTRIES[c.code] ?? ''}`);
+    return haystack.includes(q);
+  });
+}
+
 /** Representative region per currency (unit-system / fallback). */
 export const CURRENCY_PRIMARY_REGION = {
   USD: 'US',

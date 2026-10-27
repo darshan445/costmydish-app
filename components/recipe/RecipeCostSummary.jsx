@@ -2,9 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Badge } from '../ui/Badge';
 import { FOOD_COST_COPY } from '../../constants/copy';
 import { COLORS, FONT_SIZE, SPACING, RADIUS } from '../../constants/theme';
-import { formatCurrency, formatFoodCostPercent } from '../../utils/format';
-
-const MARGIN_LABELS = { good: 'On Target', warning: 'Slightly Over', danger: 'Over Budget' };
+import { formatCurrency, formatFoodCostPercent, isWithinOnePercent, marginStatusLabel } from '../../utils/format';
 
 export function RecipeCostSummary({
   totalCost,
@@ -24,7 +22,7 @@ export function RecipeCostSummary({
   if (formatProfits && formatProfits.length > 0) {
     const min = Math.min(...formatProfits);
     const max = Math.max(...formatProfits);
-    if (formatProfits.length === 1 || Math.abs(max - min) < 0.01) {
+    if (formatProfits.length === 1 || isWithinOnePercent(min, max)) {
       displayProfit = min;
     } else {
       displayIsRange = true;
@@ -47,8 +45,8 @@ export function RecipeCostSummary({
   if (fcps.length > 0) {
     fcpMin = Math.min(...fcps);
     fcpMax = Math.max(...fcps);
-    if (fcps.length === 1 || Math.abs(fcpMax - fcpMin) < 0.01) {
-      displayFcp = fcpMin;
+    if (fcps.length === 1 || isWithinOnePercent(fcpMin, fcpMax)) {
+      displayFcp = fcpMax;
     } else {
       fcpIsRange = true;
     }
@@ -60,6 +58,9 @@ export function RecipeCostSummary({
   const bannerIsRed = (bannerHighValue ?? 0) < 0;
   const bannerBorderColor = bannerIsRed ? COLORS.error : bannerIsGreen ? COLORS.success : COLORS.border;
   const bannerValueColor = bannerIsRed ? COLORS.error : bannerIsGreen ? COLORS.success : COLORS.textSecondary;
+  const bannerBackground = bannerIsRed ? '#FEF2F2' : bannerIsGreen ? '#F0FDF4' : COLORS.surfaceAlt;
+  const bestProfit = formatProfits?.length > 0 ? Math.max(...formatProfits) : null;
+  const statusLabel = marginStatus ? marginStatusLabel(marginStatus, bestProfit) : null;
 
   return (
     <View style={styles.container}>
@@ -71,7 +72,7 @@ export function RecipeCostSummary({
       {showBanner && (
         <View style={[
           styles.profitBanner,
-          { borderColor: bannerBorderColor },
+          { borderColor: bannerBorderColor, backgroundColor: bannerBackground },
           displayIsRange && styles.profitBannerStacked,
         ]}>
           <Text style={styles.profitBannerLabel}>
@@ -94,7 +95,7 @@ export function RecipeCostSummary({
           <View style={styles.divider} />
           <View style={[styles.row, fcpIsRange && styles.foodCostRow]}>
             <View style={styles.rowLeft}>
-              <Text style={styles.rowLabel}>Food Cost %</Text>
+              <Text style={styles.rowLabel}>Food cost %</Text>
               {!fcpIsRange && sellingFormatLabel != null && (
                 <Text style={styles.rowSubLabel}>based on {sellingFormatLabel}</Text>
               )}
@@ -109,7 +110,7 @@ export function RecipeCostSummary({
                 </Text>
                 {marginStatus && (
                   <Badge
-                    label={MARGIN_LABELS[marginStatus]}
+                    label={statusLabel}
                     variant={marginStatus}
                     style={styles.foodCostBadge}
                   />
@@ -119,7 +120,7 @@ export function RecipeCostSummary({
               <View style={styles.rowRight}>
                 <Text style={styles.rowValue}>{formatFoodCostPercent(displayFcp)}</Text>
                 {marginStatus && (
-                  <Badge label={MARGIN_LABELS[marginStatus]} variant={marginStatus} style={styles.badge} />
+                  <Badge label={statusLabel} variant={marginStatus} style={styles.badge} />
                 )}
               </View>
             )}
@@ -219,7 +220,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: SPACING.sm,
-    backgroundColor: '#F0FDF4',
     borderRadius: RADIUS.md,
     borderWidth: 1.5,
     padding: SPACING.md,
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   },
   profitBannerStacked: {
     flexDirection: 'column',
-    alignItems: 'stretch',
+    alignItems: 'center',
   },
   profitBannerLabel: {
     fontSize: FONT_SIZE.sm,
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
   },
   profitBannerValueStacked: {
     fontSize: FONT_SIZE.lg,
-    textAlign: 'left',
+    textAlign: 'center',
   },
   badge: {
     marginLeft: SPACING.xs,
