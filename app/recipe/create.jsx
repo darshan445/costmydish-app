@@ -2046,7 +2046,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                     style={styles.textInput}
                     value={newIngName}
                     onChangeText={(v) => { setNewIngName(v); setNewIngErrors((e) => ({ ...e, name: undefined })); }}
-                    placeholder="e.g. Butter, Flour..."
+                    placeholder="One ingredient (e.g. Butter)"
                     placeholderTextColor={COLORS.textTertiary}
                     autoCapitalize="words"
                     onFocus={() => setIngSkipKeyboardLift(true)}

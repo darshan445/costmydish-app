@@ -132,7 +132,7 @@ function IngredientDraftCard({
             style={styles.textInput}
             value={card.name}
             onChangeText={(v) => onChange('name', v)}
-            placeholder="e.g. Butter, Flour..."
+            placeholder="One ingredient (e.g. Butter)"
             placeholderTextColor={COLORS.textTertiary}
             autoCapitalize="words"
           />
