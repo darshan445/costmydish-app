@@ -10,13 +10,13 @@ const FEATURES = [
     icon: '⚖️',
   },
   {
-    title: 'Live recipe costing',
-    description: 'Add ingredients to a recipe and watch total cost, cost per unit, food cost %, and profit update as you type.',
+    title: 'One-screen costing',
+    description: 'Type the dish, add ingredients, and watch cost per serving and a suggested price update as you type — no multi-step forms.',
     icon: '📊',
   },
   {
-    title: 'Multiple selling formats',
-    description: 'Sell by the slice, whole pizza, portion, or custom format. Each format gets its own margin and suggested price.',
+    title: 'More than one way to sell',
+    description: 'Sell by the slice, whole cake, plate, box or dozen. Each way to sell gets its own price, food cost % and profit.',
     icon: '🍕',
   },
   {

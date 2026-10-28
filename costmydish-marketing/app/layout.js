@@ -58,6 +58,7 @@ export const metadata = {
     ...defaultMetadata.alternates,
     languages: buildLanguageAlternates('/'),
   },
+  itunes: { appId: '6780339569' },
   verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
     ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }
     : {},

@@ -13,6 +13,7 @@ export default function robots() {
           '/reset-password',
           '/update-password',
           '/delete-account',
+          '/get',
         ],
       },
     ],

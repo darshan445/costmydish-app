@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { SEO_LANDING_PAGES } from '@/lib/landing-pages';
 
 export function Footer() {
   return (
@@ -20,19 +21,31 @@ export function Footer() {
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-text-secondary">Product</p>
               <ul className="mt-3 space-y-2 text-sm">
-                <li><a href="/#features" className="text-text-secondary hover:text-primary">Features</a></li>
-                <li><a href="/#how-it-works" className="text-text-secondary hover:text-primary">How it works</a></li>
-                <li><a href="/#pricing" className="text-text-secondary hover:text-primary">Pricing</a></li>
-                <li><a href="/compare" className="text-text-secondary hover:text-primary">Compare</a></li>
+                <li><Link href="/#features" className="text-text-secondary hover:text-primary">Features</Link></li>
+                <li><Link href="/#how-it-works" className="text-text-secondary hover:text-primary">How it works</Link></li>
+                <li><Link href="/#pricing" className="text-text-secondary hover:text-primary">Pricing</Link></li>
+                <li><Link href="/compare" className="text-text-secondary hover:text-primary">Compare</Link></li>
+              </ul>
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-text-secondary">Free calculators</p>
+              <ul className="mt-3 space-y-2 text-sm">
+                {SEO_LANDING_PAGES.filter((page) => page.kind === 'tool').map((page) => (
+                  <li key={page.slug}>
+                    <Link href={`/${page.slug}`} className="text-text-secondary hover:text-primary">{page.navLabel}</Link>
+                  </li>
+                ))}
               </ul>
             </div>
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-text-secondary">Guides</p>
               <ul className="mt-3 space-y-2 text-sm">
-                <li><a href="/food-cost-calculator" className="text-text-secondary hover:text-primary">Food cost calculator</a></li>
-                <li><a href="/recipe-cost-calculator" className="text-text-secondary hover:text-primary">Recipe cost calculator</a></li>
-                <li><a href="/bakery-pricing-calculator" className="text-text-secondary hover:text-primary">Bakery pricing</a></li>
-                <li><a href="/restaurant-menu-costing" className="text-text-secondary hover:text-primary">Restaurant menu costing</a></li>
+                {SEO_LANDING_PAGES.filter((page) => page.kind === 'guide').map((page) => (
+                  <li key={page.slug}>
+                    <Link href={`/${page.slug}`} className="text-text-secondary hover:text-primary">{page.navLabel}</Link>
+                  </li>
+                ))}
+                <li><Link href="/pricing" className="font-semibold text-text-secondary hover:text-primary">Pricing guides (cupcakes, pizza, lattes…)</Link></li>
               </ul>
             </div>
             <div>

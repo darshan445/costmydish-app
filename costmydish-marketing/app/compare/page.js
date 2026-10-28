@@ -23,7 +23,7 @@ const COMPARISONS = [
     price: 'From ~$75/mo',
     bestFor: 'Multi-location ops with invoice integrations',
     downsides: ['Expensive for independents', 'Browser-based, slow on tablet', 'Steep onboarding'],
-    costmydish: 'Free tier, 3-step wizard, mobile app, start in minutes',
+    costmydish: 'Free tier, one-screen costing on your phone, first dish in about 2 minutes',
   },
   {
     name: 'xtraCHEF (Toast)',
@@ -44,7 +44,7 @@ const COMPARISONS = [
     price: 'Varies',
     bestFor: 'Specific niches (chefs, bakers)',
     downsides: ['Inconsistent UX', 'Limited free tiers', 'Hard to compare formats'],
-    costmydish: 'Multiple selling formats, clear food cost %, global currency',
+    costmydish: 'More than one way to sell each dish, clear food cost %, any currency',
   },
 ];
 
@@ -94,7 +94,7 @@ export default function ComparePage() {
         </div>
       </div>
 
-      <CtaSection />
+      <CtaSection campaign="compare" />
       <JsonLd
         data={breadcrumbJsonLd([
           { name: 'Home', href: '/' },

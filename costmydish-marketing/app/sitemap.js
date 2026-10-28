@@ -1,4 +1,5 @@
 import { SEO_LANDING_PAGES } from '@/lib/landing-pages';
+import { PRICING_ITEMS } from '@/lib/pricing-items';
 import { siteConfig } from '@/lib/site';
 
 /** @type {import('next').MetadataRoute.Sitemap} */
@@ -15,11 +16,16 @@ export default function sitemap() {
 
   const landingPages = SEO_LANDING_PAGES.map((page) => ({
     path: `/${page.slug}`,
-    priority: 0.95,
-    changeFrequency: 'weekly',
+    priority: page.kind === 'tool' ? 0.95 : 0.85,
+    changeFrequency: page.kind === 'tool' ? 'weekly' : 'monthly',
   }));
 
-  return [...staticPages, ...landingPages].map((page) => ({
+  const pricingPages = [
+    { path: '/pricing', priority: 0.85, changeFrequency: 'monthly' },
+    ...PRICING_ITEMS.map((item) => ({ path: `/pricing/${item.slug}`, priority: 0.8, changeFrequency: 'monthly' })),
+  ];
+
+  return [...staticPages, ...landingPages, ...pricingPages].map((page) => ({
     url: `${siteConfig.url}${page.path}`,
     lastModified,
     changeFrequency: page.changeFrequency,

@@ -1,15 +1,12 @@
 import { SeoLandingPage } from '@/components/SeoLandingPage';
-import { getLandingPage } from '@/lib/landing-pages';
+import { SEO_LANDING_PAGES, getLandingPage } from '@/lib/landing-pages';
 import { buildPageMetadata } from '@/lib/seo';
 import { notFound } from 'next/navigation';
 
+export const dynamicParams = false;
+
 export function generateStaticParams() {
-  return [
-    { slug: 'food-cost-calculator' },
-    { slug: 'recipe-cost-calculator' },
-    { slug: 'bakery-pricing-calculator' },
-    { slug: 'restaurant-menu-costing' },
-  ];
+  return SEO_LANDING_PAGES.map((page) => ({ slug: page.slug }));
 }
 
 export async function generateMetadata({ params }) {

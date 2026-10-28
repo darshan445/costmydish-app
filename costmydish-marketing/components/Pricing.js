@@ -5,10 +5,10 @@ const PLANS = [
     period: 'forever',
     description: 'Try CostMyDish and cost your first recipes.',
     features: [
-      'Up to 5 recipes',
+      'Up to 5 dishes',
       'Up to 20 ingredients',
       'Full cost calculations',
-      'Selling format analysis',
+      'Profit for each way you sell',
       'Margin status badges',
     ],
     cta: 'Get started free',
@@ -21,7 +21,7 @@ const PLANS = [
     annualNote: 'or $39.99/year (~$3.33/mo)',
     description: 'For growing menus and serious home cooks.',
     features: [
-      'Unlimited recipes',
+      'Unlimited dishes',
       'Unlimited ingredients',
       'Ingredient price history',
       'Cloud sync across devices',

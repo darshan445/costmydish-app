@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 
 const NAV = [
+  { href: '/food-cost-calculator', label: 'Free calculator' },
   { href: '/#features', label: 'Features' },
   { href: '/#how-it-works', label: 'How it works' },
   { href: '/#pricing', label: 'Pricing' },
@@ -17,12 +18,12 @@ export function Header() {
           <span className="text-lg font-bold text-text">CostMyDish</span>
         </Link>
 
-        <nav className="hidden items-center gap-8 md:flex">
+        <nav className="hidden items-center gap-6 lg:flex">
           {NAV.map((item) => (
             <a
               key={item.href}
               href={item.href}
-              className="text-sm font-medium text-text-secondary transition hover:text-primary"
+              className="whitespace-nowrap text-sm font-medium text-text-secondary transition hover:text-primary"
             >
               {item.label}
             </a>
@@ -31,7 +32,7 @@ export function Header() {
 
         <a
           href="#download"
-          className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-dark"
+          className="whitespace-nowrap rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-dark"
         >
           Get the app
         </a>

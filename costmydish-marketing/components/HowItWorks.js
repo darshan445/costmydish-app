@@ -1,23 +1,23 @@
 const STEPS = [
   {
     step: '01',
-    title: 'Add your ingredients',
-    description: 'Enter what you buy and what you paid — e.g. flour at $3.99 per 2kg, milk at ₹50 per litre. Optional waste % for trim and spoilage. Works in any currency and any unit.',
+    title: 'Type what you’re making',
+    description: 'Start from Home: “Brownies”, “Chicken biryani”, “Vanilla cake”. Say how many it makes — 12 slices, 24 cookies, 4 plates.',
   },
   {
     step: '02',
-    title: 'Build a recipe',
-    description: 'Pick ingredients from your library, enter quantities and units, and set your target food cost %. See live cost preview as you go.',
+    title: 'Add ingredients with what you paid',
+    description: 'Flour at $3.99 for 2 kg, milk at ₹50 a litre — then how much the dish uses. Optional waste % for trim. Each ingredient is saved to your Library for next time.',
   },
   {
     step: '03',
-    title: 'Add selling formats',
-    description: 'Define how you sell — 8 slices at $3.99 each, or a whole pizza at $14.99, or a food truck combo at $12.99. The app costs per unit and shows profit and food cost % for each format.',
+    title: 'See your cost and a price — live',
+    description: 'Cost per serving and a suggested price update as you type, all on one screen. Enter your own price to see food cost % and profit, then open the full result with a per-ingredient breakdown.',
   },
   {
     step: '04',
-    title: 'Price with confidence',
-    description: 'Use suggested prices, margin badges, and dashboard alerts to keep every dish on target. Update an ingredient price — all recipes refresh instantly.',
+    title: 'Stay on target',
+    description: 'Sell the same dish more than one way (by the slice and whole). Home flags dishes over your target, and when a buy price changes in your Library, every dish updates.',
   },
 ];
 
@@ -28,7 +28,7 @@ export function HowItWorks() {
         <div className="text-center">
           <p className="text-sm font-bold uppercase tracking-wider text-primary">How it works</p>
           <h2 className="mt-2 text-3xl font-extrabold text-text sm:text-4xl">
-            From pantry to profit in four steps
+            From “what does it cost?” to a price in 2 minutes
           </h2>
         </div>
 
@@ -49,7 +49,7 @@ export function HowItWorks() {
         <div className="mt-14 rounded-2xl border border-border bg-primary-dark p-8 text-white sm:p-10">
           <h3 className="text-xl font-bold">Example: Margherita Pizza</h3>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-white/85">
-            Cost flour, sauce, mozzarella, and olive oil → total recipe cost $3.21. Sell 8 slices at $3.99 → 10% food cost, $3.59 profit per slice. Sell a whole pizza at $14.99 → 21% food cost, $11.78 profit. One recipe, multiple formats, full clarity.
+            Cost flour, sauce, mozzarella, and olive oil → total recipe cost $3.21. Sell 8 slices at $3.99 → 10% food cost, $3.59 profit per slice. Sell a whole pizza at $14.99 → 21% food cost, $11.78 profit. One recipe, two ways to sell, full clarity.
           </p>
         </div>
       </div>

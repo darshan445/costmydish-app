@@ -1,7 +1,7 @@
 export const MARKETING_FAQ = [
   {
     q: 'How do I calculate food cost percentage?',
-    a: 'Divide your total ingredient cost by your selling price and multiply by 100. For example, if a pizza costs $3.21 to make and you sell it for $14.99, your food cost percentage is 21.4%. CostMyDish calculates this automatically for every recipe and selling format.',
+    a: 'Divide your total ingredient cost by your selling price and multiply by 100. For example, if a pizza costs $3.21 to make and you sell it for $14.99, your food cost percentage is 21.4%. CostMyDish calculates this automatically for every dish and every way you sell it. You can also try the free food cost calculator on this site.',
   },
   {
     q: 'What is a good food cost percentage for a restaurant?',
@@ -17,7 +17,7 @@ export const MARKETING_FAQ = [
   },
   {
     q: 'Does CostMyDish work for food trucks and caterers?',
-    a: 'Yes. CostMyDish is built for any food business — restaurants, food trucks, caterers, home bakers, and cafés. You can set multiple selling formats per dish, so a food truck selling a combo and individual items can cost both formats from one recipe.',
+    a: 'Yes. CostMyDish is built for any food business — restaurants, food trucks, caterers, home bakers, and cafés. You can add more than one way to sell each dish, so a food truck selling a combo and single items can price both from one recipe.',
   },
   {
     q: 'How is CostMyDish different from meez or xtraCHEF?',
@@ -29,7 +29,7 @@ export const MARKETING_FAQ = [
   },
   {
     q: 'Is CostMyDish free?',
-    a: 'Yes. The free plan gives you 5 dishes and 20 ingredients with full cost calculations, selling format analysis, and margin status badges. Upgrade to Hobbyist ($4.99/mo) for unlimited dishes and ingredients, price history, and cloud sync.',
+    a: 'Yes. The free plan gives you 5 dishes and 20 ingredients with full cost calculations, profit for each way you sell, and margin status badges. Upgrade to Hobbyist ($4.99/mo) for unlimited dishes and ingredients, price history, and cloud sync.',
   },
 ];
 

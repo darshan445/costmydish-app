@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 const PAIN_POINTS = [
   {
     problem: 'Spreadsheets',
@@ -57,7 +59,7 @@ export function CompareSection() {
         </div>
 
         <p className="mt-6 text-center text-sm text-text-secondary">
-          <a href="/compare" className="font-semibold text-primary underline">See full comparison →</a>
+          <Link href="/compare" className="font-semibold text-primary underline">See full comparison →</Link>
         </p>
       </div>
     </section>

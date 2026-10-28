@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import Link from 'next/link';
 
 export function Hero() {
   return (
@@ -16,7 +17,7 @@ export function Hero() {
             <span className="block text-primary">for Chefs, Bakers &amp; Restaurants</span>
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-text-secondary">
-            Free food costing calculator for chefs, home bakers, caterers and food trucks. Build your ingredient library, cost recipes in real time, and set selling prices that hit your food cost % target.
+            Type what you’re making, add ingredients with what you paid, and see your cost per serving and a selling price in about 2 minutes. For home bakers, cafés, caterers, food trucks and restaurants.
           </p>
           <div className="mt-8 flex flex-wrap gap-4">
             <a
@@ -25,12 +26,12 @@ export function Hero() {
             >
               Download free
             </a>
-            <a
-              href="#how-it-works"
+            <Link
+              href="/food-cost-calculator"
               className="rounded-full border border-border bg-surface px-6 py-3 text-sm font-bold text-text transition hover:border-primary/30"
             >
-              See how it works
-            </a>
+              Try the calculator online
+            </Link>
           </div>
         </div>
 
