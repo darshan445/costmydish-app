@@ -15,7 +15,7 @@ import useRecipeStore from '../../stores/recipeStore';
 import useSettingsStore from '../../stores/settingsStore';
 import { formatFoodCostPercent } from '../../utils/format';
 import { normalizeFoodCostPercent } from '../../lib/calculations';
-import { trackFoodCost } from '../../lib/foodCostAnalytics';
+import { track, AnalyticsEvents } from '../../lib/analytics';
 import { DISH_STARTERS } from '../../constants/dishStarters';
 import { getUniqueSellingUnitOptions } from '../../constants/units';
 import { FOOD_COST_COPY as C } from '../../constants/copy';
@@ -44,8 +44,18 @@ export default function HomeScreen() {
   }, [sellingUnits]);
 
   const handleStart = ({ method, chip, ...prefill }) => {
-    trackFoodCost('home_start', { method, chip: chip ?? null });
+    track(AnalyticsEvents.HOME_START_SUBMITTED, {
+      method,
+      chip: chip ?? null,
+      has_yield: Boolean(prefill.yieldQty),
+      unit: prefill.unit ?? null,
+    });
     startCalculate({ source: 'home_start', prefill });
+  };
+
+  const openDish = (recipeId, from) => {
+    track(AnalyticsEvents.DISH_OPENED, { from });
+    router.push(`/recipe/${recipeId}`);
   };
 
   const greeting = profile?.full_name ? `Hi, ${profile.full_name.split(' ')[0]} 👋` : 'Welcome 👋';
@@ -107,7 +117,7 @@ export default function HomeScreen() {
           <TouchableOpacity
             style={styles.sampleLink}
             onPress={() => {
-              trackFoodCost('sample_result_opened', {});
+              track(AnalyticsEvents.HOME_SAMPLE_OPENED);
               router.push('/recipe/sample');
             }}
             activeOpacity={0.75}
@@ -169,7 +179,7 @@ export default function HomeScreen() {
                     <TouchableOpacity
                       key={r.id}
                       style={styles.attentionCard}
-                      onPress={() => router.push(`/recipe/${r.id}`)}
+                      onPress={() => openDish(r.id, 'home_attention')}
                       activeOpacity={0.75}
                     >
                       <View style={styles.attentionLeft}>
@@ -208,13 +218,13 @@ export default function HomeScreen() {
             recipe={item}
             costSummary={costSummaries[item.id] ?? null}
             currencySymbol={symbol}
-            onPress={() => router.push(`/recipe/${item.id}`)}
+            onPress={() => openDish(item.id, 'home_recent')}
           />
         )}
         ListFooterComponent={
           <TouchableOpacity
             style={styles.createCta}
-            onPress={() => startCalculate({ source: 'home' })}
+            onPress={() => startCalculate({ source: 'home_footer' })}
             activeOpacity={0.7}
           >
             <Ionicons

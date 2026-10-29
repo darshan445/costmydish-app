@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +30,15 @@ export default function IngredientsScreen() {
   const [showPaywall, setShowPaywall] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const searchTracked = useRef(false);
+
+  const changeSearch = (value) => {
+    setSearch(value);
+    if (!searchTracked.current && value.trim()) {
+      searchTracked.current = true;
+      track(AnalyticsEvents.LIBRARY_SEARCHED, { ingredient_count: ingredients.length });
+    }
+  };
 
   const filtered = ingredients.filter((i) => {
     const q = search.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -37,14 +46,15 @@ export default function IngredientsScreen() {
     return i.name.toLowerCase().trim().includes(q);
   });
 
-  const handleAdd = async () => {
+  const handleAdd = async (source) => {
     const libraryCount = await ensureIngredientCount();
     track(AnalyticsEvents.INGREDIENT_ADD_TAPPED, {
+      source,
       ingredient_count: libraryCount,
       at_limit: !canAddIngredient(libraryCount),
     });
     if (!canAddIngredient(libraryCount)) {
-      track(AnalyticsEvents.PAYWALL_VIEWED, { reason: 'ingredient', source: 'ingredients_tab' });
+      track(AnalyticsEvents.PAYWALL_TRIGGERED, { reason: 'ingredient', source: 'library_tab' });
       setShowPaywall(true);
       return;
     }
@@ -55,6 +65,7 @@ export default function IngredientsScreen() {
     if (!pendingDelete) return;
     setDeleting(true);
     await deleteIngredient(pendingDelete.id);
+    track(AnalyticsEvents.INGREDIENT_DELETED, { ingredient_count_after: Math.max(0, ingredients.length - 1) });
     setDeleting(false);
     setPendingDelete(null);
   };
@@ -73,7 +84,7 @@ export default function IngredientsScreen() {
               : `${ingredients.length} item${ingredients.length === 1 ? '' : 's'} · ${C.library.subtitle}`}
           </Text>
         </View>
-        <TouchableOpacity onPress={handleAdd} style={styles.addBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity onPress={() => handleAdd('library_header')} style={styles.addBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="add-circle" size={32} color={COLORS.primary} />
         </TouchableOpacity>
       </View>
@@ -85,7 +96,7 @@ export default function IngredientsScreen() {
           placeholder="Search library…"
           placeholderTextColor={COLORS.textTertiary}
           value={search}
-          onChangeText={setSearch}
+          onChangeText={changeSearch}
         />
         {search.length > 0 && (
           <TouchableOpacity onPress={() => setSearch('')}>
@@ -114,8 +125,14 @@ export default function IngredientsScreen() {
             <IngredientCard
               ingredient={item}
               currencySymbol={symbol}
-              onPress={() => router.push(`/ingredient/edit/${item.id}`)}
-              onDelete={() => setPendingDelete({ id: item.id, name: item.name })}
+              onPress={() => {
+                track(AnalyticsEvents.INGREDIENT_EDIT_OPENED, { source: 'library_tab' });
+                router.push(`/ingredient/edit/${item.id}`);
+              }}
+              onDelete={() => {
+                track(AnalyticsEvents.INGREDIENT_DELETE_TAPPED);
+                setPendingDelete({ id: item.id, name: item.name });
+              }}
             />
           )}
           ListEmptyComponent={
@@ -127,13 +144,13 @@ export default function IngredientsScreen() {
                 title={C.library.emptyTitle}
                 description={C.library.emptyDescription}
                 actionLabel="Add to library"
-                onAction={handleAdd}
+                onAction={() => handleAdd('library_empty')}
               />
             )
           }
           ListFooterComponent={
             filtered.length > 0 && search.length === 0 ? (
-              <TouchableOpacity style={styles.ctaFooter} onPress={handleAdd} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.ctaFooter} onPress={() => handleAdd('library_footer')} activeOpacity={0.7}>
                 <Ionicons name="add-circle-outline" size={18} color={COLORS.primary} style={{ marginRight: SPACING.xs }} />
                 <Text style={styles.ctaText}>Add another to library</Text>
               </TouchableOpacity>

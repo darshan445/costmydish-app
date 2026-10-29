@@ -78,7 +78,9 @@ export function AnalyticsBridge() {
 
   useEffect(() => {
     if (!pathname) return;
-    trackScreen(pathname, {
+    const screenName = segments.filter((s) => !s.startsWith('(')).join('/') || 'home';
+    trackScreen(screenName, {
+      path: pathname,
       route_segments: segments.join('/'),
     });
   }, [pathname, segments.join('/')]);

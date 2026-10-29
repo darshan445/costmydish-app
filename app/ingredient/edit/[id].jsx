@@ -217,7 +217,7 @@ export default function EditIngredientScreen() {
                     style={styles.textInput}
                     value={value}
                     onChangeText={onChange}
-                    placeholder="One ingredient (e.g. Butter)"
+                    placeholder="e.g. Butter"
                     placeholderTextColor={COLORS.textTertiary}
                     autoCapitalize="words"
                   />

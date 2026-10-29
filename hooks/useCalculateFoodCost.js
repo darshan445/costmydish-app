@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useSubscription } from './useSubscription';
 import useRecipeStore from '../stores/recipeStore';
-import { trackFoodCost } from '../lib/foodCostAnalytics';
+import { track, AnalyticsEvents } from '../lib/analytics';
+import { setDishEntrySource } from '../lib/foodCostAnalytics';
 
 /**
  * Shared entry point for "Calculate food cost" (Home, Dishes, FAB).
  * Always gates free plan before opening the editor.
  * Waits for hydrated recipe count so an empty in-memory [] cannot bypass the 5-dish limit.
+ * `source` names the exact button (home_start, home_footer, dishes_header, dishes_empty, dishes_footer, fab).
  */
 export function useCalculateFoodCost() {
   const router = useRouter();
@@ -19,13 +21,16 @@ export function useCalculateFoodCost() {
     const source = options?.source ?? 'cta';
 
     const recipeCount = await ensureRecipeCount();
-    if (!canCreateRecipe(recipeCount)) {
-      trackFoodCost('paywall_shown', { reason: 'dish_limit', recipeCount });
+    const allowed = canCreateRecipe(recipeCount);
+    track(AnalyticsEvents.DISH_START_TAPPED, { source, recipe_count: recipeCount, allowed });
+    if (!allowed) {
+      track(AnalyticsEvents.DISH_START_BLOCKED, { source, recipe_count: recipeCount, reason: 'dish_limit' });
+      track(AnalyticsEvents.PAYWALL_TRIGGERED, { reason: 'recipe', source });
       setShowPaywall(true);
       return;
     }
 
-    trackFoodCost('wizard_started', { source });
+    setDishEntrySource(source);
     const prefill = options?.prefill;
     if (prefill?.name) {
       router.push({

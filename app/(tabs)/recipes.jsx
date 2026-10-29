@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
@@ -13,6 +13,7 @@ import { useRecipes } from '../../hooks/useRecipes';
 import { useCalculateFoodCost } from '../../hooks/useCalculateFoodCost';
 import useSettingsStore from '../../stores/settingsStore';
 import useRecipeStore from '../../stores/recipeStore';
+import { track, AnalyticsEvents } from '../../lib/analytics';
 import { FOOD_COST_COPY as C } from '../../constants/copy';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
@@ -45,6 +46,20 @@ export default function DishesScreen() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const searchTracked = useRef(false);
+
+  const changeSearch = (value) => {
+    setSearch(value);
+    if (!searchTracked.current && value.trim()) {
+      searchTracked.current = true;
+      track(AnalyticsEvents.DISHES_SEARCHED, { dish_count: recipes.length });
+    }
+  };
+
+  const changeFilter = (key) => {
+    if (key !== statusFilter) track(AnalyticsEvents.DISHES_FILTER_CHANGED, { filter: key });
+    setStatusFilter(key);
+  };
 
   const showSkeleton = !hydrated && !error;
   const showLoadError = !hydrated && Boolean(error);
@@ -73,7 +88,7 @@ export default function DishesScreen() {
           <Text style={styles.subtitle}>{C.dishes.subtitle}</Text>
         </View>
         <TouchableOpacity
-          onPress={() => startCalculate({ source: 'dishes' })}
+          onPress={() => startCalculate({ source: 'dishes_header' })}
           style={styles.addBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityLabel={C.action.calculateA11y}
@@ -99,7 +114,7 @@ export default function DishesScreen() {
           title={C.dishes.emptyTitle}
           description={C.dishes.emptyDescription}
           actionLabel={C.action.calculate}
-          onAction={() => startCalculate({ source: 'dishes' })}
+          onAction={() => startCalculate({ source: 'dishes_empty' })}
         />
       ) : (
         <>
@@ -111,7 +126,7 @@ export default function DishesScreen() {
                 placeholder="Search dishes…"
                 placeholderTextColor={COLORS.textTertiary}
                 value={search}
-                onChangeText={setSearch}
+                onChangeText={changeSearch}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
@@ -129,7 +144,7 @@ export default function DishesScreen() {
                   <TouchableOpacity
                     key={f.key}
                     style={[styles.chip, active && styles.chipActive]}
-                    onPress={() => setStatusFilter(f.key)}
+                    onPress={() => changeFilter(f.key)}
                     activeOpacity={0.75}
                   >
                     <Text style={[styles.chipText, active && styles.chipTextActive]}>{f.label}</Text>
@@ -149,7 +164,10 @@ export default function DishesScreen() {
                 recipe={item}
                 costSummary={costSummaries[item.id] ?? null}
                 currencySymbol={symbol}
-                onPress={() => router.push(`/recipe/${item.id}`)}
+                onPress={() => {
+                  track(AnalyticsEvents.DISH_OPENED, { from: 'dishes_list' });
+                  router.push(`/recipe/${item.id}`);
+                }}
               />
             )}
             ListEmptyComponent={
@@ -171,7 +189,7 @@ export default function DishesScreen() {
               filteredDishes.length > 0 && !search && statusFilter === 'all' ? (
                 <TouchableOpacity
                   style={styles.ctaFooter}
-                  onPress={() => startCalculate({ source: 'dishes' })}
+                  onPress={() => startCalculate({ source: 'dishes_footer' })}
                   activeOpacity={0.7}
                 >
                   <Ionicons

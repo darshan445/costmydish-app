@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
@@ -132,7 +132,7 @@ function IngredientDraftCard({
             style={styles.textInput}
             value={card.name}
             onChangeText={(v) => onChange('name', v)}
-            placeholder="One ingredient (e.g. Butter)"
+            placeholder="e.g. Butter"
             placeholderTextColor={COLORS.textTertiary}
             autoCapitalize="words"
           />
@@ -262,14 +262,24 @@ export default function CreateIngredientScreen() {
     [pickerUnitSystem],
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      track(AnalyticsEvents.INGREDIENT_CREATE_OPENED, {
-        source: isFromRecipe ? 'recipe_wizard' : 'library',
-        ingredient_count: ingredients.length,
+  const source = isFromRecipe ? 'dish' : 'library';
+  const savedRef = useRef(false);
+  const cardsRef = useRef(cards);
+  cardsRef.current = cards;
+
+  useEffect(() => {
+    track(AnalyticsEvents.INGREDIENT_CREATE_OPENED, { source, ingredient_count: ingredients.length });
+    return () => {
+      const current = cardsRef.current;
+      track(AnalyticsEvents.INGREDIENT_CREATE_LEFT, {
+        source,
+        saved: savedRef.current,
+        card_count: current.length,
+        filled_count: current.filter(isCardFilled).length,
+        started_typing: current.some((c) => String(c.name ?? '').trim() || String(c.purchase_price ?? '').trim()),
       });
-    }, [isFromRecipe, ingredients.length]),
-  );
+    };
+  }, []);
 
   const filledCount = cards.filter(isCardFilled).length;
   const unitPickerCard = cards.find((c) => c.draftId === unitPickerDraftId);
@@ -302,6 +312,7 @@ export default function CreateIngredientScreen() {
   };
 
   const addCard = () => {
+    track(AnalyticsEvents.INGREDIENT_CARD_ADDED, { card_count_after: cards.length + 1, source });
     setCards((prev) => [...prev, createEmptyCard(defaultPurchaseUnit)]);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   };
@@ -338,6 +349,10 @@ export default function CreateIngredientScreen() {
     }
 
     if (Object.keys(nextErrors).length > 0) {
+      track(AnalyticsEvents.INGREDIENT_CREATE_VALIDATION_FAILED, {
+        source,
+        fields: [...new Set(Object.values(nextErrors).flatMap((e) => Object.keys(e)))],
+      });
       setCardErrors(nextErrors);
       Alert.alert('Check your ingredients', 'Fix the highlighted fields before saving.');
       return;
@@ -345,7 +360,7 @@ export default function CreateIngredientScreen() {
 
     const libraryCount = await ensureIngredientCount();
     if (!canAddIngredient(libraryCount + itemsToSave.length - 1)) {
-      track(AnalyticsEvents.PAYWALL_VIEWED, { reason: 'ingredient', source: 'ingredient_create' });
+      track(AnalyticsEvents.PAYWALL_TRIGGERED, { reason: 'ingredient', source: 'ingredient_create' });
       setShowPaywall(true);
       return;
     }
@@ -364,6 +379,7 @@ export default function CreateIngredientScreen() {
 
     if (saved.length === 0) {
       track(AnalyticsEvents.INGREDIENT_CREATE_FAILED, {
+        source,
         count: itemsToSave.length,
         message: failures[0]?.error ?? 'unknown',
       });
@@ -371,10 +387,12 @@ export default function CreateIngredientScreen() {
       return;
     }
 
+    savedRef.current = true;
     track(AnalyticsEvents.INGREDIENT_CREATED, {
       count: saved.length,
       failed_count: failures.length,
-      source: isFromRecipe ? 'recipe_wizard' : 'library',
+      source,
+      name_has_comma_count: saved.filter((i) => String(i.name ?? '').includes(',')).length,
       total_ingredients_after: ingredients.length + saved.length,
     });
 

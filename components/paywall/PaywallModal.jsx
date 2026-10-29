@@ -110,6 +110,13 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upg
   };
 
   const handleSubscribe = async () => {
+    track(AnalyticsEvents.PAYWALL_SUBSCRIBE_TAPPED, {
+      reason,
+      mode,
+      billing: isAnnual ? 'annual' : 'monthly',
+      packages_loaded: Boolean(selectedPkg),
+      same_plan: Boolean(isSamePlan),
+    });
     if (isSamePlan) return;
 
     if (!selectedPkg) {

@@ -15,7 +15,8 @@ import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { useRecipeCost } from '../../hooks/useRecipeCost';
 import { calculateDishSummary, calculateSellingFormatMetrics, roundPriceUp } from '../../lib/calculations';
 import { ReviewPromptController } from '../../components/review/ReviewPromptController';
-import { trackFoodCost } from '../../lib/foodCostAnalytics';
+import { track, AnalyticsEvents } from '../../lib/analytics';
+import { setDishEntrySource } from '../../lib/foodCostAnalytics';
 import { useSubscription } from '../../hooks/useSubscription';
 import useRecipeStore from '../../stores/recipeStore';
 import useSettingsStore from '../../stores/settingsStore';
@@ -92,6 +93,13 @@ export default function RecipeDetailScreen({ sampleRecipe = null, sampleCurrency
     await waitForDishSave();
     const { data, error: err } = await fetchRecipeWithIngredients(id);
     if (data) {
+      if (!hasDetailRef.current) {
+        track(AnalyticsEvents.DISH_DETAIL_VIEWED, {
+          just_saved: justSaved,
+          ingredient_count: data.recipe_ingredients?.length ?? 0,
+          selling_format_count: data.selling_formats?.length ?? 0,
+        });
+      }
       hasDetailRef.current = true;
       setRecipe(data);
       setError(null);
@@ -161,6 +169,8 @@ export default function RecipeDetailScreen({ sampleRecipe = null, sampleCurrency
     && !recipe?.is_sample;
 
   const openEdit = () => {
+    track(AnalyticsEvents.DISH_EDIT_TAPPED);
+    setDishEntrySource('dish_detail');
     router.push({ pathname: '/recipe/edit/[id]', params: { id } });
   };
 
@@ -193,9 +203,10 @@ export default function RecipeDetailScreen({ sampleRecipe = null, sampleCurrency
       return;
     }
     if (formatSheet?.mode === 'add') {
-      trackFoodCost('selling_format_added', {
-        selling_format_count: (recipe?.selling_formats?.length ?? 0) + 1,
+      track(AnalyticsEvents.DISH_SELLING_FORMAT_ADDED, {
+        format_count_after: (recipe?.selling_formats?.length ?? 0) + 1,
         unit: values.selling_unit_name,
+        source: 'dish_detail',
       });
     }
     setFormatSheet(null);
@@ -212,6 +223,7 @@ export default function RecipeDetailScreen({ sampleRecipe = null, sampleCurrency
       Alert.alert(deleteError);
       return;
     }
+    track(AnalyticsEvents.DISH_SELLING_FORMAT_REMOVED, { source: 'dish_detail' });
     setFormatSheet(null);
     loadRecipe();
   };
@@ -220,6 +232,7 @@ export default function RecipeDetailScreen({ sampleRecipe = null, sampleCurrency
     setDeleting(true);
     try {
       await deleteRecipe(id);
+      track(AnalyticsEvents.DISH_DELETED, { ingredient_count: recipe?.recipe_ingredients?.length ?? 0 });
       setShowDeleteConfirm(false);
       router.back();
     } finally {

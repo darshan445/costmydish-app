@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { parsePositiveNumber } from '../../lib/calculations';
+import { track, AnalyticsEvents } from '../../lib/analytics';
 import { FOOD_COST_COPY as C } from '../../constants/copy';
 import { COLORS, FONT_SIZE, RADIUS, SHADOW, SPACING } from '../../constants/theme';
 
@@ -17,12 +18,30 @@ export function DishStartInput({ starters, unitOptions, onStart }) {
   const [unit, setUnit] = useState('serving');
   const [pickedChip, setPickedChip] = useState(null);
   const [showUnitPicker, setShowUnitPicker] = useState(false);
+  const tracked = useRef({ name: false, yield: false });
 
   const trimmed = name.replace(/\s+/g, ' ').trim();
   const yieldInvalid = yieldQty.trim() !== '' && parsePositiveNumber(yieldQty) == null;
   const unitLabel = unitOptions.find((u) => u.value === unit)?.label ?? unit;
 
+  const changeName = (value) => {
+    setName(value);
+    if (!tracked.current.name && value.trim()) {
+      tracked.current.name = true;
+      track(AnalyticsEvents.HOME_START_NAME_TYPED);
+    }
+  };
+
+  const changeYield = (value) => {
+    setYieldQty(value);
+    if (!tracked.current.yield && value.trim()) {
+      tracked.current.yield = true;
+      track(AnalyticsEvents.HOME_START_YIELD_ENTERED);
+    }
+  };
+
   const pickStarter = (starter) => {
+    track(AnalyticsEvents.HOME_START_CHIP_TAPPED, { chip: starter.key });
     setName(starter.label);
     if (unitOptions.some((u) => u.value === starter.unit)) setUnit(starter.unit);
     setPickedChip(starter.key);
@@ -45,7 +64,7 @@ export function DishStartInput({ starters, unitOptions, onStart }) {
       <TextInput
         style={styles.input}
         value={name}
-        onChangeText={setName}
+        onChangeText={changeName}
         placeholder={C.home.startPlaceholder}
         placeholderTextColor={COLORS.textTertiary}
         autoCapitalize="words"
@@ -83,7 +102,7 @@ export function DishStartInput({ starters, unitOptions, onStart }) {
           <TextInput
             style={[styles.input, yieldInvalid && styles.inputError]}
             value={yieldQty}
-            onChangeText={setYieldQty}
+            onChangeText={changeYield}
             placeholder={C.wizard.yieldPlaceholder}
             placeholderTextColor={COLORS.textTertiary}
             keyboardType="decimal-pad"
@@ -129,7 +148,11 @@ export function DishStartInput({ starters, unitOptions, onStart }) {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.listRow}
-              onPress={() => { setUnit(item.value); setShowUnitPicker(false); }}
+              onPress={() => {
+                if (item.value !== unit) track(AnalyticsEvents.HOME_START_UNIT_CHANGED, { unit: item.value });
+                setUnit(item.value);
+                setShowUnitPicker(false);
+              }}
             >
               <Text style={styles.listRowText}>{item.label}</Text>
               {unit === item.value ? <Ionicons name="checkmark" size={18} color={COLORS.primary} /> : null}

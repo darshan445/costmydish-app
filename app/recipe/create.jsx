@@ -25,7 +25,9 @@ import {
   parsePositiveNumber,
 } from '../../lib/calculations';
 import { track, AnalyticsEvents } from '../../lib/analytics';
-import { trackFoodCost } from '../../lib/foodCostAnalytics';
+import {
+  endDishSession, getDishSessionLastAction, setDishSessionRecipeId, startDishSession, trackDish,
+} from '../../lib/foodCostAnalytics';
 import { supabase } from '../../lib/supabase';
 import {
   consumePendingAddToDishIngredientIds,
@@ -264,6 +266,17 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
   const saveQueuedRef = useRef(false);
   /** Last autosave failed — shown so the owner can retry. */
   const [saveFailed, setSaveFailed] = useState(false);
+  const autosaveFailedRef = useRef(false);
+  /** Owner tapped Save dish and it went through */
+  const savedTappedRef = useRef(false);
+  /** Values on open — dish_name_entered etc. fire once the owner changes them */
+  const fieldBaselineRef = useRef(null);
+  const fieldTrackedRef = useRef({});
+  /** Per opening of the ingredient sheet: what the owner did before closing it */
+  const ingSheetTrackRef = useRef({ added: 0, filled: new Set(), searched: false });
+  const resetIngSheetTrack = () => {
+    ingSheetTrackRef.current = { added: 0, filled: new Set(), searched: false };
+  };
 
   const { control, handleSubmit, watch, reset, formState: { errors } } = useForm({
     defaultValues: {
@@ -339,7 +352,11 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
         setIngredientError(false);
         setPageLoading(false);
         markLoaded();
-        trackFoodCost('editor_opened', { source: 'edit', recipeId });
+        startDishSession({ mode: 'edit', recipeId });
+        trackDish(AnalyticsEvents.DISH_EDITOR_OPENED, {
+          ingredient_count: data.recipe_ingredients?.length ?? 0,
+          selling_format_count: formats.length,
+        });
         return;
       }
 
@@ -354,7 +371,13 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
         if (prefillUnit) setYieldUnitChoice(prefillUnit);
       }
 
-      trackFoodCost('editor_opened', { source: 'new' });
+      startDishSession({ mode: 'new' });
+      trackDish(AnalyticsEvents.DISH_EDITOR_OPENED, {
+        prefilled_name: Boolean(prefillName),
+        prefilled_yield: parsePositiveNumber(firstParam(prefillYieldParam)) != null,
+        prefilled_unit: firstParam(prefillUnitParam),
+        library_count: ingredients.length,
+      });
       markLoaded();
     })();
     return () => { cancelled = true; };
@@ -573,9 +596,9 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
 
   const openPriceHistoryFromForm = () => {
     if (!canViewPriceHistory) {
-      track(AnalyticsEvents.PAYWALL_VIEWED, {
+      track(AnalyticsEvents.PAYWALL_TRIGGERED, {
         reason: 'priceHistory',
-        source: 'recipe_wizard_inline',
+        source: 'dish_ingredient_form',
       });
       setPaywallReason('priceHistory');
       showPaywallOverIngSheet();
@@ -605,7 +628,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
   };
 
   const openCreateIngredient = () => {
-    trackFoodCost('add_to_library_tapped', { flow: 'inline' });
+    trackDish(AnalyticsEvents.DISH_NEW_INGREDIENT_FORM_OPENED, { trigger: 'picker_button' });
     resetNewIngredientForm();
     setIngCreateOnly(false);
     setIngFormMode('new');
@@ -618,7 +641,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
   };
 
   const openAddIngSheet = () => {
-    trackFoodCost('ingredient_picker_opened', { ingredient_count: recipeIngredients.length });
+    resetIngSheetTrack();
     setIngSheetIngredient(null);
     setIngSheetQty('');
     setIngSheetUnit('');
@@ -629,12 +652,17 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
     setIngSearch('');
     setIngredientError(false);
     const leftover = ingredients.filter((i) => !addedIds.has(i.id));
+    trackDish(AnalyticsEvents.DISH_ADD_INGREDIENT_TAPPED, {
+      ingredient_count: recipeIngredients.length,
+      library_count: ingredients.length,
+      opens: leftover.length === 0 ? 'new_form' : 'library_list',
+    });
     if (leftover.length === 0) {
       resetNewIngredientForm();
       setIngCreateOnly(true);
       setIngSheetStep('create');
-      trackFoodCost('add_to_library_tapped', {
-        flow: ingredients.length === 0 ? 'inline_empty_library' : 'inline_all_used',
+      trackDish(AnalyticsEvents.DISH_NEW_INGREDIENT_FORM_OPENED, {
+        trigger: ingredients.length === 0 ? 'empty_library' : 'all_used',
       });
     } else {
       setIngCreateOnly(false);
@@ -685,17 +713,18 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
     useCallback(() => {
       const pendingIds = consumePendingAddToDishIngredientIds();
       if (pendingIds.length > 0) {
-        trackFoodCost('returned_from_library', {
+        trackDish(AnalyticsEvents.DISH_RETURNED_FROM_LIBRARY, {
           pending_count: pendingIds.length,
           flow: 'configure_saved',
         });
+        resetIngSheetTrack();
         reopenIngredientPickerRef.current = false;
         startAddToDishQueue(pendingIds);
         return;
       }
       if (reopenIngredientPickerRef.current) {
         reopenIngredientPickerRef.current = false;
-        trackFoodCost('returned_from_library', { flow: 'picker' });
+        trackDish(AnalyticsEvents.DISH_RETURNED_FROM_LIBRARY, { flow: 'picker' });
         openAddIngSheetRef.current();
       }
     }, [startAddToDishQueue])
@@ -749,6 +778,10 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
     }
 
     if (Object.keys(errors).length > 0) {
+      trackDish(AnalyticsEvents.DISH_INGREDIENT_VALIDATION_FAILED, {
+        fields: Object.keys(errors),
+        form_mode: ingFormMode,
+      });
       setNewIngErrors(errors);
       return;
     }
@@ -757,6 +790,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
     if (!isExisting) {
       const libraryCount = await ensureIngredientCount();
       if (!canAddIngredient(libraryCount)) {
+        track(AnalyticsEvents.PAYWALL_TRIGGERED, { reason: 'ingredient', source: 'dish_ingredient_form' });
         setPaywallReason('ingredient');
         showPaywallOverIngSheet();
         return;
@@ -799,7 +833,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
           saved = data;
           track(AnalyticsEvents.INGREDIENT_UPDATED, {
             price_changed: baseline ? price !== baseline.purchase_price : true,
-            source: 'recipe_wizard_inline',
+            source: 'dish_ingredient_form',
           });
           // Refresh history so the sheet reflects the new change
           if (canViewPriceHistory && baseline && price !== baseline.purchase_price) {
@@ -824,7 +858,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
           track(AnalyticsEvents.INGREDIENT_CREATE_FAILED, {
             count: 1,
             message: error ?? 'unknown',
-            source: 'recipe_wizard_inline',
+            source: 'dish_ingredient_form',
           });
           Alert.alert('Could not save', typeof error === 'string' ? error : 'Please try again.');
           return;
@@ -834,7 +868,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
         track(AnalyticsEvents.INGREDIENT_CREATED, {
           count: 1,
           failed_count: 0,
-          source: 'recipe_wizard_inline',
+          source: 'dish_ingredient_form',
           total_ingredients_after: ingredients.length + 1,
         });
       }
@@ -898,18 +932,21 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
       });
       setIngredientError(false);
 
-      if (recipeIngredientsRef.current.length === 0) {
-        trackFoodCost('first_ingredient_added', {
-          source: isEdit ? 'edit' : 'create',
+      const alreadyOnDish = recipeIngredientsRef.current.some((r) => r.ingredient_id === targetId);
+      if (alreadyOnDish) {
+        trackDish(AnalyticsEvents.DISH_INGREDIENT_QTY_UPDATED, { used_unit: newIngUsedUnit });
+      } else {
+        ingSheetTrackRef.current.added += 1;
+        trackDish(AnalyticsEvents.DISH_INGREDIENT_ADDED, {
+          ingredient_count_after: recipeIngredientsRef.current.length + 1,
+          is_first: recipeIngredientsRef.current.length === 0,
+          source: !isExisting ? 'new' : addToDishQueueRef.current.length > 0 ? 'library_tab' : 'library_list',
+          name_has_comma: name.includes(','),
+          purchase_unit: newIngPurchaseUnit,
+          used_unit: newIngUsedUnit,
+          has_waste: wastePercent > 0,
         });
       }
-      trackFoodCost('ingredient_added', {
-        ingredient_id: saved.id,
-        recipe_ingredient_count: recipeIngredients.length + 1,
-        from_inline_create: !isExisting,
-        from_existing: isExisting,
-        from_queue: addToDishQueueRef.current.length > 0,
-      });
 
       const queue = addToDishQueueRef.current;
       if (queue.length > 1) {
@@ -939,6 +976,8 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
 
   const openEditIngSheet = (ri) => {
     if (!ri?.ingredient) return;
+    resetIngSheetTrack();
+    trackDish(AnalyticsEvents.DISH_INGREDIENT_EDIT_OPENED);
     setAddToDishQueue([]);
     addToDishQueueRef.current = [];
     fillExistingIngredientForm(ri.ingredient, {
@@ -951,6 +990,10 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
   };
 
   const handleIngSelect = (ing) => {
+    trackDish(AnalyticsEvents.DISH_LIBRARY_INGREDIENT_PICKED, {
+      library_count: ingredients.length,
+      searched: Boolean(ingSearch.trim()),
+    });
     setAddToDishQueue([]);
     addToDishQueueRef.current = [];
     fillExistingIngredientForm(ing, { createOnly: false, mode: 'add-existing' });
@@ -976,6 +1019,15 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
   };
 
   const handleIngSheetClose = () => {
+    const sheetTrack = ingSheetTrackRef.current;
+    trackDish(AnalyticsEvents.DISH_INGREDIENT_SHEET_CLOSED, {
+      step: ingSheetStep,
+      form_mode: ingSheetStep === 'create' ? ingFormMode : null,
+      added: sheetTrack.added > 0,
+      added_count: sheetTrack.added,
+      filled_fields: [...sheetTrack.filled],
+      searched: sheetTrack.searched,
+    });
     setShowIngSheet(false);
     setShowPriceHistorySheet(false);
     setIngSearch('');
@@ -991,6 +1043,9 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
   };
 
   const removeIngredient = (ingredientId) => {
+    trackDish(AnalyticsEvents.DISH_INGREDIENT_REMOVED, {
+      ingredient_count_after: Math.max(0, recipeIngredients.length - 1),
+    });
     setRecipeIngredients((prev) => prev.filter((r) => r.ingredient_id !== ingredientId));
   };
 
@@ -1002,6 +1057,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
   // ---- Default (yield) selling price ----
 
   const openPriceSheet = () => {
+    trackDish(AnalyticsEvents.DISH_PRICE_SHEET_OPENED, { has_price: parsePositiveNumber(defaultPrice) != null });
     setPriceSheetValue(defaultPrice);
     setPriceSheetError('');
     setShowPriceSheet(true);
@@ -1010,6 +1066,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
   const confirmPriceSheet = () => {
     const raw = priceSheetValue.trim();
     if (raw === '') {
+      if (parsePositiveNumber(defaultPrice) != null) trackDish(AnalyticsEvents.DISH_PRICE_REMOVED);
       setDefaultPrice('');
       setShowPriceSheet(false);
       return;
@@ -1019,14 +1076,17 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
       setPriceSheetError('Enter a price above 0, or leave it empty');
       return;
     }
-    if (parsePositiveNumber(defaultPrice) == null) {
-      trackFoodCost('price_added', { kind: 'selling_price', source: isEdit ? 'edit' : 'create' });
-    }
+    trackDish(AnalyticsEvents.DISH_PRICE_SET, {
+      first_time: parsePositiveNumber(defaultPrice) == null,
+      food_cost_percent: priceSheetMetrics?.foodCostPercent ?? null,
+      margin_status: priceSheetMetrics?.marginStatus ?? null,
+    });
     setDefaultPrice(String(price));
     setShowPriceSheet(false);
   };
 
   const removeDefaultPrice = () => {
+    trackDish(AnalyticsEvents.DISH_PRICE_REMOVED);
     setDefaultPrice('');
     setPriceSheetValue('');
     setShowPriceSheet(false);
@@ -1071,18 +1131,23 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
 
     const { data, error } = await saveRecipe({ recipeId: id, ...payload, refresh: false });
     if (error || !data?.id) {
+      if (!autosaveFailedRef.current) {
+        autosaveFailedRef.current = true;
+        trackDish(AnalyticsEvents.DISH_AUTOSAVE_FAILED, { creating: !id }, { countsAsAction: false });
+      }
       setSaveFailed(true);
       return;
     }
+    autosaveFailedRef.current = false;
     setSaveFailed(false);
     lastSavedRef.current = fingerprint;
     if (!id) {
       savedRecipeIdRef.current = data.id;
       createdHereRef.current = true;
-      trackFoodCost('dish_created', {
-        recipeId: data.id,
+      setDishSessionRecipeId(data.id);
+      trackDish(AnalyticsEvents.DISH_CREATED, {
         ingredient_count: payload.recipeIngredients.length,
-      });
+      }, { countsAsAction: false });
     }
   }, [saveRecipe]);
 
@@ -1126,15 +1191,74 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
     if (loaded) runSave();
   }, [loaded, structureKey, runSave]);
 
+  useEffect(() => {
+    if (loaded && !fieldBaselineRef.current) {
+      fieldBaselineRef.current = { name: watchName ?? '', yieldQty, targetPct };
+    }
+  }, [loaded]);
+
+  /** Name, yield and target: one event each, the first time the owner changes them. */
+  const trackFieldChanges = () => {
+    const base = fieldBaselineRef.current;
+    const latest = latestRef.current;
+    if (!base || !latest) return;
+    const done = fieldTrackedRef.current;
+    const name = String(latest.name ?? '').trim();
+    if (!done.name && name && latest.name !== base.name) {
+      done.name = true;
+      trackDish(AnalyticsEvents.DISH_NAME_ENTERED, {
+        was_prefilled: Boolean(String(base.name).trim()),
+        length: name.length,
+      });
+    }
+    if (!done.yield && parsePositiveNumber(latest.yieldQty) != null && latest.yieldQty !== base.yieldQty) {
+      done.yield = true;
+      trackDish(AnalyticsEvents.DISH_YIELD_ENTERED, {
+        was_prefilled: parsePositiveNumber(base.yieldQty) != null,
+        yield_unit: latest.yieldUnit,
+      });
+    }
+    if (!done.target && latest.targetPct !== base.targetPct) {
+      done.target = true;
+      trackDish(AnalyticsEvents.DISH_TARGET_CHANGED, { target: latest.targetPct, previous: base.targetPct });
+    }
+  };
+
+  // New ingredient form: which fields the owner fills before adding (or giving up)
+  useEffect(() => {
+    if (!showIngSheet || ingSheetStep !== 'create' || ingFormMode !== 'new') return;
+    const { filled } = ingSheetTrackRef.current;
+    [
+      ['name', newIngName],
+      ['price', newIngPurchasePrice],
+      ['purchase_qty', newIngPurchaseQty],
+      ['used_qty', newIngUsedQty],
+    ].forEach(([field, value]) => {
+      if (!filled.has(field) && String(value ?? '').trim()) {
+        filled.add(field);
+        trackDish(AnalyticsEvents.DISH_INGREDIENT_FIELD_FILLED, { field });
+      }
+    });
+  }, [showIngSheet, ingSheetStep, ingFormMode, newIngName, newIngPurchasePrice, newIngPurchaseQty, newIngUsedQty]);
+
   // Name, yield, target: save once typing pauses
   useEffect(() => {
     if (!loaded) return undefined;
-    const timer = setTimeout(() => { runSave(); }, 800);
+    const timer = setTimeout(() => {
+      runSave();
+      trackFieldChanges();
+    }, 800);
     return () => clearTimeout(timer);
   }, [loaded, typingKey, runSave]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background') {
+        trackDish(AnalyticsEvents.DISH_APP_BACKGROUNDED, {
+          ingredient_count: latestRef.current?.recipeIngredients?.length ?? 0,
+          last_action: getDishSessionLastAction(),
+        }, { countsAsAction: false });
+      }
       if (state === 'background' || state === 'inactive') runSave();
     });
     return () => sub.remove();
@@ -1142,6 +1266,20 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
 
   // Leaving by any route: flush, drop a dish created here but emptied again, refresh lists
   useEffect(() => () => {
+    const latest = latestRef.current;
+    const ingredientCount = latest?.recipeIngredients?.length ?? 0;
+    trackDish(AnalyticsEvents.DISH_EDITOR_LEFT, {
+      saved: savedTappedRef.current,
+      dish_created: Boolean(savedRecipeIdRef.current),
+      ingredient_count: ingredientCount,
+      has_name: Boolean(String(latest?.name ?? '').trim()),
+      has_yield: parsePositiveNumber(latest?.yieldQty) != null,
+      has_price: parsePositiveNumber(latest?.defaultPrice) != null,
+      extra_format_count: latest?.sellingFormats?.length ?? 0,
+      last_action: getDishSessionLastAction(),
+      empty_dish_removed: Boolean(savedRecipeIdRef.current && createdHereRef.current && ingredientCount === 0),
+    }, { countsAsAction: false });
+    endDishSession();
     trackDishSave((async () => {
       await runSave();
       const id = savedRecipeIdRef.current;
@@ -1156,6 +1294,10 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
 
   /** Everything is already autosaved; this flushes the last change and opens the dish. */
   const onSaveDish = async () => {
+    trackDish(AnalyticsEvents.DISH_SAVE_TAPPED, {
+      ingredient_count: recipeIngredients.length,
+      blocked: recipeIngredients.length === 0 ? 'no_ingredients' : yieldInvalid ? 'invalid_yield' : null,
+    });
     if (recipeIngredients.length === 0) {
       setIngredientError(true);
       return;
@@ -1167,13 +1309,13 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
       await runSave();
       const id = savedRecipeIdRef.current;
       if (!id || lastSavedRef.current !== currentFingerprint()) {
+        trackDish(AnalyticsEvents.DISH_SAVE_FAILED);
         Alert.alert('Couldn\u2019t save', 'Check your connection and try again.');
         return;
       }
 
-      trackFoodCost('dish_saved', {
-        source: isEdit ? 'edit' : 'create',
-        recipeId: id,
+      savedTappedRef.current = true;
+      trackDish(AnalyticsEvents.DISH_SAVED, {
         ingredient_count: recipeIngredients.length,
         has_yield: dish.yieldQuantity != null,
         has_selling_price: dish.hasSellingPrice,
@@ -1248,6 +1390,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
   /** null | { mode: 'add' | 'edit', key, initialFormat } — key 'default' is the yield + price format */
   const [formatSheet, setFormatSheet] = useState(null);
   const openFormatSheet = (key) => {
+    trackDish(AnalyticsEvents.DISH_SELLING_FORMAT_SHEET_OPENED, { mode: key == null ? 'add' : 'edit' });
     if (key == null) {
       setFormatSheet({ mode: 'add', key: null, initialFormat: { selling_unit_name: yieldUnit } });
       return;
@@ -1276,7 +1419,10 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
         unit_quantity: String(unit_quantity),
         selling_price: String(selling_price),
       }]);
-      trackFoodCost('selling_format_added', { recipeId: savedRecipeIdRef.current, source: 'editor' });
+      trackDish(AnalyticsEvents.DISH_SELLING_FORMAT_ADDED, {
+        format_count_after: sellingFormats.length + 2,
+        unit: selling_unit_name,
+      });
     }
     setFormatSheet(null);
   };
@@ -1284,6 +1430,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
   const handleFormatDelete = () => {
     const key = formatSheet?.key;
     if (key == null || sellingFormats.length === 0) return;
+    trackDish(AnalyticsEvents.DISH_SELLING_FORMAT_REMOVED, { format_count_after: sellingFormats.length });
     if (key === 'default') {
       // The next way to sell becomes the dish's main yield and price
       const [next, ...rest] = sellingFormats;
@@ -1684,7 +1831,11 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                 <TouchableOpacity
                   key={cat.value}
                   style={styles.listRow}
-                  onPress={() => { onChange(cat.value); setShowCatPicker(false); }}
+                  onPress={() => {
+                    if (cat.value !== value) trackDish(AnalyticsEvents.DISH_CATEGORY_CHANGED, { category: cat.value });
+                    onChange(cat.value);
+                    setShowCatPicker(false);
+                  }}
                 >
                   <Text style={styles.listRowText}>{cat.label}</Text>
                   {value === cat.value && <Ionicons name="checkmark" size={18} color={COLORS.primary} />}
@@ -1878,7 +2029,13 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
               <TextInput
                 style={styles.textInput}
                 value={ingSearch}
-                onChangeText={setIngSearch}
+                onChangeText={(v) => {
+                  setIngSearch(v);
+                  if (!ingSheetTrackRef.current.searched && v.trim()) {
+                    ingSheetTrackRef.current.searched = true;
+                    trackDish(AnalyticsEvents.DISH_INGREDIENT_SEARCHED, { library_count: ingredients.length });
+                  }
+                }}
                 placeholder="Search..."
                 placeholderTextColor={COLORS.textTertiary}
                 autoCapitalize="none"
@@ -2046,7 +2203,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                     style={styles.textInput}
                     value={newIngName}
                     onChangeText={(v) => { setNewIngName(v); setNewIngErrors((e) => ({ ...e, name: undefined })); }}
-                    placeholder="One ingredient (e.g. Butter)"
+                    placeholder="e.g. Butter"
                     placeholderTextColor={COLORS.textTertiary}
                     autoCapitalize="words"
                     onFocus={() => setIngSkipKeyboardLift(true)}
@@ -2367,6 +2524,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
             key={u.value}
             style={styles.listRow}
             onPress={() => {
+              if (u.value !== yieldUnit) trackDish(AnalyticsEvents.DISH_YIELD_UNIT_CHANGED, { unit: u.value });
               setYieldUnitChoice(u.value);
               setShowYieldUnitPicker(false);
             }}
