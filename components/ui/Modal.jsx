@@ -39,6 +39,7 @@ import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
  */
 export function Modal({
   visible: visibleProp,
+  /** Called with how it was closed: 'x', 'backdrop' or 'back_button' (Android back). */
   onClose,
   title,
   children,
@@ -50,6 +51,8 @@ export function Modal({
   scrollable = true,
   /** When false, the sheet does not rise with the keyboard. */
   keyboardLift = true,
+  /** When false, scrolling the body keeps the keyboard open (long forms scrolled while typing). */
+  dismissKeyboardOnScroll = true,
 }) {
   const visible = useNativeModalVisible(visibleProp);
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -120,9 +123,22 @@ export function Modal({
     return () => sub.remove();
   }, [visible, scrollable, keyboardLift, scrollFocusedInputIntoView]);
 
-  const handleClose = () => {
+  /** @param {'x' | 'backdrop' | 'back_button'} reason how the user closed the sheet */
+  const handleClose = (reason) => {
     Keyboard.dismiss();
-    onCloseRef.current();
+    onCloseRef.current(reason);
+  };
+
+  // Number fields have no returnKeyType: on iOS that adds a see-through Done toolbar that
+  // reads as a gap above the keyboard. Instead a tap on blank space or above the sheet, or a
+  // scroll, hides the keyboard; a tap above the sheet only closes it once the keyboard is gone.
+  const handleBackdropPress = () => {
+    if (Keyboard.isVisible()) {
+      Keyboard.dismiss();
+      return;
+    }
+    if (onBack) onBack();
+    else handleClose('backdrop');
   };
 
   const handleHardwareBack = () => {
@@ -134,7 +150,7 @@ export function Modal({
       onBack();
       return;
     }
-    handleClose();
+    handleClose('back_button');
   };
 
   if (!visible) return null;
@@ -156,7 +172,7 @@ export function Modal({
       >
         <Pressable
           style={styles.backdropPressable}
-          onPress={onBack ?? handleClose}
+          onPress={handleBackdropPress}
           accessibilityRole="button"
           accessibilityLabel="Close modal"
         >
@@ -184,7 +200,7 @@ export function Modal({
               <Text style={styles.title} numberOfLines={2}>{title}</Text>
               {onBack ? null : (
                 <TouchableOpacity
-                  onPress={handleClose}
+                  onPress={() => handleClose('x')}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   activeOpacity={0.6}
                   accessibilityRole="button"
@@ -200,7 +216,7 @@ export function Modal({
             <ScrollView
               ref={scrollRef}
               keyboardShouldPersistTaps="always"
-              keyboardDismissMode="none"
+              keyboardDismissMode={dismissKeyboardOnScroll ? 'on-drag' : 'none'}
               showsVerticalScrollIndicator={false}
               bounces
               nestedScrollEnabled
@@ -208,7 +224,9 @@ export function Modal({
               onScroll={(e) => { scrollOffsetRef.current = e.nativeEvent.contentOffset.y; }}
               onLayout={(e) => { scrollViewportRef.current = e.nativeEvent.layout.height; }}
             >
-              {children}
+              <Pressable onPress={Keyboard.dismiss} accessible={false}>
+                {children}
+              </Pressable>
             </ScrollView>
           ) : (
             <View style={styles.body}>{children}</View>

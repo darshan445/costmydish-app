@@ -1,3 +1,81 @@
+import { BASE_CURRENCY, moneyFor } from '@/lib/currency';
+import { cakePrice, dishSummary, formatPercent, roundPriceUp } from '@/lib/food-cost';
+import { CAKE_EXTRAS, presetExample } from '@/lib/presets';
+
+/** "30.0%" → "30%" for prose. */
+const pct = (value) => formatPercent(value).replace(/\.0%$/, '%');
+
+/** Plate example used across the guides: $3.20 plate cost, $12 selling price, 30% target. */
+function plateExample(c) {
+  const cost = c.p(3.2);
+  const sell = c.p(12);
+  return { cost, sell, percent: (cost / sell) * 100, profit: sell - cost, minimum: roundPriceUp(cost / 0.3) };
+}
+
+function cookieExample(c) {
+  const cookies = presetExample('cookies', c.code);
+  const perCookie = cookies.totalCost / Number(cookies.makes);
+  return { ...cookies, perCookie, minimum: roundPriceUp(perCookie / 0.3) };
+}
+
+function cakeExample(c) {
+  const cake = presetExample('cake', c.code);
+  const packaging = c.p(CAKE_EXTRAS.packaging);
+  const hourlyRate = c.p(CAKE_EXTRAS.hourlyRate);
+  const hours = Number(CAKE_EXTRAS.hours);
+  const result = cakePrice({
+    ingredientCost: cake.totalCost,
+    packaging,
+    hours,
+    hourlyRate,
+    overheadPercent: CAKE_EXTRAS.overheadPercent,
+    profitPercent: CAKE_EXTRAS.profitPercent,
+    portions: cake.makes,
+  });
+  const perSlice = cake.totalCost / Number(cake.makes);
+  return {
+    ...result,
+    ingredients: cake.totalCost,
+    perSlice,
+    packaging,
+    hourlyRate,
+    hours,
+    direct: cake.totalCost + packaging + result.labour,
+    sliceAt30: roundPriceUp(perSlice / 0.3),
+  };
+}
+
+function pastaExample(c) {
+  const pasta = presetExample('pasta', c.code);
+  const fettuccine = pasta.line('Fettuccine');
+  const chicken = pasta.line('Chicken breast');
+  const cream = pasta.line('Heavy cream');
+  const garlic = pasta.line('Garlic');
+  const perPlate = pasta.totalCost / Number(pasta.makes);
+  const summary = dishSummary({ totalCost: pasta.totalCost, quantityMade: pasta.makes, targetPercent: 30, sellingPrice: String(c.p(14)) });
+  return {
+    ...pasta,
+    fettuccine,
+    chicken,
+    cream,
+    garlic,
+    chickenBeforeWaste: chicken.price * 0.5,
+    garlicBeforeWaste: garlic.price * 0.015,
+    perPlate,
+    sellAt: c.p(14),
+    summary,
+  };
+}
+
+/** Resolves copy that depends on the visitor's currency: plain strings pass through, functions get money helpers. */
+export function resolveCopy(value, code = BASE_CURRENCY) {
+  return typeof value === 'function' ? value(moneyFor(code)) : value;
+}
+
+export function resolveFaqs(faqs, code = BASE_CURRENCY) {
+  return faqs.map((faq) => ({ q: faq.q, a: resolveCopy(faq.a, code) }));
+}
+
 /**
  * SEO pages served at /[slug].
  * kind 'tool'  — calculator-first landing pages (target "… calculator" searches)
@@ -70,7 +148,11 @@ export const SEO_LANDING_PAGES = [
       },
       {
         q: 'How is recipe cost different from food cost %?',
-        a: 'Recipe cost is what the ingredients cost you. Food cost % compares that to the selling price: cost per serving ÷ price × 100. A $0.60 cookie sold for $2.00 has a 30% food cost.',
+        a: (c) => {
+          const cost = c.p(0.6);
+          const price = c.p(2);
+          return `Recipe cost is what the ingredients cost you. Food cost % compares that to the selling price: cost per serving ÷ price × 100. A ${c.m(cost)} cookie sold for ${c.m(price)} has a ${pct((cost / price) * 100)} food cost.`;
+        },
       },
       {
         q: 'Can I cost a recipe that uses cups but I buy flour by the kg?',
@@ -156,12 +238,15 @@ export const SEO_LANDING_PAGES = [
     sections: [
       {
         h2: 'How to price menu items in 4 steps',
-        list: [
-          'Cost the plate: add up every ingredient from your current supplier prices, including trim and waste',
-          'Pick a target food cost % — most restaurants use 28–35%',
-          'Divide the plate cost by the target: $3.20 ÷ 0.30 = $10.67 minimum menu price',
-          'Round to a menu-friendly price ($10.95 or $11.50) and check it against what nearby places charge',
-        ],
+        list: (c) => {
+          const plate = plateExample(c);
+          return [
+            'Cost the plate: add up every ingredient from your current supplier prices, including trim and waste',
+            'Pick a target food cost % — most restaurants use 28–35%',
+            `Divide the plate cost by the target: ${c.m(plate.cost)} ÷ 0.30 = ${c.m(plate.minimum)} minimum menu price`,
+            `Round up to a menu-friendly price (${c.$(10.95)} or ${c.$(11.5)}) and check it against what nearby places charge`,
+          ];
+        },
       },
       {
         h2: 'Restaurant menu pricing strategies',
@@ -170,7 +255,7 @@ export const SEO_LANDING_PAGES = [
           'Gross profit pricing — make sure each plate earns enough cash (price − plate cost), not just a good percentage',
           'Competitor pricing — check what similar places charge, then confirm your margin still works',
           'Menu engineering — promote dishes with high profit and high sales; fix or remove low-profit, low-sales ones',
-          'Charm pricing — prices like $12.95 or $13 read as cheaper than $13.50',
+          'Charm pricing — a price just under a round number, or a clean round number, reads as cheaper than an awkward one in between',
         ],
         body: [
           'Whatever strategy you use, re-cost your menu whenever supplier prices change. Most lost margin comes from menu prices set on last year’s ingredient costs.',
@@ -188,7 +273,10 @@ export const SEO_LANDING_PAGES = [
     faqs: [
       {
         q: 'How do you calculate a menu price?',
-        a: 'Divide the cost of one plate by your target food cost % as a decimal. A plate costing $3.20 at a 30% target should be on the menu for at least $10.67.',
+        a: (c) => {
+          const plate = plateExample(c);
+          return `Divide the cost of one plate by your target food cost % as a decimal. A plate costing ${c.m(plate.cost)} at a 30% target should be on the menu for at least ${c.m(plate.minimum)}.`;
+        },
       },
       {
         q: 'How does CostMyDish compare to meez or xtraCHEF?',
@@ -221,19 +309,25 @@ export const SEO_LANDING_PAGES = [
     sections: [
       {
         h2: 'What is food cost percentage?',
-        body: [
-          'Food cost percentage is the share of a dish’s selling price that goes on ingredients. If a plate sells for $12 and its ingredients cost $3.20, about 27% of every sale pays for food. The rest has to cover staff, rent, energy, packaging and your profit.',
-          'It is the single most useful number for pricing food, because it lets you compare a $4 cookie and a $28 steak on the same scale.',
-        ],
+        body: (c) => {
+          const plate = plateExample(c);
+          return [
+            `Food cost percentage is the share of a dish’s selling price that goes on ingredients. If a plate sells for ${c.w(plate.sell)} and its ingredients cost ${c.m(plate.cost)}, about ${Math.round(plate.percent)}% of every sale pays for food. The rest has to cover staff, rent, energy, packaging and your profit.`,
+            `It is the single most useful number for pricing food, because it lets you compare a ${c.$w(4)} cookie and a ${c.$w(28)} steak on the same scale.`,
+          ];
+        },
       },
       {
         h2: 'The food cost formula',
         formula: 'Food cost % = ingredient cost per serving ÷ selling price × 100',
-        body: [
-          'This is the food cost percentage formula used for a single dish. Example: a pasta dish costs $3.20 in ingredients and sells for $12.00. $3.20 ÷ $12.00 × 100 = 26.7% food cost, leaving $8.80 gross profit per plate.',
-          'To find a price from a target, flip the formula: selling price = ingredient cost ÷ target %. For a 30% target: $3.20 ÷ 0.30 = $10.67.',
-          'For a whole restaurant over a week or month, the food cost formula uses stock and purchases instead: (opening stock + purchases − closing stock) ÷ food sales × 100. Both are explained below.',
-        ],
+        body: (c) => {
+          const plate = plateExample(c);
+          return [
+            `This is the food cost percentage formula used for a single dish. Example: a pasta dish costs ${c.m(plate.cost)} in ingredients and sells for ${c.m(plate.sell)}. ${c.m(plate.cost)} ÷ ${c.m(plate.sell)} × 100 = ${formatPercent(plate.percent)} food cost, leaving ${c.m(plate.profit)} gross profit per plate.`,
+            `To find a price from a target, flip the formula: selling price = ingredient cost ÷ target %. For a 30% target: ${c.m(plate.cost)} ÷ 0.30 = ${c.m(plate.minimum)}.`,
+            'For a whole restaurant over a week or month, the food cost formula uses stock and purchases instead: (opening stock + purchases − closing stock) ÷ food sales × 100. Both are explained below.',
+          ];
+        },
       },
       {
         h2: 'How to calculate food cost percentage, step by step',
@@ -244,9 +338,13 @@ export const SEO_LANDING_PAGES = [
           'Multiply by 100 — that is your food cost percentage',
           'Compare it with your target (for example 30%) and adjust the price or recipe if it is over',
         ],
-        body: [
-          'Example: a batch of 24 cookies costs $4.51, so each cookie costs about $0.19. Sold at $1.00, the food cost percentage is 0.19 ÷ 1.00 × 100 = 19%.',
-        ],
+        body: (c) => {
+          const cookies = cookieExample(c);
+          const price = c.p(1);
+          return [
+            `Example: a batch of ${cookies.makes} cookies costs ${c.m(cookies.totalCost)}, so each cookie costs about ${c.m(cookies.perCookie)}. Sold at ${c.m(price)}, the food cost percentage is ${c.m(cookies.perCookie)} ÷ ${c.m(price)} × 100 ≈ ${pct((cookies.perCookie / price) * 100)}.`,
+          ];
+        },
       },
       {
         h2: 'What is the ideal food cost percentage?',
@@ -292,7 +390,10 @@ export const SEO_LANDING_PAGES = [
       },
       {
         q: 'How do I calculate food cost percentage?',
-        a: 'Divide the ingredient cost of one serving by its selling price and multiply by 100. $3.20 ÷ $12.00 × 100 = 26.7%.',
+        a: (c) => {
+          const plate = plateExample(c);
+          return `Divide the ingredient cost of one serving by its selling price and multiply by 100. ${c.m(plate.cost)} ÷ ${c.m(plate.sell)} × 100 = ${formatPercent(plate.percent)}.`;
+        },
       },
       {
         q: 'What is the ideal food cost percentage for a restaurant?',
@@ -300,7 +401,10 @@ export const SEO_LANDING_PAGES = [
       },
       {
         q: 'How do I price a dish from food cost percentage?',
-        a: 'Divide the cost per serving by your target as a decimal. A $3.00 plate at a 30% target should sell for at least $10.00.',
+        a: (c) => {
+          const cost = c.p(3);
+          return `Divide the cost per serving by your target as a decimal. A ${c.m(cost)} plate at a 30% target should sell for at least ${c.m(roundPriceUp(cost / 0.3))}.`;
+        },
       },
       {
         q: 'Should food cost % include packaging?',
@@ -331,9 +435,12 @@ export const SEO_LANDING_PAGES = [
       },
       {
         h2: 'Step 1: write down what you paid',
-        body: [
-          'For each ingredient, note the price and the pack size from your receipt or supplier invoice: fettuccine $3.00 for 500 g, chicken breast $9.00 per kg, cream $4.50 per litre. Use the price you actually pay now, not last year’s.',
-        ],
+        body: (c) => {
+          const pasta = pastaExample(c);
+          return [
+            `For each ingredient, note the price and the pack size from your receipt or supplier invoice: fettuccine ${c.m(pasta.fettuccine.price)} for 500 g, chicken breast ${c.m(pasta.chicken.price)} per kg, cream ${c.m(pasta.cream.price)} per litre. Use the price you actually pay now, not last year’s.`,
+          ];
+        },
       },
       {
         h2: 'Step 2: write down how much the recipe uses',
@@ -343,23 +450,32 @@ export const SEO_LANDING_PAGES = [
       },
       {
         h2: 'Step 3: convert units and work out each line',
-        body: [
-          'Convert the pack size into the same unit as the recipe. Cream: $4.50 per 1,000 ml, and you use 300 ml → 300 ÷ 1,000 × $4.50 = $1.35. Pasta: 400 ÷ 500 × $3.00 = $2.40.',
-          'Weight converts to weight and volume to volume. You can’t convert grams to cups without knowing the ingredient’s density, so buy and use in the same kind of unit.',
-        ],
+        body: (c) => {
+          const pasta = pastaExample(c);
+          return [
+            `Convert the pack size into the same unit as the recipe. Cream: ${c.m(pasta.cream.price)} per 1,000 ml, and you use 300 ml → 300 ÷ 1,000 × ${c.m(pasta.cream.price)} = ${c.m(pasta.cream.cost)}. Pasta: 400 ÷ 500 × ${c.m(pasta.fettuccine.price)} = ${c.m(pasta.fettuccine.cost)}.`,
+            'Weight converts to weight and volume to volume. You can’t convert grams to cups without knowing the ingredient’s density, so buy and use in the same kind of unit.',
+          ];
+        },
       },
       {
         h2: 'Step 4: add waste and trim',
-        body: [
-          'If you lose 10% of the chicken to trim, you pay for 100% but only use 90%. Divide by the usable share: $4.50 ÷ 0.90 = $5.00. Garlic at 15% waste: $0.09 ÷ 0.85 ≈ $0.11.',
-        ],
+        body: (c) => {
+          const pasta = pastaExample(c);
+          return [
+            `If you lose 10% of the chicken to trim, you pay for 100% but only use 90%. Divide by the usable share: ${c.m(pasta.chickenBeforeWaste)} ÷ 0.90 = ${c.m(pasta.chicken.cost)}. Garlic at 15% waste: ${c.m(pasta.garlicBeforeWaste)} ÷ 0.85 ≈ ${c.m(pasta.garlic.cost)}.`,
+          ];
+        },
       },
       {
         h2: 'Step 5: cost per serving and price',
-        body: [
-          'Add the lines: $2.40 + $5.00 + $1.35 + $1.76 + $0.32 + $0.11 ≈ $10.94 for the batch. The recipe makes 4 plates, so each costs about $2.73.',
-          'At a 30% target food cost: $2.734 ÷ 0.30 = $9.12 minimum price (rounded up to the cent). Sell at $14.00 and your food cost is about 19.6% with $11.27 gross profit per plate.',
-        ],
+        body: (c) => {
+          const pasta = pastaExample(c);
+          return [
+            `Add the lines: ${pasta.lines.map((line) => c.m(line.cost)).join(' + ')} ≈ ${c.m(pasta.totalCost)} for the batch. The recipe makes ${pasta.makes} plates, so each costs about ${c.m(pasta.perPlate)}.`,
+            `At a 30% target food cost: ${c.symbol}${pasta.perPlate.toFixed(3)} ÷ 0.30 = ${c.m(pasta.summary.suggestedPrice)} minimum price (rounded up). Sell at ${c.m(pasta.sellAt)} and your food cost is about ${formatPercent(pasta.summary.foodCostPercent)} with ${c.m(pasta.summary.profit)} gross profit per plate.`,
+          ];
+        },
       },
       {
         h2: 'Common mistakes',
@@ -385,7 +501,10 @@ export const SEO_LANDING_PAGES = [
       },
       {
         q: 'How do I calculate food cost per plate?',
-        a: 'Cost the whole recipe, then divide by the number of plates it makes. A $10.94 batch that makes 4 plates costs $2.73 per plate.',
+        a: (c) => {
+          const pasta = pastaExample(c);
+          return `Cost the whole recipe, then divide by the number of plates it makes. A ${c.m(pasta.totalCost)} batch that makes ${pasta.makes} plates costs ${c.m(pasta.perPlate)} per plate.`;
+        },
       },
       {
         q: 'How often should I recalculate food cost?',
@@ -425,10 +544,15 @@ export const SEO_LANDING_PAGES = [
       },
       {
         h2: 'Worked example: chocolate chip cookies',
-        body: [
-          'Flour at $2.50/kg, 250 g used → $0.63. Butter $8.00/kg, 150 g → $1.20. 2 eggs at $0.30 → $0.60. Sugar $1.80/kg, 100 g → $0.18. Chocolate chips $12.00/kg, 150 g → $1.80. Vanilla $15.00/L, 5 ml → $0.08. Baking powder and salt add a few cents.',
-          'The batch costs about $4.51 and makes 24 cookies, so each cookie costs about $0.19. At a 30% target food cost the minimum price is $0.63 per cookie.',
-        ],
+        body: (c) => {
+          const cookies = cookieExample(c);
+          const line = (name) => cookies.line(name);
+          const smalls = line('Baking powder').cost + line('Salt').cost;
+          return [
+            `Flour at ${c.m(line('All-purpose flour').price)}/kg, 250 g used → ${c.m(line('All-purpose flour').cost)}. Butter ${c.m(line('Butter').price)}/kg, 150 g → ${c.m(line('Butter').cost)}. 2 eggs at ${c.m(line('Eggs').price)} → ${c.m(line('Eggs').cost)}. Sugar ${c.m(line('Sugar').price)}/kg, 100 g → ${c.m(line('Sugar').cost)}. Chocolate chips ${c.m(line('Chocolate chips').price)}/kg, 150 g → ${c.m(line('Chocolate chips').cost)}. Vanilla ${c.m(line('Vanilla extract').price)}/L, 5 ml → ${c.m(line('Vanilla extract').cost)}. Baking powder and salt add ${c.m(smalls)}.`,
+            `The batch costs about ${c.m(cookies.totalCost)} and makes ${cookies.makes} cookies, so each cookie costs about ${c.m(cookies.perCookie)}. At a 30% target food cost the minimum price is ${c.m(cookies.minimum)} per cookie.`,
+          ];
+        },
       },
       {
         h2: 'Yield: the step most people skip',
@@ -488,18 +612,21 @@ export const SEO_LANDING_PAGES = [
       {
         h2: 'How the cake pricing calculator works',
         formula: 'Cake price = (ingredients + packaging + hours × hourly rate) × (1 + overheads %) × (1 + profit %)',
-        body: [
-          'The example is a 12-slice vanilla layer cake with cream cheese frosting: $7.54 ingredients + $2.50 box and board + 3 hours at $15 = $55.04. Add 15% overheads → $63.30. Add 20% profit → $75.96, or $6.33 a slice.',
-          'Ingredients end up around 10% of a fair custom-cake price. If your price is close to your ingredient cost, you are working for free.',
-        ],
+        body: (c) => {
+          const cake = cakeExample(c);
+          return [
+            `The example is a 12-slice vanilla layer cake with cream cheese frosting: ${c.m(cake.ingredients)} ingredients + ${c.m(cake.packaging)} box and board + ${cake.hours} hours at ${c.w(cake.hourlyRate)} = ${c.m(cake.direct)}. Add ${CAKE_EXTRAS.overheadPercent}% overheads → ${c.m(cake.totalCost)}. Add ${CAKE_EXTRAS.profitPercent}% profit → ${c.m(cake.price)}, or ${c.m(cake.pricePerPortion)} a slice.`,
+            `Ingredients end up around ${Math.round(cake.ingredientShare)}% of a fair custom-cake price. If your price is close to your ingredient cost, you are working for free.`,
+          ];
+        },
       },
       {
         h2: 'What to put in each box',
-        list: [
+        list: (c) => [
           'Ingredients: everything in the cake, filling, frosting and decorations, costed from what you paid',
           'Packaging: cake box, board, dowels, toppers, ribbon',
           'Hours: baking, cooling, filling, decorating, clean-up and messaging the customer — not just oven time',
-          'Hourly rate: what you would accept for any other job; $15–25 is common for home bakers',
+          `Hourly rate: what you would accept for any other job; ${c.$w(15)}–${c.$w(25)} is common for home bakers`,
           'Overheads: electricity, gas, equipment wear, card and marketplace fees, delivery — usually 10–20%',
           'Profit: on top of paying yourself, so the business can grow — usually 15–30%',
         ],
@@ -522,7 +649,10 @@ export const SEO_LANDING_PAGES = [
     faqs: [
       {
         q: 'How much should I charge for a cake?',
-        a: 'Add ingredients, packaging and your hours at a fair rate, then add 10–20% for overheads and 15–30% profit. A 12-slice layer cake that costs $7.54 in ingredients and takes 3 hours comes to about $76 at $15 an hour.',
+        a: (c) => {
+          const cake = cakeExample(c);
+          return `Add ingredients, packaging and your hours at a fair rate, then add 10–20% for overheads and 15–30% profit. A 12-slice layer cake that costs ${c.m(cake.ingredients)} in ingredients and takes ${cake.hours} hours comes to about ${c.w(Math.round(cake.price))} at ${c.w(cake.hourlyRate)} an hour.`;
+        },
       },
       {
         q: 'How do I calculate the cost of making a cake?',
@@ -568,9 +698,9 @@ export const SEO_LANDING_PAGES = [
       },
       {
         h2: 'How to use the food cost spreadsheet',
-        list: [
+        list: (c) => [
           'Open the “Your recipe” sheet and type the recipe name and how many portions it makes',
-          'For each ingredient, enter what you paid and the pack size from your receipt (for example $8.00 for 1 kg butter)',
+          `For each ingredient, enter what you paid and the pack size from your receipt (for example ${c.$(8)} for 1 kg butter)`,
           'Enter how much the recipe uses, picking the unit from the dropdown (for example 150 g)',
           'Add a waste % for anything you trim — meat, fish, fruit and vegetables',
           'Read the cost per portion and suggested price at the top; add your selling price to see food cost % and profit',
@@ -646,36 +776,48 @@ export const SEO_LANDING_PAGES = [
       },
       {
         h2: 'Step 1: cost the ingredients',
-        body: [
-          'Use the calculator to cost the cake and frosting from what you paid. In the example, a 12-slice vanilla layer cake with cream cheese frosting costs about $7.54 in ingredients — about $0.63 a slice.',
-        ],
+        body: (c) => {
+          const cake = cakeExample(c);
+          return [
+            `Use the calculator to cost the cake and frosting from what you paid. In the example, a 12-slice vanilla layer cake with cream cheese frosting costs about ${c.m(cake.ingredients)} in ingredients — about ${c.m(cake.perSlice)} a slice.`,
+          ];
+        },
       },
       {
         h2: 'Step 2: add packaging',
-        body: [
-          'Cake box, board, dowels, toppers, ribbon, cupcake liners. A box and board might be $2.50 per cake. In the CostMyDish app you can add these as ingredients (for example “Cake box, 10 for $12, use 1”) so they are always counted.',
+        body: (c) => [
+          `Cake box, board, dowels, toppers, ribbon, cupcake liners. A box and board might be ${c.$(CAKE_EXTRAS.packaging)} per cake. In the CostMyDish app you can add these as ingredients (for example “Cake box, 10 for ${c.$w(12)}, use 1”) so they are always counted.`,
         ],
       },
       {
         h2: 'Step 3: pay yourself',
-        body: [
-          'Track the real time: baking, cooling, filling, decorating, cleaning and talking to the customer. If a cake takes 3 hours and you pay yourself $15 an hour, that is $45 — already six times the ingredient cost.',
-        ],
+        body: (c) => {
+          const cake = cakeExample(c);
+          return [
+            `Track the real time: baking, cooling, filling, decorating, cleaning and talking to the customer. If a cake takes ${cake.hours} hours and you pay yourself ${c.w(cake.hourlyRate)} an hour, that is ${c.w(cake.labour)} — already about ${Math.round(cake.labour / cake.ingredients)} times the ingredient cost.`,
+          ];
+        },
       },
       {
         h2: 'Step 4: cover overheads and add profit',
-        body: [
-          'Overheads are electricity, gas, equipment wear, card fees, delivery fuel and marketplace fees. Many home bakers add 10–20% for these. Then add profit on top so the business can grow — 15–30% is common.',
-          'Example: $7.54 ingredients + $2.50 packaging + $45 time = $55.04. Add 15% overheads → $63.30. Add 20% profit → about $76. Ingredients are then roughly 10% of the price.',
-        ],
+        body: (c) => {
+          const cake = cakeExample(c);
+          return [
+            'Overheads are electricity, gas, equipment wear, card fees, delivery fuel and marketplace fees. Many home bakers add 10–20% for these. Then add profit on top so the business can grow — 15–30% is common.',
+            `Example: ${c.m(cake.ingredients)} ingredients + ${c.m(cake.packaging)} packaging + ${c.w(cake.labour)} time = ${c.m(cake.direct)}. Add ${CAKE_EXTRAS.overheadPercent}% overheads → ${c.m(cake.totalCost)}. Add ${CAKE_EXTRAS.profitPercent}% profit → about ${c.w(Math.round(cake.price))}. Ingredients are then roughly ${Math.round(cake.ingredientShare)}% of the price.`,
+          ];
+        },
         link: { href: '/cake-pricing-calculator', label: 'Work out your full cake price with the cake pricing calculator →' },
       },
       {
         h2: 'Pricing by the slice vs. whole cake',
-        body: [
-          'Slices take more handling and packaging, so they usually carry a higher price per portion. For a café, cost per slice is often priced at 25–35% food cost; a 12-slice cake costing $0.63 a slice suggests at least $2.10 a slice for ingredients alone at 30%, before labour.',
-          'In the app you can add both ways to sell the same cake — by the slice and whole — and see the profit on each.',
-        ],
+        body: (c) => {
+          const cake = cakeExample(c);
+          return [
+            `Slices take more handling and packaging, so they usually carry a higher price per portion. For a café, cost per slice is often priced at 25–35% food cost; a 12-slice cake costing ${c.m(cake.perSlice)} a slice suggests at least ${c.m(cake.sliceAt30)} a slice for ingredients alone at 30%, before labour.`,
+            'In the app you can add both ways to sell the same cake — by the slice and whole — and see the profit on each.',
+          ];
+        },
       },
       {
         h2: 'Checklist before you quote',

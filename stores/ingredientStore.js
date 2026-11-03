@@ -14,6 +14,7 @@ let fetchFlight = null;
 /** Bumped around every write; a reload that overlapped one is re-run instead of applied. */
 let writeVersion = 0;
 const MAX_FETCH_ATTEMPTS = 3;
+const INVALID_VALUES_MESSAGE = 'Price and quantity must be above 0, and waste must be under 100%.';
 
 const useIngredientStore = create((set, get) => ({
   ingredients: [],
@@ -113,6 +114,7 @@ const useIngredientStore = create((set, get) => ({
       if (error?.code === '23505') {
         return { data: null, error: `An ingredient named "${ingredientData.name}" already exists. Use a different name.` };
       }
+      if (error?.code === '23514') return { data: null, error: INVALID_VALUES_MESSAGE };
       return { data: null, error: 'Failed to save ingredient. Please try again.' };
     } finally {
       writeVersion += 1;
@@ -138,6 +140,7 @@ const useIngredientStore = create((set, get) => ({
       if (error?.code === '23505') {
         return { data: null, error: `An ingredient named "${updates.name}" already exists. Use a different name.` };
       }
+      if (error?.code === '23514') return { data: null, error: INVALID_VALUES_MESSAGE };
       return { data: null, error: 'Failed to update ingredient. Please try again.' };
     } finally {
       writeVersion += 1;

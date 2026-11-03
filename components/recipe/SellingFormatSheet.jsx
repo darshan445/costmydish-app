@@ -7,7 +7,9 @@ import { Button } from '../ui/Button';
 import { calculateSellingFormatMetrics, parsePositiveNumber, roundPriceUp } from '../../lib/calculations';
 import { FOOD_COST_COPY as C } from '../../constants/copy';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
-import { formatCurrency, formatFoodCostPercent } from '../../utils/format';
+import {
+  DECIMAL_KEYBOARD, formatCurrency, formatFoodCostPercent, parseDecimal, parseWholeNumber, priceError as validatePrice, wholeNumberError,
+} from '../../utils/format';
 import { formatSellingFormatName, labelPerSellingUnit } from '../../utils/sellingFormat';
 
 /**
@@ -68,8 +70,8 @@ export function SellingFormatSheet({
   const shownPrice = priceTouched ? price : (suggestedPrice != null ? suggestedPrice.toFixed(2) : '');
 
   const preview = useMemo(() => {
-    const p = parsePositiveNumber(shownPrice);
-    if (p == null || !hasAnyCost) return null;
+    if (validatePrice(shownPrice) || !hasAnyCost) return null;
+    const p = parseDecimal(shownPrice);
     return calculateSellingFormatMetrics({
       totalRecipeCost,
       unitQuantity: parsePositiveNumber(qty) ?? 1,
@@ -79,12 +81,23 @@ export function SellingFormatSheet({
   }, [shownPrice, hasAnyCost, totalRecipeCost, qty, targetFoodCostPercent]);
 
   const handleSubmit = () => {
-    const q = parsePositiveNumber(qty);
-    const p = parsePositiveNumber(shownPrice);
-    setQtyError(q == null ? C.sellingFormat.qtyRequired : '');
-    setPriceError(p == null ? C.sellingFormat.priceRequired : '');
-    if (q == null || p == null) return;
-    onSubmit({ selling_unit_name: unit, unit_quantity: q, selling_price: p });
+    // A count saved before counts had to be whole numbers stays valid until it is edited
+    const savedQty = initialFormat?.unit_quantity != null ? String(initialFormat.unit_quantity) : null;
+    const keepsSavedQty = savedQty != null && qty.trim() === savedQty;
+    const nextQtyError = qty.trim() === ''
+      ? C.sellingFormat.qtyRequired
+      : (keepsSavedQty ? null : wholeNumberError(qty));
+    const nextPriceError = String(shownPrice ?? '').trim() === ''
+      ? C.sellingFormat.priceRequired
+      : validatePrice(shownPrice);
+    setQtyError(nextQtyError ?? '');
+    setPriceError(nextPriceError ?? '');
+    if (nextQtyError || nextPriceError) return;
+    onSubmit({
+      selling_unit_name: unit,
+      unit_quantity: keepsSavedQty ? parseDecimal(qty) : parseWholeNumber(qty),
+      selling_price: parseDecimal(shownPrice),
+    });
   };
 
   const title = mode === 'add' ? C.action.addAnotherWayToSell : C.action.editWayToSell;
@@ -190,7 +203,8 @@ export function SellingFormatSheet({
             style={styles.textInput}
             value={qty}
             onChangeText={(v) => { setQty(v); setQtyError(''); }}
-            keyboardType="decimal-pad"
+            keyboardType="number-pad"
+            maxLength={6}
             placeholder="1"
             placeholderTextColor={COLORS.textTertiary}
           />
@@ -205,7 +219,7 @@ export function SellingFormatSheet({
             style={styles.textInput}
             value={shownPrice}
             onChangeText={(v) => { setPrice(v); setPriceTouched(true); setPriceError(''); }}
-            keyboardType="decimal-pad"
+            keyboardType={DECIMAL_KEYBOARD}
             placeholder="0.00"
             placeholderTextColor={COLORS.textTertiary}
           />

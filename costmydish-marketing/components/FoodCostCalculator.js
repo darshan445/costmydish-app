@@ -3,82 +3,98 @@
 import { useMemo, useState } from 'react';
 import {
   MARGIN_LABELS,
+  NAME_MAX_LENGTH,
+  SELLING_UNITS,
   UNIT_OPTIONS,
   cakePrice,
+  compatibleUnitOptions,
+  defaultUsedUnit,
   dishSummary,
+  foodCostPercentError,
   formatMoney,
   formatPercent,
   ingredientLineCost,
   parsePositive,
+  positiveNumberError,
+  priceError,
+  sellingUnitWord,
+  toSellingUnit,
+  typedError,
+  unitFamily,
+  wastePercentError,
+  wholeNumberError,
 } from '@/lib/food-cost';
-
-const CURRENCIES = ['$', '£', '€', '₹', 'A$', 'C$', '₱', 'R', 'RM', 'AED'];
-
-const PRESETS = {
-  cookies: {
-    dishName: 'Chocolate chip cookies',
-    makes: '24',
-    unitWord: 'cookie',
-    rows: [
-      ['All-purpose flour', '2.50', '1', 'kg', '250', 'g'],
-      ['Butter', '8.00', '1', 'kg', '150', 'g'],
-      ['Eggs', '0.30', '1', 'each', '2', 'each'],
-      ['Sugar', '1.80', '1', 'kg', '100', 'g'],
-      ['Chocolate chips', '12.00', '1', 'kg', '150', 'g'],
-      ['Vanilla extract', '15.00', '1', 'l', '5', 'ml'],
-      ['Baking powder', '5.00', '1', 'kg', '5', 'g'],
-      ['Salt', '1.00', '1', 'kg', '3', 'g'],
-    ],
-  },
-  cake: {
-    dishName: 'Vanilla layer cake',
-    makes: '12',
-    unitWord: 'slice',
-    rows: [
-      ['Cake flour', '2.50', '1', 'kg', '300', 'g'],
-      ['Sugar', '1.80', '1', 'kg', '250', 'g'],
-      ['Butter', '8.00', '1', 'kg', '225', 'g'],
-      ['Eggs', '3.60', '1', 'dozen', '4', 'each'],
-      ['Milk', '1.20', '1', 'l', '240', 'ml'],
-      ['Vanilla extract', '15.00', '1', 'l', '10', 'ml'],
-      ['Icing sugar', '2.20', '1', 'kg', '400', 'g'],
-      ['Cream cheese', '9.00', '1', 'kg', '225', 'g'],
-    ],
-  },
-  pasta: {
-    dishName: 'Chicken alfredo pasta',
-    makes: '4',
-    unitWord: 'plate',
-    rows: [
-      ['Fettuccine', '3.00', '500', 'g', '400', 'g'],
-      ['Chicken breast', '9.00', '1', 'kg', '500', 'g', '10'],
-      ['Heavy cream', '4.50', '1', 'l', '300', 'ml'],
-      ['Parmesan', '22.00', '1', 'kg', '80', 'g'],
-      ['Butter', '8.00', '1', 'kg', '40', 'g'],
-      ['Garlic', '6.00', '1', 'kg', '15', 'g', '15'],
-    ],
-  },
-};
+import { CurrencySelect } from '@/components/CurrencySelect';
+import { BASE_CURRENCY, getCurrency, localPriceText, localizeRows } from '@/lib/currency';
+import { CAKE_EXTRAS, PRESETS } from '@/lib/presets';
+import { useCurrencyCode } from '@/lib/use-currency';
 
 let rowId = 0;
-function makeRow([name = '', buyPrice = '', buyQty = '1', buyUnit = 'kg', useQty = '', useUnit = 'g', wastePercent = ''] = []) {
+function nextRowId() {
   rowId += 1;
-  return { id: rowId, name, buyPrice, buyQty, buyUnit, useQty, useUnit, wastePercent };
+  return `row-${rowId}`;
+}
+
+function makeRow([name = '', buyPrice = '', buyQty = '1', buyUnit = 'kg', useQty = '', useUnit = 'g', wastePercent = ''] = [], id = nextRowId()) {
+  return { id, name, buyPrice, buyQty, buyUnit, useQty, useUnit, wastePercent };
+}
+
+/** An example value that follows the visitor's currency until they type over it. */
+function useExampleValue(example, code, from = BASE_CURRENCY) {
+  const [typed, setTyped] = useState(null);
+  return [typed ?? localPriceText(example, code, from), setTyped];
 }
 
 const inputClass =
   'w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15';
 const labelClass = 'mb-1 block text-xs font-semibold text-text-secondary';
+const sectionLabelClass = 'mb-2 block text-[11px] font-bold uppercase tracking-wider text-primary';
 
-function UnitSelect({ value, onChange, label }) {
+/** Text or number field with the app's inline error style (red border + message under the box). */
+function Field({ label, value, onChange, error, hint, placeholder, numeric = 'decimal', prefix, suffix, maxLength, className = '' }) {
+  return (
+    <label className={`block ${className}`}>
+      <span className={labelClass}>{label}</span>
+      <span className={`flex items-center rounded-lg border bg-surface transition focus-within:ring-2 ${error ? 'border-red-500 focus-within:ring-red-500/15' : 'border-border focus-within:border-primary focus-within:ring-primary/15'}`}>
+        {prefix ? <span className="pl-3 text-sm font-medium text-text">{prefix}</span> : null}
+        <input
+          inputMode={numeric === 'integer' ? 'numeric' : numeric === 'decimal' ? 'decimal' : 'text'}
+          className="w-full min-w-0 rounded-lg bg-transparent px-3 py-2.5 text-sm text-text outline-none"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          maxLength={maxLength}
+        />
+        {suffix ? <span className="pr-3 text-sm text-text-secondary">{suffix}</span> : null}
+      </span>
+      {error ? (
+        <span className="mt-1 block text-xs font-semibold text-red-600">{error}</span>
+      ) : hint ? (
+        <span className="mt-1 block text-xs text-text-secondary">{hint}</span>
+      ) : null}
+    </label>
+  );
+}
+
+function UnitSelect({ value, onChange, label, options = UNIT_OPTIONS }) {
   return (
     <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className={inputClass}>
-      {UNIT_OPTIONS.map((group) => (
+      {options.map((group) => (
         <optgroup key={group.group} label={group.group}>
           {group.units.map(([unitValue, unitLabel]) => (
             <option key={unitValue} value={unitValue}>{unitLabel}</option>
           ))}
         </optgroup>
+      ))}
+    </select>
+  );
+}
+
+function SellingUnitSelect({ value, onChange }) {
+  return (
+    <select aria-label="Unit" value={value} onChange={(e) => onChange(e.target.value)} className={inputClass}>
+      {SELLING_UNITS.map(([unitValue, unitLabel]) => (
+        <option key={unitValue} value={unitValue}>{unitLabel}</option>
       ))}
     </select>
   );
@@ -125,54 +141,46 @@ function SaveInAppCta() {
   );
 }
 
-function QuickCalculator({ currency }) {
-  const [plateCost, setPlateCost] = useState('3.20');
-  const [sellingPrice, setSellingPrice] = useState('12.00');
+function QuickCalculator({ currency, code }) {
+  const [plateCost, setPlateCost] = useExampleValue('3.20', code);
+  const [sellingPrice, setSellingPrice] = useExampleValue('12.00', code);
   const [target, setTarget] = useState('30');
 
-  const cost = parsePositive(plateCost) ?? 0;
+  const costError = typedError(priceError, plateCost);
+  const cost = costError ? 0 : (parsePositive(plateCost) ?? 0);
   const summary = dishSummary({ totalCost: cost, quantityMade: 1, targetPercent: target, sellingPrice });
 
   return (
     <div className="grid gap-6 @4xl/calc:grid-cols-[1fr_320px]">
       <div className="grid gap-4 @xl:grid-cols-3">
-        <label>
-          <span className={labelClass}>Ingredient cost per plate ({currency})</span>
-          <input inputMode="decimal" className={inputClass} value={plateCost} onChange={(e) => setPlateCost(e.target.value)} />
-        </label>
-        <label>
-          <span className={labelClass}>Selling price ({currency})</span>
-          <input inputMode="decimal" className={inputClass} value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value)} placeholder="Optional" />
-        </label>
-        <label>
-          <span className={labelClass}>Target food cost %</span>
-          <input inputMode="decimal" className={inputClass} value={target} onChange={(e) => setTarget(e.target.value)} />
-        </label>
+        <Field label="Cost per plate" prefix={currency} value={plateCost} onChange={setPlateCost} error={costError} placeholder="0.00" />
+        <Field label="Your price per plate" prefix={currency} value={sellingPrice} onChange={setSellingPrice} error={typedError(priceError, sellingPrice)} placeholder="Optional" />
+        <Field label="Food cost target" suffix="%" value={target} onChange={setTarget} error={typedError(foodCostPercentError, target)} placeholder="30" hint="A common food cost target is 25–35%." />
         <p className="text-xs leading-relaxed text-text-secondary @xl:col-span-3">
           Food cost % = ingredient cost ÷ selling price × 100. Don’t know your plate cost yet? Use the recipe calculator below
           to add up each ingredient.
         </p>
       </div>
       <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-        <ResultRow label="Food cost %" value={formatPercent(summary.foodCostPercent)} strong />
+        <ResultRow label="Food cost" value={formatPercent(summary.foodCostPercent)} strong />
         <ResultRow
           label="Profit per plate"
           value={formatMoney(summary.profit, currency)}
           tone={summary.profit != null ? (summary.profit < 0 ? 'bad' : 'good') : undefined}
         />
-        <ResultRow label={`Price for ${summary.target}% food cost`} value={formatMoney(summary.suggestedPrice, currency)} />
+        <ResultRow label="Suggested per plate" value={formatMoney(summary.suggestedPrice, currency)} />
         <div className="mt-3"><StatusPill status={summary.status} /></div>
       </div>
     </div>
   );
 }
 
-function CakePricingPanel({ currency, totalCost, makes, word }) {
-  const [packaging, setPackaging] = useState('2.50');
-  const [hours, setHours] = useState('3');
-  const [hourlyRate, setHourlyRate] = useState('15');
-  const [overheadPercent, setOverheadPercent] = useState('15');
-  const [profitPercent, setProfitPercent] = useState('20');
+function CakePricingPanel({ currency, code, totalCost, makes, word }) {
+  const [packaging, setPackaging] = useExampleValue(CAKE_EXTRAS.packaging, code);
+  const [hours, setHours] = useState(CAKE_EXTRAS.hours);
+  const [hourlyRate, setHourlyRate] = useExampleValue(CAKE_EXTRAS.hourlyRate, code);
+  const [overheadPercent, setOverheadPercent] = useState(CAKE_EXTRAS.overheadPercent);
+  const [profitPercent, setProfitPercent] = useState(CAKE_EXTRAS.profitPercent);
 
   const result = useMemo(
     () => cakePrice({ ingredientCost: totalCost, packaging, hours, hourlyRate, overheadPercent, profitPercent, portions: makes }),
@@ -182,26 +190,11 @@ function CakePricingPanel({ currency, totalCost, makes, word }) {
   return (
     <>
       <div className="grid grid-cols-2 gap-3 py-3">
-        <label>
-          <span className={labelClass}>Packaging ({currency})</span>
-          <input inputMode="decimal" className={inputClass} value={packaging} onChange={(e) => setPackaging(e.target.value)} placeholder="0" />
-        </label>
-        <label>
-          <span className={labelClass}>Hours of work</span>
-          <input inputMode="decimal" className={inputClass} value={hours} onChange={(e) => setHours(e.target.value)} placeholder="0" />
-        </label>
-        <label>
-          <span className={labelClass}>Your hourly rate ({currency})</span>
-          <input inputMode="decimal" className={inputClass} value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} placeholder="0" />
-        </label>
-        <label>
-          <span className={labelClass}>Overheads %</span>
-          <input inputMode="decimal" className={inputClass} value={overheadPercent} onChange={(e) => setOverheadPercent(e.target.value)} placeholder="0" />
-        </label>
-        <label className="col-span-2">
-          <span className={labelClass}>Profit %</span>
-          <input inputMode="decimal" className={inputClass} value={profitPercent} onChange={(e) => setProfitPercent(e.target.value)} placeholder="0" />
-        </label>
+        <Field label="Packaging" prefix={currency} value={packaging} onChange={setPackaging} error={typedError((v) => positiveNumberError(v, 'amount', 1000000), packaging)} placeholder="0" />
+        <Field label="Hours of work" value={hours} onChange={setHours} error={typedError((v) => positiveNumberError(v, 'number', 10000), hours)} placeholder="0" />
+        <Field label="Your hourly rate" prefix={currency} value={hourlyRate} onChange={setHourlyRate} error={typedError((v) => positiveNumberError(v, 'rate', 1000000), hourlyRate)} placeholder="0" />
+        <Field label="Overheads" suffix="%" value={overheadPercent} onChange={setOverheadPercent} error={typedError((v) => positiveNumberError(v, '%', 1000), overheadPercent)} placeholder="0" />
+        <Field label="Profit" suffix="%" value={profitPercent} onChange={setProfitPercent} error={typedError((v) => positiveNumberError(v, '%', 1000), profitPercent)} placeholder="0" className="col-span-2" />
       </div>
       <ResultRow label="Your time" value={formatMoney(result.labour, currency)} />
       <ResultRow label="Overheads" value={formatMoney(result.overhead, currency)} />
@@ -218,23 +211,48 @@ function CakePricingPanel({ currency, totalCost, makes, word }) {
   );
 }
 
-function RecipeCalculator({ currency, preset, recipe, defaultTarget, pricing }) {
+function RecipeCalculator({ currency, code, preset, recipe, recipeCurrency = BASE_CURRENCY, defaultTarget, pricing }) {
   const start = recipe ?? PRESETS[preset] ?? PRESETS.cookies;
+  const from = recipe ? recipeCurrency : BASE_CURRENCY;
   const [dishName, setDishName] = useState(start.dishName);
-  const [makes, setMakes] = useState(String(start.makes));
-  const [unitWord, setUnitWord] = useState(start.unitWord);
-  const [target, setTarget] = useState(String(defaultTarget ?? 30));
+  const [makes, setMakesText] = useState(String(start.makes));
+  const [yieldUnit, setYieldUnit] = useState(() => toSellingUnit(start.unitWord));
+  const [target, setTargetText] = useState(String(defaultTarget ?? 30));
   const [sellingPrice, setSellingPrice] = useState('');
-  const [rows, setRows] = useState(() => start.rows.map(makeRow));
+  // As in the app: while a field shows an error, results keep its last valid value
+  const [validMakes, setValidMakes] = useState(makes);
+  const [validTarget, setValidTarget] = useState(target);
+  const setMakes = (value) => {
+    setMakesText(value);
+    if (value.trim() !== '' && !wholeNumberError(value)) setValidMakes(value);
+  };
+  const setTarget = (value) => {
+    setTargetText(value);
+    if (value.trim() !== '' && !foodCostPercentError(value)) setValidTarget(value);
+  };
+  // Example rows show local prices until the visitor edits them; after that only the symbol changes, as in the app
+  const exampleRows = useMemo(
+    () => localizeRows(start.rows, code, from).map((row, index) => makeRow(row, `example-${index}`)),
+    [start, code, from],
+  );
+  const [editedRows, setEditedRows] = useState(null);
+  const rows = editedRows ?? exampleRows;
+  const setRows = (update) => setEditedRows((current) => update(current ?? exampleRows));
 
   const updateRow = (id, field, value) =>
-    setRows((current) => current.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
+    setRows((current) => current.map((row) => {
+      if (row.id !== id) return row;
+      const next = { ...row, [field]: value };
+      // Same as the app: changing the purchase unit resets the used unit to a matching one
+      if (field === 'buyUnit' && unitFamily(value) !== unitFamily(row.useUnit)) next.useUnit = defaultUsedUnit(value);
+      return next;
+    }));
   const removeRow = (id) => setRows((current) => current.filter((row) => row.id !== id));
   const addRow = () => setRows((current) => [...current, makeRow()]);
   const clearAll = () => {
     setDishName('');
     setSellingPrice('');
-    setRows([makeRow()]);
+    setEditedRows([makeRow()]);
   };
 
   const { lines, totalCost } = useMemo(() => {
@@ -243,24 +261,43 @@ function RecipeCalculator({ currency, preset, recipe, defaultTarget, pricing }) 
     return { lines: Object.fromEntries(computed.map((line) => [line.id, line])), totalCost: total };
   }, [rows]);
 
-  const summary = dishSummary({ totalCost, quantityMade: makes, targetPercent: target, sellingPrice });
-  const word = unitWord.trim() || 'serving';
+  const makesError = typedError(wholeNumberError, makes);
+  const targetError = typedError(foodCostPercentError, target);
+  const sellingPriceError = typedError(priceError, sellingPrice);
+
+  const summary = dishSummary({
+    totalCost,
+    quantityMade: validMakes,
+    targetPercent: validTarget,
+    sellingPrice: sellingPriceError ? '' : sellingPrice,
+  });
+  const word = sellingUnitWord(yieldUnit);
 
   return (
     <div className="grid gap-6 @4xl/calc:grid-cols-[1fr_340px]">
       <div className="@container">
         <div className="grid gap-4 @md:grid-cols-[1fr_120px_140px]">
-          <label>
-            <span className={labelClass}>What are you making?</span>
-            <input className={inputClass} value={dishName} onChange={(e) => setDishName(e.target.value)} placeholder="e.g. Brownies" />
-          </label>
-          <label>
-            <span className={labelClass}>It makes</span>
-            <input inputMode="decimal" className={inputClass} value={makes} onChange={(e) => setMakes(e.target.value)} />
-          </label>
-          <label>
+          <Field
+            label="What are you making?"
+            numeric="text"
+            value={dishName}
+            onChange={setDishName}
+            placeholder="e.g. Brownies"
+            maxLength={NAME_MAX_LENGTH}
+          />
+          <Field
+            label="Yield"
+            numeric="integer"
+            value={makes}
+            onChange={setMakes}
+            error={makesError}
+            hint="How many this recipe makes"
+            placeholder="e.g. 12"
+            maxLength={6}
+          />
+          <label className="block">
             <span className={labelClass}>Unit</span>
-            <input className={inputClass} value={unitWord} onChange={(e) => setUnitWord(e.target.value)} placeholder="slice, plate…" />
+            <SellingUnitSelect value={yieldUnit} onChange={setYieldUnit} />
           </label>
         </div>
 
@@ -278,11 +315,12 @@ function RecipeCalculator({ currency, preset, recipe, defaultTarget, pricing }) 
               <div key={row.id} className="rounded-xl border border-border bg-surface p-4">
                 <div className="flex items-center gap-3">
                   <input
-                    aria-label="Ingredient name"
+                    aria-label="Name"
                     className={`${inputClass} font-semibold`}
                     value={row.name}
                     onChange={(e) => updateRow(row.id, 'name', e.target.value)}
-                    placeholder="Ingredient, e.g. Flour"
+                    placeholder="e.g. Butter"
+                    maxLength={NAME_MAX_LENGTH}
                   />
                   <span className="w-20 shrink-0 text-right text-sm font-bold text-text">
                     {line?.cost != null ? formatMoney(line.cost, currency) : '—'}
@@ -296,31 +334,60 @@ function RecipeCalculator({ currency, preset, recipe, defaultTarget, pricing }) 
                     ×
                   </button>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-3 @xl:grid-cols-3 @2xl:grid-cols-[1fr_1fr_1fr_1fr_1fr_80px]">
-                  <label>
-                    <span className={labelClass}>You paid ({currency})</span>
-                    <input inputMode="decimal" className={inputClass} value={row.buyPrice} onChange={(e) => updateRow(row.id, 'buyPrice', e.target.value)} />
-                  </label>
-                  <label>
-                    <span className={labelClass}>For</span>
-                    <input inputMode="decimal" className={inputClass} value={row.buyQty} onChange={(e) => updateRow(row.id, 'buyQty', e.target.value)} />
-                  </label>
-                  <label>
-                    <span className={labelClass}>Unit</span>
-                    <UnitSelect label="Purchase unit" value={row.buyUnit} onChange={(v) => updateRow(row.id, 'buyUnit', v)} />
-                  </label>
-                  <label>
-                    <span className={labelClass}>You use</span>
-                    <input inputMode="decimal" className={inputClass} value={row.useQty} onChange={(e) => updateRow(row.id, 'useQty', e.target.value)} />
-                  </label>
-                  <label>
-                    <span className={labelClass}>Unit</span>
-                    <UnitSelect label="Recipe unit" value={row.useUnit} onChange={(v) => updateRow(row.id, 'useUnit', v)} />
-                  </label>
-                  <label>
-                    <span className={labelClass}>Waste %</span>
-                    <input inputMode="decimal" className={inputClass} value={row.wastePercent} onChange={(e) => updateRow(row.id, 'wastePercent', e.target.value)} placeholder="0" />
-                  </label>
+                <div className="mt-4 grid gap-4 @2xl:grid-cols-[3fr_2fr]">
+                  <div>
+                    <span className={sectionLabelClass}>What you bought</span>
+                    <div className="grid grid-cols-2 gap-3 @xl:grid-cols-[1fr_1fr_1fr_1fr]">
+                      <Field
+                        label="Purchased cost"
+                        prefix={currency}
+                        value={row.buyPrice}
+                        onChange={(v) => updateRow(row.id, 'buyPrice', v)}
+                        error={typedError(priceError, row.buyPrice)}
+                        placeholder="0.00"
+                      />
+                      <Field
+                        label="Purchased quantity"
+                        value={row.buyQty}
+                        onChange={(v) => updateRow(row.id, 'buyQty', v)}
+                        error={typedError((v) => positiveNumberError(v, 'quantity'), row.buyQty)}
+                        placeholder="0"
+                      />
+                      <label className="block">
+                        <span className={labelClass}>Purchased unit</span>
+                        <UnitSelect label="Purchased unit" value={row.buyUnit} onChange={(v) => updateRow(row.id, 'buyUnit', v)} />
+                      </label>
+                      <Field
+                        label="Waste %"
+                        value={row.wastePercent}
+                        onChange={(v) => updateRow(row.id, 'wastePercent', v)}
+                        error={typedError(wastePercentError, row.wastePercent)}
+                        placeholder="0"
+                        hint="optional"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <span className={sectionLabelClass}>Used in this dish</span>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field
+                        label="Used quantity"
+                        value={row.useQty}
+                        onChange={(v) => updateRow(row.id, 'useQty', v)}
+                        error={typedError((v) => positiveNumberError(v, 'quantity'), row.useQty)}
+                        placeholder="0"
+                      />
+                      <label className="block">
+                        <span className={labelClass}>Used unit</span>
+                        <UnitSelect
+                          label="Used unit"
+                          value={row.useUnit}
+                          onChange={(v) => updateRow(row.id, 'useUnit', v)}
+                          options={compatibleUnitOptions(row.buyUnit)}
+                        />
+                      </label>
+                    </div>
+                  </div>
                 </div>
                 {line?.error ? <p className="mt-2 text-xs font-semibold text-red-600">{line.error}</p> : null}
               </div>
@@ -364,23 +431,32 @@ function RecipeCalculator({ currency, preset, recipe, defaultTarget, pricing }) 
           <ResultRow label="Total ingredient cost" value={formatMoney(totalCost, currency)} />
           <ResultRow label={`Cost per ${word}`} value={formatMoney(totalCost > 0 ? summary.costPerUnit : null, currency)} strong />
           {pricing === 'cake' ? (
-            <CakePricingPanel currency={currency} totalCost={totalCost} makes={makes} word={word} />
+            <CakePricingPanel currency={currency} code={code} totalCost={totalCost} makes={validMakes} word={word} />
           ) : (
             <>
               <div className="grid grid-cols-2 gap-3 py-3">
-                <label>
-                  <span className={labelClass}>Target food cost %</span>
-                  <input inputMode="decimal" className={inputClass} value={target} onChange={(e) => setTarget(e.target.value)} />
-                </label>
-                <label>
-                  <span className={labelClass}>Your price per {word}</span>
-                  <input inputMode="decimal" className={inputClass} value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value)} placeholder="Optional" />
-                </label>
+                <Field
+                  label="Food cost target"
+                  suffix="%"
+                  value={target}
+                  onChange={setTarget}
+                  error={targetError}
+                  placeholder="30"
+                />
+                <Field
+                  label={`Your price per ${word}`}
+                  prefix={currency}
+                  value={sellingPrice}
+                  onChange={setSellingPrice}
+                  error={sellingPriceError}
+                  placeholder="Optional"
+                />
               </div>
-              <ResultRow label={`Suggested price per ${word}`} value={formatMoney(summary.suggestedPrice, currency)} strong tone="good" />
+              <p className="-mt-1 mb-2 text-xs text-text-secondary">A common food cost target is 25–35%. Leave the price empty to use the suggested price.</p>
+              <ResultRow label={`Suggested per ${word}`} value={formatMoney(summary.suggestedPrice, currency)} strong tone="good" />
               {summary.foodCostPercent != null ? (
                 <>
-                  <ResultRow label="Your food cost %" value={formatPercent(summary.foodCostPercent)} />
+                  <ResultRow label="Food cost" value={formatPercent(summary.foodCostPercent)} />
                   <ResultRow
                     label={`Profit per ${word}`}
                     value={formatMoney(summary.profit, currency)}
@@ -405,29 +481,33 @@ function RecipeCalculator({ currency, preset, recipe, defaultTarget, pricing }) 
  * @param {'recipe'|'quick'} [props.mode]
  * @param {'cookies'|'cake'|'pasta'} [props.preset]
  * @param {{ dishName: string, makes: number|string, unitWord: string, rows: Array }} [props.recipe] overrides preset
+ * @param {string} [props.recipeCurrency] currency code the recipe rows are priced in (default USD)
  * @param {number} [props.defaultTarget]
- * @param {string} [props.defaultCurrency]
  * @param {string} [props.title]
  * @param {'food-cost'|'cake'} [props.pricing] 'cake' prices with packaging, time, overheads and profit
  */
-export function FoodCostCalculator({ mode = 'recipe', preset = 'cookies', recipe, defaultTarget, defaultCurrency = '$', title, pricing = 'food-cost' }) {
-  const [currency, setCurrency] = useState(defaultCurrency);
+export function FoodCostCalculator({ mode = 'recipe', preset = 'cookies', recipe, recipeCurrency, defaultTarget, title, pricing = 'food-cost' }) {
+  const code = useCurrencyCode();
+  const currency = getCurrency(code).symbol;
 
   return (
     <section id="calculator" className="@container/calc scroll-mt-20 rounded-3xl border border-border bg-surface-alt p-4 sm:p-6">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-extrabold text-text">{title ?? (mode === 'quick' ? 'Food cost % calculator' : 'Free recipe cost calculator')}</h2>
-        <label className="flex items-center gap-2 text-sm text-text-secondary">
-          Currency
-          <select aria-label="Currency" value={currency} onChange={(e) => setCurrency(e.target.value)} className="rounded-lg border border-border bg-surface px-2 py-2 text-sm font-semibold text-text">
-            {CURRENCIES.map((symbol) => <option key={symbol} value={symbol}>{symbol}</option>)}
-          </select>
-        </label>
+        <CurrencySelect />
       </div>
       {mode === 'quick' ? (
-        <QuickCalculator currency={currency} />
+        <QuickCalculator currency={currency} code={code} />
       ) : (
-        <RecipeCalculator currency={currency} preset={preset} recipe={recipe} defaultTarget={defaultTarget} pricing={pricing} />
+        <RecipeCalculator
+          currency={currency}
+          code={code}
+          preset={preset}
+          recipe={recipe}
+          recipeCurrency={recipeCurrency}
+          defaultTarget={defaultTarget}
+          pricing={pricing}
+        />
       )}
     </section>
   );

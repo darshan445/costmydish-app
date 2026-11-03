@@ -16,7 +16,10 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { useIngredients } from '../../hooks/useIngredients';
 import useRecipeStore from '../../stores/recipeStore';
 import useSettingsStore from '../../stores/settingsStore';
-import { capitalize, formatCurrency, formatFoodCostPercent, marginStatusLabel } from '../../utils/format';
+import {
+  capitalize, DECIMAL_KEYBOARD, foodCostPercentError, formatCurrency, formatFoodCostPercent, marginStatusLabel,
+  NAME_MAX_LENGTH, parseDecimal, positiveNumberError, priceError, wastePercentError, wholeNumberError,
+} from '../../utils/format';
 import { formatSellingFormatName, labelPerSellingUnit, yieldUnitText } from '../../utils/sellingFormat';
 import { getIngredientUsageSummary } from '../../utils/unitDisplay';
 import {
@@ -106,8 +109,7 @@ function buildDishPayload({
 }
 
 function validateTarget(value) {
-  const n = Number(String(value ?? '').replace(',', '.'));
-  return (Number.isFinite(n) && n > 0 && n <= 100) || 'Enter a % between 1 and 100';
+  return foodCostPercentError(value) ?? true;
 }
 
 export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
@@ -291,14 +293,19 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
   });
 
   const [watchName, watchCategory, watchTarget] = watch(['name', 'category', 'target_food_cost_percent']);
-  const targetPct = validateTarget(watchTarget) === true
-    ? Number(String(watchTarget).replace(',', '.'))
-    : (Number(defaultTarget) || 30);
+  const targetError = foodCostPercentError(watchTarget);
+  const targetInvalid = Boolean(targetError);
+  const targetPct = targetInvalid ? (Number(defaultTarget) || 30) : parseDecimal(watchTarget);
   const categoryLabel = RECIPE_CATEGORIES.find((c) => c.value === watchCategory)?.label ?? 'Other';
   const yieldUnit = yieldUnitChoice ?? getDefaultSellingUnitForCategory(watchCategory, sellingUnitOptions);
   const yieldUnitOptionLabel = sellingUnitOptions.find((u) => u.value === yieldUnit)?.label;
   const yieldUnitWord = yieldUnitText(yieldUnit, yieldUnitOptionLabel);
-  const yieldInvalid = yieldQty.trim() !== '' && parsePositiveNumber(yieldQty) == null;
+  // Dishes saved before yields had to be whole numbers keep their value until it is edited
+  const savedYieldRef = useRef(null);
+  const yieldError = yieldQty.trim() !== '' && yieldQty !== savedYieldRef.current
+    ? wholeNumberError(yieldQty)
+    : null;
+  const yieldInvalid = Boolean(yieldError);
 
   const loadedRef = useRef(false);
   const [loaded, setLoaded] = useState(false);
@@ -313,7 +320,9 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
 
     const applyDefaultFormat = (fmt) => {
       const qty = fmt?.unit_quantity;
-      setYieldQty(qty != null && String(qty).trim() !== '' ? String(qty) : '');
+      const savedYield = qty != null && String(qty).trim() !== '' ? String(qty) : '';
+      savedYieldRef.current = savedYield;
+      setYieldQty(savedYield);
       setYieldUnitChoice(fmt?.selling_unit_name || null);
       setDefaultPrice(parsePositiveNumber(fmt?.selling_price) != null ? String(fmt.selling_price) : '');
     };
@@ -759,22 +768,29 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
     const name = newIngName.trim();
     if (!name) errors.name = 'Enter a name';
 
-    const price = parseFloat(newIngPurchasePrice);
-    if (!newIngPurchasePrice.trim() || Number.isNaN(price) || price < 0) {
-      errors.purchase_price = 'Enter a valid price';
-    }
+    const price = parseDecimal(newIngPurchasePrice);
+    const purchasePriceError = priceError(newIngPurchasePrice);
+    if (purchasePriceError) errors.purchase_price = purchasePriceError;
 
-    const purchaseQty = parseFloat(newIngPurchaseQty);
-    if (Number.isNaN(purchaseQty) || purchaseQty <= 0) {
-      errors.purchase_quantity = 'Enter a valid quantity';
+    const purchaseQty = parseDecimal(newIngPurchaseQty);
+    const purchaseQtyError = positiveNumberError(newIngPurchaseQty, 'quantity');
+    if (purchaseQtyError) errors.purchase_quantity = purchaseQtyError;
+
+    const wasteError = wastePercentError(newIngWastePercent);
+    if (wasteError) {
+      errors.waste_percent = wasteError;
+      setNewIngShowOptional(true);
     }
 
     const isDishIngredientEdit = ingFormMode === 'edit-library';
     const isPurchaseOnlySave = isDishIngredientEdit || ingFormMode === 'edit-purchase';
-    const usedQty = parseFloat(newIngUsedQty);
+    const usedQty = parseDecimal(newIngUsedQty);
     if (!isPurchaseOnlySave) {
-      if (!newIngUsedQty.trim() || Number.isNaN(usedQty) || usedQty <= 0) {
+      if (String(newIngUsedQty ?? '').trim() === '') {
         errors.used_quantity = 'Enter how much you use';
+      } else {
+        const usedQtyError = positiveNumberError(newIngUsedQty, 'quantity');
+        if (usedQtyError) errors.used_quantity = usedQtyError;
       }
       if (usedUnitError) errors.used_unit = usedUnitError;
     }
@@ -785,6 +801,8 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
         form_mode: ingFormMode,
       });
       setNewIngErrors(errors);
+      // The keyboard can cover the fields that failed (e.g. Used quantity); without it the form fits.
+      Keyboard.dismiss();
       return;
     }
 
@@ -802,7 +820,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
     setNewIngSaving(true);
     setNewIngErrors({});
     try {
-      const wastePercent = parseFloat(newIngWastePercent) || 0;
+      const wastePercent = parseDecimal(newIngWastePercent) || 0;
       const notes = newIngNotes.trim() || null;
       const purchasePayload = {
         name,
@@ -1020,9 +1038,11 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
     setShowPriceHistorySheet(false);
   };
 
-  const handleIngSheetClose = () => {
+  /** @param {'x' | 'backdrop' | 'back_button' | undefined} closedVia from the sheet; undefined when closed by code */
+  const handleIngSheetClose = (closedVia) => {
     const sheetTrack = ingSheetTrackRef.current;
     trackDish(AnalyticsEvents.DISH_INGREDIENT_SHEET_CLOSED, {
+      closed_via: typeof closedVia === 'string' ? closedVia : 'code',
       step: ingSheetStep,
       form_mode: ingSheetStep === 'create' ? ingFormMode : null,
       added: sheetTrack.added > 0,
@@ -1072,11 +1092,12 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
       setShowPriceSheet(false);
       return;
     }
-    const price = parsePositiveNumber(raw);
-    if (price == null) {
-      setPriceSheetError('Enter a price above 0, or leave it empty');
+    const sellingPriceError = priceError(raw);
+    if (sellingPriceError) {
+      setPriceSheetError(sellingPriceError);
       return;
     }
+    const price = parseDecimal(raw);
     trackDish(AnalyticsEvents.DISH_PRICE_SET, {
       first_time: parsePositiveNumber(defaultPrice) == null,
       food_cost_percent: priceSheetMetrics?.foodCostPercent ?? null,
@@ -1094,8 +1115,8 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
   };
 
   const priceSheetMetrics = useMemo(() => {
-    const price = parsePositiveNumber(priceSheetValue);
-    if (price == null || !dish.hasAnyCost) return null;
+    if (priceError(priceSheetValue) || !dish.hasAnyCost) return null;
+    const price = parseDecimal(priceSheetValue);
     return calculateSellingFormatMetrics({
       totalRecipeCost: totalCost,
       unitQuantity: dish.quantityMade,
@@ -1106,12 +1127,18 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
 
   // ---- Autosave: the DB always mirrors the dish on screen ----
 
+  // While a field shows an error, autosave keeps its last valid value instead of a fallback
+  const lastValidYieldRef = useRef('');
+  const lastValidTargetRef = useRef(null);
+  if (!yieldInvalid) lastValidYieldRef.current = yieldQty;
+  if (!targetInvalid) lastValidTargetRef.current = targetPct;
+
   const latestRef = useRef(null);
   latestRef.current = {
     name: watchName,
     category: watchCategory,
-    targetPct,
-    yieldQty,
+    targetPct: lastValidTargetRef.current ?? targetPct,
+    yieldQty: lastValidYieldRef.current,
     yieldUnit,
     defaultPrice,
     suggestedPrice: dish.suggestedPrice,
@@ -1297,13 +1324,13 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
   const onSaveDish = async () => {
     trackDish(AnalyticsEvents.DISH_SAVE_TAPPED, {
       ingredient_count: recipeIngredients.length,
-      blocked: recipeIngredients.length === 0 ? 'no_ingredients' : yieldInvalid ? 'invalid_yield' : null,
+      blocked: recipeIngredients.length === 0 ? 'no_ingredients' : yieldInvalid ? 'invalid_yield' : targetInvalid ? 'invalid_target' : null,
     });
     if (recipeIngredients.length === 0) {
       setIngredientError(true);
       return;
     }
-    if (yieldInvalid) return;
+    if (yieldInvalid || targetInvalid) return;
 
     setSaving(true);
     try {
@@ -1517,7 +1544,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
           title={isEdit ? C.action.saveChanges : C.action.saveDish}
           onPress={handleSubmit(onSaveDish)}
           loading={saving}
-          disabled={Boolean(saveBlocker) || yieldInvalid}
+          disabled={Boolean(saveBlocker) || yieldInvalid || targetInvalid}
           size="lg"
           style={styles.footerBtn}
         />
@@ -1594,6 +1621,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                     value={value}
                     onChangeText={onChange}
                   placeholder={C.wizard.dishNamePlaceholder}
+                    maxLength={NAME_MAX_LENGTH}
                     placeholderTextColor={COLORS.textTertiary}
                     autoCapitalize="words"
                   returnKeyType="next"
@@ -1614,14 +1642,15 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                 value={yieldQty}
                 onChangeText={setYieldQty}
                 autoFocus={!isEdit && Boolean(prefillNameParam) && !prefillYieldParam}
-                keyboardType="decimal-pad"
+                keyboardType="number-pad"
+                maxLength={6}
                 placeholder={C.wizard.yieldPlaceholder}
                 placeholderTextColor={COLORS.textTertiary}
                 accessibilityLabel={`${C.wizard.yieldLabel}. ${C.wizard.yieldHelper}`}
               />
             </View>
             <Text style={[styles.fieldHelper, yieldInvalid && styles.fieldHelperError]}>
-              {yieldInvalid ? 'Enter a number above 0' : C.wizard.yieldHelper}
+              {yieldError ?? C.wizard.yieldHelper}
             </Text>
           </View>
           <View style={{ width: SPACING.sm }} />
@@ -1649,20 +1678,18 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
             render={({ field: { onChange, value } }) => (
               <View style={[styles.fieldGroup, { flex: 0.75 }]}>
                 <Text style={styles.fieldLabel}>{C.wizard.targetLabel}</Text>
-                <View style={[styles.inputBox, errors.target_food_cost_percent && styles.inputBoxError]}>
+                <View style={[styles.inputBox, targetError && styles.inputBoxError]}>
                   <TextInput
                     style={styles.textInput}
                     value={value}
                     onChangeText={onChange}
-                    keyboardType="decimal-pad"
+                    keyboardType={DECIMAL_KEYBOARD}
                     placeholder="30"
                     placeholderTextColor={COLORS.textTertiary}
                   />
                   <Text style={styles.suffix}>%</Text>
                 </View>
-                {errors.target_food_cost_percent ? (
-                  <Text style={styles.errorText}>{errors.target_food_cost_percent.message}</Text>
-                ) : null}
+                {targetError ? <Text style={styles.errorText}>{targetError}</Text> : null}
               </View>
             )}
           />
@@ -1864,6 +1891,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
         }
         scrollable={ingSubView ? ingSubView !== 'priceHistory' : ingSheetStep === 'create'}
         keyboardLift
+        dismissKeyboardOnScroll={false}
         footer={
           !ingSubView && ingSheetStep === 'create' ? (
             <>
@@ -2113,7 +2141,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                           setNewIngUsedQty(v);
                           setNewIngErrors((e) => ({ ...e, used_quantity: undefined }));
                         }}
-                    keyboardType="numeric"
+                    keyboardType={DECIMAL_KEYBOARD}
                         placeholder="0"
                     placeholderTextColor={COLORS.textTertiary}
                         autoFocus={!editingIngId}
@@ -2202,6 +2230,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                     value={newIngName}
                     onChangeText={(v) => { setNewIngName(v); setNewIngErrors((e) => ({ ...e, name: undefined })); }}
                     placeholder="e.g. Butter"
+                    maxLength={NAME_MAX_LENGTH}
                     placeholderTextColor={COLORS.textTertiary}
                     autoCapitalize="words"
                     returnKeyType="next"
@@ -2227,7 +2256,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                         setNewIngPurchasePrice(v);
                         setNewIngErrors((e) => ({ ...e, purchase_price: undefined }));
                       }}
-                    keyboardType="numeric"
+                    keyboardType={DECIMAL_KEYBOARD}
                       placeholder="0.00"
                     placeholderTextColor={COLORS.textTertiary}
                       submitBehavior="submit"
@@ -2295,7 +2324,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                           setNewIngPurchaseQty(v);
                           setNewIngErrors((e) => ({ ...e, purchase_quantity: undefined }));
                         }}
-                        keyboardType="numeric"
+                        keyboardType={DECIMAL_KEYBOARD}
                         placeholder="0"
                         placeholderTextColor={COLORS.textTertiary}
                         submitBehavior={newIngShowOptional || showUsedQtyInPurchaseForm ? 'submit' : 'blurAndSubmit'}
@@ -2326,8 +2355,8 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
         </View>
 
                 {(() => {
-                  const q = parseFloat(newIngPurchaseQty) || 1;
-                  const p = parseFloat(newIngPurchasePrice);
+                  const q = parseDecimal(newIngPurchaseQty) || 1;
+                  const p = parseDecimal(newIngPurchasePrice);
                   if (!newIngPurchasePrice?.trim() || Number.isNaN(p) || p <= 0) return null;
                   return (
                     <Text style={styles.inlineCostHint}>
@@ -2357,14 +2386,14 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                     <View
                       ref={newIngWasteRef}
                       collapsable={false}
-                      style={[styles.inputBox, { marginBottom: SPACING.sm }]}
+                      style={[styles.inputBox, { marginBottom: SPACING.sm }, newIngErrors.waste_percent && styles.inputBoxError]}
                     >
               <TextInput
                         ref={wasteInputRef}
                 style={styles.textInput}
                         value={newIngWastePercent}
                         onChangeText={setNewIngWastePercent}
-                keyboardType="numeric"
+                keyboardType={DECIMAL_KEYBOARD}
                         placeholder="0"
                 placeholderTextColor={COLORS.textTertiary}
                         submitBehavior={showUsedQtyInPurchaseForm ? 'submit' : 'blurAndSubmit'}
@@ -2373,6 +2402,11 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                         }}
               />
             </View>
+                    {newIngErrors.waste_percent ? (
+                      <Text style={[styles.errorText, { marginTop: -SPACING.xs, marginBottom: SPACING.sm }]}>
+                        {newIngErrors.waste_percent}
+                      </Text>
+                    ) : null}
                     <Text style={styles.sheetLabel}>Notes</Text>
                     <View style={[styles.inputBox, styles.multilineBox, { marginBottom: SPACING.sm }]}>
                       <TextInput
@@ -2409,7 +2443,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                               setNewIngUsedQty(v);
                               setNewIngErrors((e) => ({ ...e, used_quantity: undefined }));
                             }}
-                keyboardType="numeric"
+                keyboardType={DECIMAL_KEYBOARD}
                             placeholder="0"
                 placeholderTextColor={COLORS.textTertiary}
               />
@@ -2475,7 +2509,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
               setPriceSheetValue(v);
               setPriceSheetError('');
             }}
-            keyboardType="decimal-pad"
+            keyboardType={DECIMAL_KEYBOARD}
             placeholder={dish.hasAnyCost && dish.suggestedPrice ? dish.suggestedPrice.toFixed(2) : '0.00'}
             placeholderTextColor={COLORS.textTertiary}
             autoFocus

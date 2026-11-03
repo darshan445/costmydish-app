@@ -1,3 +1,4 @@
+import { FaqAnswerText } from '@/components/LocalMoney';
 import { MARKETING_FAQ } from '@/lib/faqs';
 
 export function Faq() {
@@ -21,7 +22,7 @@ export function Faq() {
                   <span className="shrink-0 text-primary transition group-open:rotate-45">+</span>
                 </span>
               </summary>
-              <p className="mt-3 text-sm leading-relaxed text-text-secondary">{item.a}</p>
+              <p className="mt-3 text-sm leading-relaxed text-text-secondary"><FaqAnswerText item={item} /></p>
             </details>
           ))}
         </div>

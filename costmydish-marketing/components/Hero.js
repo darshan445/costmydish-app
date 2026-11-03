@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { HeroStats } from '@/components/LocalMoney';
 
 export function Hero() {
   return (
@@ -45,18 +46,7 @@ export function Hero() {
               className="mx-auto"
               priority
             />
-            <div className="mt-6 grid grid-cols-3 gap-3 text-center">
-              {[
-                { label: 'Food cost %', value: '30%' },
-                { label: 'Profit / slice', value: '$3.59' },
-                { label: 'Total cost', value: '$3.21' },
-              ].map((stat) => (
-                <div key={stat.label} className="rounded-xl bg-surface-alt px-2 py-3">
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">{stat.label}</p>
-                  <p className="mt-1 text-sm font-bold text-primary">{stat.value}</p>
-                </div>
-              ))}
-            </div>
+            <HeroStats />
             <p className="mt-3 text-center text-xs leading-relaxed text-text-secondary">
               Live example: Margherita pizza — 4 ingredients, real numbers, instant results.
             </p>

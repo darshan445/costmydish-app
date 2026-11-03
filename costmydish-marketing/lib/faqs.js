@@ -1,7 +1,21 @@
+import { BASE_CURRENCY, getCurrency } from '@/lib/currency';
+import { formatMoney, formatPercent } from '@/lib/food-cost';
+import { pizzaExample } from '@/lib/presets';
+
+export function pizzaFoodCostAnswer(code = BASE_CURRENCY) {
+  const pizza = pizzaExample(code);
+  const money = (value) => formatMoney(value, getCurrency(code).symbol);
+  return `Divide your total ingredient cost by your selling price and multiply by 100. For example, if a pizza costs ${money(pizza.totalCost)} to make and you sell it for ${money(pizza.wholePrice)}, your food cost percentage is ${formatPercent(pizza.wholePercent)}. CostMyDish calculates this automatically for every dish and every way you sell it. You can also try the free food cost calculator on this site.`;
+}
+
+/** Answers whose example money follows the visitor's currency (key → builder). */
+export const LOCAL_ANSWERS = { pizzaFoodCost: pizzaFoodCostAnswer };
+
 export const MARKETING_FAQ = [
   {
     q: 'How do I calculate food cost percentage?',
-    a: 'Divide your total ingredient cost by your selling price and multiply by 100. For example, if a pizza costs $3.21 to make and you sell it for $14.99, your food cost percentage is 21.4%. CostMyDish calculates this automatically for every dish and every way you sell it. You can also try the free food cost calculator on this site.',
+    a: pizzaFoodCostAnswer(),
+    localAnswer: 'pizzaFoodCost',
   },
   {
     q: 'What is a good food cost percentage for a restaurant?',

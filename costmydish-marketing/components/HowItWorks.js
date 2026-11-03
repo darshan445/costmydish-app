@@ -1,3 +1,5 @@
+import { IngredientPriceExample, PizzaExampleText } from '@/components/LocalMoney';
+
 const STEPS = [
   {
     step: '01',
@@ -7,7 +9,11 @@ const STEPS = [
   {
     step: '02',
     title: 'Add ingredients with what you paid',
-    description: 'Flour at $3.99 for 2 kg, milk at ₹50 a litre — then how much the dish uses. Optional waste % for trim. Each ingredient is saved to your Library for next time.',
+    description: (
+      <>
+        <IngredientPriceExample /> — then how much the dish uses. Optional waste % for trim. Each ingredient is saved to your Library for next time.
+      </>
+    ),
   },
   {
     step: '03',
@@ -49,7 +55,7 @@ export function HowItWorks() {
         <div className="mt-14 rounded-2xl border border-border bg-primary-dark p-8 text-white sm:p-10">
           <h3 className="text-xl font-bold">Example: Margherita Pizza</h3>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-white/85">
-            Cost flour, sauce, mozzarella, and olive oil → total recipe cost $3.21. Sell 8 slices at $3.99 → 10% food cost, $3.59 profit per slice. Sell a whole pizza at $14.99 → 21% food cost, $11.78 profit. One recipe, two ways to sell, full clarity.
+            <PizzaExampleText />
           </p>
         </div>
       </div>

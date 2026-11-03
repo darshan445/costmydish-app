@@ -1,10 +1,13 @@
-import { dishSummary, ingredientLineCost, roundPriceUp } from '@/lib/food-cost';
+import { BASE_CURRENCY, moneyFor } from '@/lib/currency';
+import { dishSummary, roundPriceUp } from '@/lib/food-cost';
+import { costRows } from '@/lib/presets';
 
 /**
  * Programmatic "How to price [item]" pages at /pricing/[slug].
  * Recipe rows: [name, price paid, amount bought, buy unit, amount used, use unit, waste %].
- * Example prices are typical retail/wholesale figures; every number on the page is
- * computed from these rows with the app's maths, so copy never drifts from the calculator.
+ * Example prices are typical retail/wholesale figures in `currency` (default USD); every number on the
+ * page is computed from these rows with the app's maths, so copy never drifts from the calculator.
+ * FAQ answers can use {{total}}, {{perUnit}} and {{money:3.50}} (an amount in the item's currency).
  */
 
 export const PRICING_CATEGORIES = {
@@ -69,7 +72,7 @@ export const PRICING_ITEMS = [
     ],
     sellWays: 'Sell singles, boxes of 6 and boxes of 12. Add each as a way to sell in the app to see profit on each box.',
     faqs: [
-      { q: 'What is the average price of a cupcake?', a: 'In the US, bakery cupcakes commonly sell for about $3–$5 each, with custom or decorated cupcakes higher. Check your own cost per cupcake first so your price covers ingredients, packaging and your time.' },
+      { q: 'What is the average price of a cupcake?', a: 'Bakery cupcakes commonly sell for about {{money:3}}–{{money:5}} each, with custom or decorated cupcakes higher. Check your own cost per cupcake first so your price covers ingredients, packaging and your time.' },
       { q: 'How much should I charge for a dozen cupcakes?', a: 'Multiply your price per cupcake by 12, then add the box and any decoration time. Many bakers give a small discount on a dozen but never go below cost plus their hourly rate.' },
       { q: 'Should frosting be included in the cupcake cost?', a: 'Yes. Cost the frosting as ingredients in the same recipe — it is often half the ingredient cost.' },
     ],
@@ -147,7 +150,7 @@ export const PRICING_ITEMS = [
     ],
     sellWays: 'Sell single squares, boxes of 4 or 9, or whole trays for events.',
     faqs: [
-      { q: 'How much do brownies cost to make?', a: 'With the example prices, a 9×13 pan costs about $7–8 in ingredients. Divide by the number of pieces you cut to get cost per brownie.' },
+      { q: 'How much do brownies cost to make?', a: 'With the example prices, a 9×13 pan costs about {{total}} in ingredients. Divide by the number of pieces you cut to get cost per brownie.' },
       { q: 'What size should I cut brownies to sell?', a: 'Pick a size that hits your price point: larger squares for cafés, bites for boxes and events. The calculator shows cost per piece for any count.' },
     ],
   },
@@ -600,7 +603,7 @@ export const PRICING_ITEMS = [
     ],
     sellWays: 'Sell regular and large sizes, with paid add-ins.',
     faqs: [
-      { q: 'How much does it cost to make a smoothie to sell?', a: 'Add up fruit, base and packaging per cup. With the example prices it lands around $2.50 — your fruit prices decide it.' },
+      { q: 'How much does it cost to make a smoothie to sell?', a: 'Add up fruit, base and packaging per cup. With the example prices it lands around {{perUnit}} — your fruit prices decide it.' },
       { q: 'What should a smoothie sell for?', a: 'Divide the cost per cup by your target (often 25–35% for smoothies) and round to a clean menu price.' },
     ],
   },
@@ -730,7 +733,7 @@ export const PRICING_ITEMS = [
     ],
     sellWays: 'Sell single tacos, plates of 3, and family packs.',
     faqs: [
-      { q: 'How much does it cost to make a taco?', a: 'With the example prices, a chicken taco costs just under a dollar. Steak and shrimp cost more.' },
+      { q: 'How much does it cost to make a taco?', a: 'With the example prices, a chicken taco costs about {{perUnit}}. Steak and shrimp cost more.' },
       { q: 'How should a food truck price tacos?', a: 'Cost each protein separately, then price plates of 2–3 so the food cost stays around 25–32%.' },
     ],
   },
@@ -738,7 +741,7 @@ export const PRICING_ITEMS = [
     slug: 'biryani',
     name: 'biryani',
     category: 'dishes',
-    currency: '₹',
+    currency: 'INR',
     recipe: {
       dishName: 'Chicken biryani',
       makes: 6,
@@ -765,7 +768,7 @@ export const PRICING_ITEMS = [
     ],
     sellWays: 'Sell half and full plates, family packs, and catering by the kg.',
     faqs: [
-      { q: 'How much does it cost to make one plate of biryani?', a: 'With the example prices, one plate of chicken biryani costs a little over ₹80 in ingredients. Use your local prices for an exact figure.' },
+      { q: 'How much does it cost to make one plate of biryani?', a: 'With the example prices, one plate of chicken biryani costs about {{perUnit}} in ingredients. Use your local prices for an exact figure.' },
       { q: 'How should cloud kitchens price biryani on Swiggy or Zomato?', a: 'Start from cost per plate, then add packaging and the app’s commission before applying your food cost target.' },
     ],
   },
@@ -797,7 +800,7 @@ export const PRICING_ITEMS = [
     ],
     sellWays: 'Sell regular and large plates, and family trays for takeaway.',
     faqs: [
-      { q: 'How much does a plate of pasta cost to make?', a: 'With the example prices, spaghetti bolognese costs a couple of dollars per plate. Meat and cheese are most of it.' },
+      { q: 'How much does a plate of pasta cost to make?', a: 'With the example prices, spaghetti bolognese costs about {{perUnit}} per plate. Meat and cheese are most of it.' },
       { q: 'What is a good food cost for pasta dishes?', a: 'Pasta often runs below 25%, which helps balance higher-cost dishes like steak or seafood.' },
     ],
   },
@@ -829,7 +832,7 @@ export const PRICING_ITEMS = [
     ],
     sellWays: 'Sell singles, meal deals, and platters for catering.',
     faqs: [
-      { q: 'How much does it cost to make a sandwich to sell?', a: 'With the example prices, a turkey and cheese sandwich costs a couple of dollars including packaging.' },
+      { q: 'How much does it cost to make a sandwich to sell?', a: 'With the example prices, a turkey and cheese sandwich costs about {{perUnit}} including packaging.' },
       { q: 'How do I price sandwich platters?', a: 'Cost one sandwich, multiply by the number on the platter, add the platter, then apply your target food cost.' },
     ],
   },
@@ -860,7 +863,7 @@ export const PRICING_ITEMS = [
     ],
     sellWays: 'Sell single meals and weekly bundles (5, 10, 15) at tiered prices.',
     faqs: [
-      { q: 'How much does a meal prep meal cost to make?', a: 'With the example prices, a chicken, rice and broccoli meal costs just under $3 including the container.' },
+      { q: 'How much does a meal prep meal cost to make?', a: 'With the example prices, a chicken, rice and broccoli meal costs about {{perUnit}} including the container.' },
       { q: 'How should I price meal prep bundles?', a: 'Cost one meal, then set bundle prices that give a small discount while keeping food cost near your target.' },
     ],
   },
@@ -870,18 +873,10 @@ export function getPricingItem(slug) {
   return PRICING_ITEMS.find((item) => item.slug === slug) ?? null;
 }
 
-function toRowObject([name, buyPrice, buyQty, buyUnit, useQty, useUnit, wastePercent = '']) {
-  return { name, buyPrice, buyQty, buyUnit, useQty, useUnit, wastePercent };
-}
-
-/** Worked-example numbers for an item, computed with the same maths as the calculator. */
-export function computePricingExample(item) {
+/** Worked-example numbers for an item in the visitor's currency, computed with the same maths as the calculator. */
+export function computePricingExample(item, code = BASE_CURRENCY) {
   const category = PRICING_CATEGORIES[item.category];
-  const lines = item.recipe.rows.map((row) => {
-    const parsed = toRowObject(row);
-    return { ...parsed, cost: ingredientLineCost(parsed).cost ?? 0 };
-  });
-  const totalCost = lines.reduce((sum, line) => sum + line.cost, 0);
+  const { lines, totalCost } = costRows(item.recipe.rows, code, item.currency ?? BASE_CURRENCY);
   const target = item.target ?? category.target;
   const range = item.range ?? category.range;
   const summary = dishSummary({ totalCost, quantityMade: item.recipe.makes, targetPercent: target });
@@ -899,4 +894,32 @@ export function computePricingExample(item) {
     lowPercent: low,
     highPercent: high,
   };
+}
+
+export function pluralUnit(unit) {
+  return /(ch|sh|s|x)$/.test(unit) ? `${unit}es` : `${unit}s`;
+}
+
+/** All FAQ answers for an item page, with example money in the visitor's currency. */
+export function pricingItemFaqs(item, code = BASE_CURRENCY) {
+  const example = computePricingExample(item, code);
+  const money = moneyFor(code, item.currency ?? BASE_CURRENCY);
+  const { recipe } = item;
+  const unit = recipe.unitWord;
+  const fill = (text) =>
+    text
+      .replaceAll('{{total}}', money.m(example.totalCost))
+      .replaceAll('{{perUnit}}', money.m(example.costPerUnit))
+      .replace(/\{\{money:([\d.]+)\}\}/g, (_, amount) => money.$w(amount));
+  return [
+    {
+      q: `How much does it cost to make one ${unit}?`,
+      a: `In our example (${recipe.dishName}, makes ${recipe.makes} ${recipe.makes === 1 ? unit : pluralUnit(unit)}), the ingredients cost ${money.m(example.totalCost)} in total, or ${money.m(example.costPerUnit)} per ${unit}. Enter your own prices in the calculator for your exact cost.`,
+    },
+    {
+      q: `What food cost % should I use for ${item.name}?`,
+      a: `For ${example.targetLabel} most businesses aim for ${example.range}. At ${example.target}%, the example works out to at least ${money.m(example.suggestedPrice)} per ${unit} before labour and overheads.`,
+    },
+    ...item.faqs.map((faq) => ({ q: faq.q, a: fill(faq.a) })),
+  ];
 }

@@ -3,10 +3,10 @@ import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'r
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
-import { parsePositiveNumber } from '../../lib/calculations';
 import { track, AnalyticsEvents } from '../../lib/analytics';
 import { FOOD_COST_COPY as C } from '../../constants/copy';
 import { COLORS, FONT_SIZE, RADIUS, SHADOW, SPACING } from '../../constants/theme';
+import { NAME_MAX_LENGTH, wholeNumberError } from '../../utils/format';
 
 /**
  * "What are you making?" — dish name, how many it makes and the unit, then open the editor.
@@ -22,7 +22,8 @@ export function DishStartInput({ starters, unitOptions, onStart }) {
   const yieldRef = useRef(null);
 
   const trimmed = name.replace(/\s+/g, ' ').trim();
-  const yieldInvalid = yieldQty.trim() !== '' && parsePositiveNumber(yieldQty) == null;
+  const yieldError = yieldQty.trim() !== '' ? wholeNumberError(yieldQty) : null;
+  const yieldInvalid = Boolean(yieldError);
   const unitLabel = unitOptions.find((u) => u.value === unit)?.label ?? unit;
 
   const changeName = (value) => {
@@ -67,6 +68,7 @@ export function DishStartInput({ starters, unitOptions, onStart }) {
         value={name}
         onChangeText={changeName}
         placeholder={C.home.startPlaceholder}
+        maxLength={NAME_MAX_LENGTH}
         placeholderTextColor={COLORS.textTertiary}
         autoCapitalize="words"
         returnKeyType="next"
@@ -109,7 +111,8 @@ export function DishStartInput({ starters, unitOptions, onStart }) {
             onChangeText={changeYield}
             placeholder={C.wizard.yieldPlaceholder}
             placeholderTextColor={COLORS.textTertiary}
-            keyboardType="decimal-pad"
+            keyboardType="number-pad"
+            maxLength={6}
             onSubmitEditing={submit}
             accessibilityLabel={`${C.wizard.yieldLabel}. ${C.wizard.yieldHelper}`}
           />
@@ -129,7 +132,7 @@ export function DishStartInput({ starters, unitOptions, onStart }) {
         </View>
       </View>
       <Text style={[styles.helper, yieldInvalid && styles.helperError]}>
-        {yieldInvalid ? C.home.yieldInvalid : C.wizard.yieldHelper}
+        {yieldError ?? C.wizard.yieldHelper}
       </Text>
 
       <Button

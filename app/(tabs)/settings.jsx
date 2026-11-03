@@ -18,7 +18,7 @@ import { useSubscription } from '../../hooks/useSubscription';
 import { identifyRevenueCatUser, openManageSubscriptions, restorePurchases } from '../../lib/revenuecat';
 import { refreshSubscriptionState } from '../../lib/subscriptionSync';
 import { showAppAlert } from '../../lib/appAlert';
-import { formatSubscriptionDate } from '../../utils/format';
+import { DECIMAL_KEYBOARD, foodCostPercentError, formatSubscriptionDate, parseDecimal } from '../../utils/format';
 import { searchCurrencies } from '../../constants/currencies';
 import { UNIT_SYSTEMS } from '../../constants/units';
 import { PRIVACY_POLICY_URL, TERMS_URL } from '../../constants/legal';
@@ -147,11 +147,12 @@ export default function SettingsScreen() {
   const unitSystemLabel = UNIT_SYSTEMS.find((s) => s.value === settings.unit_system)?.label ?? 'Metric';
 
   const handleSaveFoodCost = async () => {
-    const val = parseFloat(foodCostInput);
-    if (isNaN(val) || val <= 0 || val > 100) {
-      setFoodCostError('Enter a percentage between 1 and 100.');
+    const error = foodCostPercentError(foodCostInput);
+    if (error) {
+      setFoodCostError(error);
       return;
     }
+    const val = parseDecimal(foodCostInput);
     setFoodCostError('');
     setSaving(true);
     const previous = settings.default_food_cost_percent;
@@ -742,7 +743,7 @@ export default function SettingsScreen() {
           label="Target food cost percentage"
           value={foodCostInput}
           onChangeText={(v) => { setFoodCostInput(v); setFoodCostError(''); }}
-          keyboardType="numeric"
+          keyboardType={DECIMAL_KEYBOARD}
           hint="Typical range: 25–35%"
           error={foodCostError}
         />

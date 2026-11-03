@@ -25,6 +25,7 @@ import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from '../../constants/them
 import { setPendingAddToDishIngredientIds } from '../../lib/pendingRecipeIngredients';
 import { track, AnalyticsEvents } from '../../lib/analytics';
 import { UnitSystemToggle } from '../../components/ui/UnitSystemToggle';
+import { DECIMAL_KEYBOARD, NAME_MAX_LENGTH, parseDecimal, positiveNumberError, priceError, wastePercentError } from '../../utils/format';
 
 let _draftId = 0;
 function newDraftId() {
@@ -46,8 +47,8 @@ function createEmptyCard(defaultUnit) {
 }
 
 function computeCostHint(price, qty, unit, symbol) {
-  const q = parseFloat(qty) || 1;
-  const p = parseFloat(price);
+  const q = parseDecimal(qty) || 1;
+  const p = parseDecimal(price);
   if (!price?.trim() || Number.isNaN(p) || p <= 0) return null;
   return `Bought ${q} ${formatUnitLabel(unit)} for ${symbol}${p.toFixed(2)}`;
 }
@@ -65,10 +66,10 @@ function parseCard(card) {
   return {
     name: card.name.trim(),
     category_id: null,
-    purchase_price: parseFloat(card.purchase_price),
-    purchase_quantity: parseFloat(card.purchase_quantity) || 1,
+    purchase_price: parseDecimal(card.purchase_price),
+    purchase_quantity: parseDecimal(card.purchase_quantity) || 1,
     purchase_unit: card.purchase_unit,
-    waste_percent: parseFloat(card.waste_percent) || 0,
+    waste_percent: parseDecimal(card.waste_percent) || 0,
     notes: card.notes?.trim() || null,
     is_archived: false,
   };
@@ -78,12 +79,12 @@ function validateCard(card, reservedNames) {
   if (!isCardFilled(card)) return null;
 
   if (!card.name?.trim()) return { field: 'name', message: 'Name is required' };
-  const price = parseFloat(card.purchase_price);
-  if (!card.purchase_price?.trim() || Number.isNaN(price) || price < 0) {
-    return { field: 'purchase_price', message: 'Enter a valid price' };
-  }
-  const qty = parseFloat(card.purchase_quantity);
-  if (Number.isNaN(qty) || qty <= 0) return { field: 'purchase_quantity', message: 'Enter a valid quantity' };
+  const purchasePriceError = priceError(card.purchase_price);
+  if (purchasePriceError) return { field: 'purchase_price', message: purchasePriceError };
+  const qtyError = positiveNumberError(card.purchase_quantity, 'quantity');
+  if (qtyError) return { field: 'purchase_quantity', message: qtyError };
+  const wasteError = wastePercentError(card.waste_percent);
+  if (wasteError) return { field: 'waste_percent', message: wasteError };
 
   const nameKey = card.name.trim().toLowerCase();
   if (reservedNames.has(nameKey)) {
@@ -133,6 +134,7 @@ function IngredientDraftCard({
             value={card.name}
             onChangeText={(v) => onChange('name', v)}
             placeholder="e.g. Butter"
+            maxLength={NAME_MAX_LENGTH}
             placeholderTextColor={COLORS.textTertiary}
             autoCapitalize="words"
           />
@@ -148,7 +150,7 @@ function IngredientDraftCard({
             style={[styles.textInput, { flex: 1 }]}
             value={card.purchase_price}
             onChangeText={(v) => onChange('purchase_price', v)}
-            keyboardType="numeric"
+            keyboardType={DECIMAL_KEYBOARD}
             placeholder="0.00"
             placeholderTextColor={COLORS.textTertiary}
           />
@@ -164,11 +166,12 @@ function IngredientDraftCard({
               style={styles.textInput}
               value={card.purchase_quantity}
               onChangeText={(v) => onChange('purchase_quantity', v)}
-              keyboardType="numeric"
+              keyboardType={DECIMAL_KEYBOARD}
               placeholder="0"
               placeholderTextColor={COLORS.textTertiary}
             />
           </View>
+          {errors?.purchase_quantity ? <Text style={styles.errorText}>{errors.purchase_quantity}</Text> : null}
         </View>
 
         <View style={styles.purchaseColGap} />
@@ -207,16 +210,17 @@ function IngredientDraftCard({
         <View style={styles.optionalFields}>
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Waste %</Text>
-            <View style={styles.inputBox}>
+            <View style={[styles.inputBox, errors?.waste_percent && styles.inputBoxError]}>
               <TextInput
                 style={styles.textInput}
                 value={card.waste_percent}
                 onChangeText={(v) => onChange('waste_percent', v)}
-                keyboardType="numeric"
+                keyboardType={DECIMAL_KEYBOARD}
                 placeholder="0"
                 placeholderTextColor={COLORS.textTertiary}
               />
             </View>
+            {errors?.waste_percent ? <Text style={styles.errorText}>{errors.waste_percent}</Text> : null}
           </View>
           <View style={[styles.fieldGroup, { marginBottom: 0 }]}>
             <Text style={styles.fieldLabel}>Notes</Text>
@@ -354,6 +358,9 @@ export default function CreateIngredientScreen() {
         fields: [...new Set(Object.values(nextErrors).flatMap((e) => Object.keys(e)))],
       });
       setCardErrors(nextErrors);
+      setCards((prev) => prev.map((c) => (
+        nextErrors[c.draftId]?.waste_percent ? { ...c, showOptional: true } : c
+      )));
       Alert.alert('Check your ingredients', 'Fix the highlighted fields before saving.');
       return;
     }

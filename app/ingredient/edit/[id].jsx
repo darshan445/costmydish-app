@@ -16,7 +16,7 @@ import useRecipeStore from '../../../stores/recipeStore';
 import useSettingsStore from '../../../stores/settingsStore';
 import { supabase } from '../../../lib/supabase';
 import { track, AnalyticsEvents } from '../../../lib/analytics';
-import { formatFoodCostPercent } from '../../../utils/format';
+import { DECIMAL_KEYBOARD, formatFoodCostPercent, NAME_MAX_LENGTH, parseDecimal, positiveNumberError, priceError, wastePercentError } from '../../../utils/format';
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from '../../../constants/theme';
 import { useSubscription } from '../../../hooks/useSubscription';
 import { useUnitSystem } from '../../../hooks/useUnitSystem';
@@ -30,8 +30,8 @@ import {
 import { UnitSystemToggle } from '../../../components/ui/UnitSystemToggle';
 
 function computeCostHint(price, qty, unit, symbol) {
-  const q = parseFloat(qty) || 1;
-  const p = parseFloat(price);
+  const q = parseDecimal(qty) || 1;
+  const p = parseDecimal(price);
   const displayPrice = p > 0 ? p : 120;
   const prefix = p > 0 ? '' : 'e.g. ';
   return `${prefix}Bought ${q} ${formatUnitLabel(unit)} for ${symbol}${displayPrice}`;
@@ -107,12 +107,14 @@ export default function EditIngredientScreen() {
   );
 
   const onSubmit = async (data) => {
+    const price = parseDecimal(data.purchase_price);
+    const quantity = parseDecimal(data.purchase_quantity);
     const { error } = await updateIngredient(id, {
       name: data.name,
-      purchase_price: parseFloat(data.purchase_price),
-      purchase_quantity: parseFloat(data.purchase_quantity),
+      purchase_price: price,
+      purchase_quantity: quantity,
       purchase_unit: data.purchase_unit,
-      waste_percent: parseFloat(data.waste_percent) || 0,
+      waste_percent: parseDecimal(data.waste_percent) || 0,
       notes: data.notes || null,
     });
     if (error) {
@@ -127,7 +129,7 @@ export default function EditIngredientScreen() {
         .eq('ingredient_id', id);
 
       const affectedIds = new Set((riRows ?? []).map((r) => r.recipe_id));
-      const priceChanged = parseFloat(data.purchase_price) !== Number(ingredient.purchase_price);
+      const priceChanged = price !== Number(ingredient.purchase_price);
 
       track(AnalyticsEvents.INGREDIENT_UPDATED, {
         price_changed: priceChanged,
@@ -149,8 +151,8 @@ export default function EditIngredientScreen() {
 
         setImpactData({
           ingredientName: data.name,
-          newPrice: parseFloat(data.purchase_price),
-          quantity: parseFloat(data.purchase_quantity),
+          newPrice: price,
+          quantity,
           unit: data.purchase_unit,
           affected,
         });
@@ -159,7 +161,7 @@ export default function EditIngredientScreen() {
       }
     } catch (_) {
       track(AnalyticsEvents.INGREDIENT_UPDATED, {
-        price_changed: parseFloat(data.purchase_price) !== Number(ingredient.purchase_price),
+        price_changed: price !== Number(ingredient.purchase_price),
         affected_recipe_count: 0,
       });
     }
@@ -218,6 +220,7 @@ export default function EditIngredientScreen() {
                     value={value}
                     onChangeText={onChange}
                     placeholder="e.g. Butter"
+                    maxLength={NAME_MAX_LENGTH}
                     placeholderTextColor={COLORS.textTertiary}
                     autoCapitalize="words"
                   />
@@ -227,7 +230,10 @@ export default function EditIngredientScreen() {
             )} />
 
           <View style={styles.purchaseCard}>
-            <Controller control={control} name="purchase_price" rules={{ required: 'Required' }}
+            <Controller
+              control={control}
+              name="purchase_price"
+              rules={{ validate: (v) => priceError(v) ?? true }}
               render={({ field: { onChange, value } }) => (
                 <View style={[styles.fieldGroup, { marginBottom: SPACING.sm }]}>
                   <Text style={styles.colLabel}>Purchased cost</Text>
@@ -237,29 +243,34 @@ export default function EditIngredientScreen() {
                       style={[styles.textInput, { flex: 1 }]}
                       value={value}
                       onChangeText={onChange}
-                      keyboardType="numeric"
+                      keyboardType={DECIMAL_KEYBOARD}
                       placeholder="0.00"
                       placeholderTextColor={COLORS.textTertiary}
                     />
                   </View>
+                  {errors.purchase_price && <Text style={styles.errorText}>{errors.purchase_price.message}</Text>}
                 </View>
               )} />
 
             <View style={styles.purchaseRow}>
-              <Controller control={control} name="purchase_quantity"
+              <Controller
+                control={control}
+                name="purchase_quantity"
+                rules={{ validate: (v) => positiveNumberError(v, 'quantity') ?? true }}
                 render={({ field: { onChange, value } }) => (
                   <View style={[styles.purchaseCol, { flex: 1 }]}>
                     <Text style={styles.colLabel}>Purchased quantity</Text>
-                    <View style={styles.inputBox}>
+                    <View style={[styles.inputBox, errors.purchase_quantity && styles.inputBoxError]}>
                       <TextInput
                         style={styles.textInput}
                         value={value}
                         onChangeText={onChange}
-                        keyboardType="numeric"
+                        keyboardType={DECIMAL_KEYBOARD}
                         placeholder="1"
                         placeholderTextColor={COLORS.textTertiary}
                       />
                     </View>
+                    {errors.purchase_quantity && <Text style={styles.errorText}>{errors.purchase_quantity.message}</Text>}
                   </View>
                 )} />
 
@@ -308,23 +319,27 @@ export default function EditIngredientScreen() {
           </TouchableOpacity>
 
           {/* Waste % */}
-          <Controller control={control} name="waste_percent"
+          <Controller
+            control={control}
+            name="waste_percent"
+            rules={{ validate: (v) => wastePercentError(v) ?? true }}
             render={({ field: { onChange, value } }) => (
               <View style={styles.fieldGroup}>
                 <View style={styles.labelRow}>
                   <Text style={styles.fieldLabel}>Waste %</Text>
                   <Text style={styles.optionalTag}>optional</Text>
                 </View>
-                <View style={styles.inputBox}>
+                <View style={[styles.inputBox, errors.waste_percent && styles.inputBoxError]}>
                   <TextInput
                     style={styles.textInput}
                     value={value}
                     onChangeText={onChange}
-                    keyboardType="numeric"
+                    keyboardType={DECIMAL_KEYBOARD}
                     placeholder="0"
                     placeholderTextColor={COLORS.textTertiary}
                   />
                 </View>
+                {errors.waste_percent && <Text style={styles.errorText}>{errors.waste_percent.message}</Text>}
                 <Text style={styles.hintText}>% lost to peeling, trimming, cooking or spoilage</Text>
               </View>
             )} />
