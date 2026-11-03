@@ -27,7 +27,32 @@ function GuideSection({ section }) {
           ))}
         </ul>
       ) : null}
+      {section.link ? (
+        <Link href={section.link.href} className="mt-4 inline-block font-semibold text-primary underline">
+          {section.link.label}
+        </Link>
+      ) : null}
     </section>
+  );
+}
+
+function Downloads({ downloads }) {
+  return (
+    <div className="mt-8 rounded-2xl border border-primary/20 bg-primary/5 p-6">
+      <div className="flex flex-wrap gap-3">
+        {downloads.files.map((file) => (
+          <a
+            key={file.href}
+            href={file.href}
+            download
+            className="rounded-full bg-primary px-6 py-3 text-sm font-bold text-white shadow-md transition hover:bg-primary-dark"
+          >
+            {file.label}
+          </a>
+        ))}
+      </div>
+      {downloads.note ? <p className="mt-4 text-sm leading-relaxed text-text-secondary">{downloads.note}</p> : null}
+    </div>
   );
 }
 
@@ -92,6 +117,8 @@ export function SeoLandingPage({ page }) {
             {page.h1}
           </h1>
           <p className="mt-5 max-w-3xl text-lg leading-relaxed text-text-secondary">{page.subtitle}</p>
+
+          {page.downloads ? <Downloads downloads={page.downloads} /> : null}
 
           {calculatorAtTop ? calculator : null}
 

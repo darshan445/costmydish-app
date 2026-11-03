@@ -253,8 +253,12 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
   const newIngPurchaseQtyRef = useRef(null);
   const newIngWasteRef = useRef(null);
   const newIngUsedQtyRef = useRef(null);
-  /** Name / Purchased cost: no sheet lift (avoids pushing fields off the top). Other fields: full lift. */
-  const [ingSkipKeyboardLift, setIngSkipKeyboardLift] = useState(false);
+  /** TextInput refs for the return-key "next" chain in the new-ingredient form. */
+  const nameInputRef = useRef(null);
+  const priceInputRef = useRef(null);
+  const qtyInputRef = useRef(null);
+  const wasteInputRef = useRef(null);
+  const usedQtyInputRef = useRef(null);
 
   /** Dish id once it exists in the DB (edit mode, or after the first autosave). */
   const savedRecipeIdRef = useRef(recipeId);
@@ -502,7 +506,6 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
     setEditingIngId(dishEditingId);
     setIngCreateOnly(createOnly || mode === 'edit-library');
     setIngSheetStep('create');
-    setIngSkipKeyboardLift(false);
     setShowIngSheet(true);
   }, [defaultPurchaseUnit, compatibleUsedUnits, settingsUnitSystem]);
 
@@ -637,7 +640,6 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
     setIngSheetIngredient(null);
     setAddToDishQueue([]);
     addToDishQueueRef.current = [];
-    setIngSkipKeyboardLift(false);
   };
 
   const openAddIngSheet = () => {
@@ -1038,7 +1040,6 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
     setAddToDishQueue([]);
     addToDishQueueRef.current = [];
     setIngCreateOnly(false);
-    setIngSkipKeyboardLift(false);
     resetNewIngredientForm();
   };
 
@@ -1863,9 +1864,6 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
         }
         scrollable={ingSubView ? ingSubView !== 'priceHistory' : ingSheetStep === 'create'}
         keyboardLift
-        keyboardOffset={
-          !ingSubView && ingSheetStep === 'create' && ingSkipKeyboardLift ? 0 : null
-        }
         footer={
           !ingSubView && ingSheetStep === 'create' ? (
             <>
@@ -2119,7 +2117,6 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                         placeholder="0"
                     placeholderTextColor={COLORS.textTertiary}
                         autoFocus={!editingIngId}
-                        onFocus={() => setIngSkipKeyboardLift(false)}
                   />
                 </View>
                     {newIngErrors.used_quantity ? (
@@ -2200,13 +2197,16 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                   style={[styles.inputBox, newIngErrors.name && styles.inputBoxError, { marginBottom: SPACING.md }]}
                 >
                   <TextInput
+                    ref={nameInputRef}
                     style={styles.textInput}
                     value={newIngName}
                     onChangeText={(v) => { setNewIngName(v); setNewIngErrors((e) => ({ ...e, name: undefined })); }}
                     placeholder="e.g. Butter"
                     placeholderTextColor={COLORS.textTertiary}
                     autoCapitalize="words"
-                    onFocus={() => setIngSkipKeyboardLift(true)}
+                    returnKeyType="next"
+                    submitBehavior="submit"
+                    onSubmitEditing={() => priceInputRef.current?.focus()}
                   />
                 </View>
                 {newIngErrors.name ? <Text style={[styles.errorText, { marginTop: -SPACING.sm, marginBottom: SPACING.sm }]}>{newIngErrors.name}</Text> : null}
@@ -2220,6 +2220,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                   >
                     <Text style={styles.currencyPrefix}>{symbol}</Text>
                     <TextInput
+                      ref={priceInputRef}
                       style={[styles.textInput, { flex: 1 }]}
                       value={newIngPurchasePrice}
                       onChangeText={(v) => {
@@ -2229,7 +2230,8 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                     keyboardType="numeric"
                       placeholder="0.00"
                     placeholderTextColor={COLORS.textTertiary}
-                      onFocus={() => setIngSkipKeyboardLift(true)}
+                      submitBehavior="submit"
+                      onSubmitEditing={() => qtyInputRef.current?.focus()}
                   />
                 </View>
                   {newIngErrors.purchase_price ? (
@@ -2286,6 +2288,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                       style={[styles.inputBox, newIngErrors.purchase_quantity && styles.inputBoxError]}
                     >
                       <TextInput
+                        ref={qtyInputRef}
                         style={styles.textInput}
                         value={newIngPurchaseQty}
                         onChangeText={(v) => {
@@ -2295,7 +2298,11 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                         keyboardType="numeric"
                         placeholder="0"
                         placeholderTextColor={COLORS.textTertiary}
-                        onFocus={() => setIngSkipKeyboardLift(false)}
+                        submitBehavior={newIngShowOptional || showUsedQtyInPurchaseForm ? 'submit' : 'blurAndSubmit'}
+                        onSubmitEditing={() => {
+                          if (newIngShowOptional) wasteInputRef.current?.focus();
+                          else if (showUsedQtyInPurchaseForm) usedQtyInputRef.current?.focus();
+                        }}
                       />
                 </View>
                     {newIngErrors.purchase_quantity ? (
@@ -2353,13 +2360,17 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                       style={[styles.inputBox, { marginBottom: SPACING.sm }]}
                     >
               <TextInput
+                        ref={wasteInputRef}
                 style={styles.textInput}
                         value={newIngWastePercent}
                         onChangeText={setNewIngWastePercent}
                 keyboardType="numeric"
                         placeholder="0"
                 placeholderTextColor={COLORS.textTertiary}
-                        onFocus={() => setIngSkipKeyboardLift(false)}
+                        submitBehavior={showUsedQtyInPurchaseForm ? 'submit' : 'blurAndSubmit'}
+                        onSubmitEditing={() => {
+                          if (showUsedQtyInPurchaseForm) usedQtyInputRef.current?.focus();
+                        }}
               />
             </View>
                     <Text style={styles.sheetLabel}>Notes</Text>
@@ -2373,7 +2384,6 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                         multiline
                         numberOfLines={2}
                         textAlignVertical="top"
-                        onFocus={() => setIngSkipKeyboardLift(false)}
                       />
           </View>
                   </View>
@@ -2392,6 +2402,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                           style={[styles.inputBox, newIngErrors.used_quantity && styles.inputBoxError]}
                         >
               <TextInput
+                            ref={usedQtyInputRef}
                             style={styles.textInput}
                             value={newIngUsedQty}
                             onChangeText={(v) => {
@@ -2401,7 +2412,6 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                 keyboardType="numeric"
                             placeholder="0"
                 placeholderTextColor={COLORS.textTertiary}
-                            onFocus={() => setIngSkipKeyboardLift(false)}
               />
             </View>
                         {newIngErrors.used_quantity ? (
@@ -2469,6 +2479,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
             placeholder={dish.hasAnyCost && dish.suggestedPrice ? dish.suggestedPrice.toFixed(2) : '0.00'}
             placeholderTextColor={COLORS.textTertiary}
             autoFocus
+            onSubmitEditing={confirmPriceSheet}
             accessibilityLabel={C.wizard.priceSheetTitle(yieldUnitWord)}
           />
         </View>

@@ -12,7 +12,7 @@ Complete action plan to rank for **food cost calculator**, **recipe cost calcula
 | Dynamic robots | `/robots.txt` → `app/robots.js` | Allow crawl; block auth utility pages |
 | Web manifest | `/manifest.webmanifest` | PWA metadata, theme color, icons |
 | JSON-LD | `lib/seo.js` | Organization, WebSite, MobileApplication, FAQ, Breadcrumbs |
-| Keyword landing pages | `/food-cost-calculator`, `/recipe-cost-calculator`, `/bakery-pricing-calculator`, `/restaurant-menu-costing` | Target long-tail SEO |
+| Keyword landing pages | `/food-cost-calculator`, `/recipe-cost-calculator`, `/bakery-pricing-calculator`, `/menu-pricing-calculator`, `/cake-pricing-calculator`, `/recipe-costing-template` | Target long-tail SEO |
 | Comparison page | `/compare` | vs spreadsheets, Fillet, meez, xtraCHEF, DishCost |
 | hreflang stubs | `en-US`, `en-GB`, `en-CA`, `en-AU`, `en-IN`, `x-default` | Regional signals (same English content today) |
 | OG / social | `/og-image.png`, `/og-banner.png`, `/logo.png` | Share previews + GSC rich results |
@@ -87,7 +87,10 @@ In GSC → **URL Inspection**, request indexing for:
 - `https://www.costmydish.com/food-cost-calculator`
 - `https://www.costmydish.com/recipe-cost-calculator`
 - `https://www.costmydish.com/bakery-pricing-calculator`
-- `https://www.costmydish.com/restaurant-menu-costing`
+- `https://www.costmydish.com/menu-pricing-calculator`
+- `https://www.costmydish.com/cake-pricing-calculator`
+- `https://www.costmydish.com/food-cost-percentage`
+- `https://www.costmydish.com/recipe-costing-template`
 - `https://www.costmydish.com/compare`
 
 ### Weekly GSC routine (15 min)

@@ -1,30 +1,36 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   Animated,
-  Easing,
   Keyboard,
   Modal as RNModal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useKeyboardInset } from '../../hooks/useKeyboardInset';
+import Reanimated, { interpolate, useAnimatedStyle } from 'react-native-reanimated';
+import {
+  KeyboardAvoidingView,
+  KeyboardEvents,
+  useReanimatedKeyboardAnimation,
+} from 'react-native-keyboard-controller';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNativeModalVisible } from '../../lib/nativeModal';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
-
-const KEYBOARD_LIFT_MS = Platform.OS === 'ios' ? 250 : 200;
 
 /**
  * Bottom sheet modal — backdrop and sheet are non-overlapping siblings (reliable Android taps).
  *
- * Keyboard: lift the whole sheet with marginBottom (= keyboard height) so the form
- * pushes up above the keyboard (same on iOS and Android).
- * Pass keyboardOffset={0} only when you intentionally want no lift.
+ * Keyboard: the whole sheet is wrapped in react-native-keyboard-controller's
+ * KeyboardAvoidingView (behavior="padding"), so it rises with the keyboard on both
+ * platforms, including inside a native Modal and with Android edge-to-edge.
+ * The sheet shrinks to the space above the keyboard and the body scrolls.
+ * Bottom padding clears the home indicator / nav bar while the keyboard is closed and
+ * drops to a normal gap while it is open (the keyboard already clears the system bars).
  *
  * Never open a second modal on top of this one (iOS won't show it). Instead:
  * - onBack: show an inner view (e.g. a unit list) in this sheet with a back arrow
@@ -42,38 +48,26 @@ export function Modal({
   overlay,
   onOverlayClose,
   scrollable = true,
-  /** When false, sheet does not rise with the keyboard. Ignored if keyboardOffset is set. */
+  /** When false, the sheet does not rise with the keyboard. */
   keyboardLift = true,
-  /**
-   * Exact sheet lift in px. When set (including 0), overrides keyboardLift.
-   * Omit to lift by full keyboard height when keyboardLift is true.
-   */
-  keyboardOffset = null,
 }) {
   const visible = useNativeModalVisible(visibleProp);
   const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const sheetLift = useRef(new Animated.Value(0)).current;
-  const trackKeyboard = visible && (keyboardOffset != null || keyboardLift);
-  const keyboardInset = useKeyboardInset({ enabled: trackKeyboard, poll: trackKeyboard });
   const onCloseRef = useRef(onClose);
-
-  const sheetKeyboardInset = keyboardOffset != null
-    ? keyboardOffset
-    : (keyboardLift ? keyboardInset : 0);
-
-  const adjustScrollInsets = keyboardOffset == null && keyboardLift && Platform.OS === 'ios'
-    && sheetKeyboardInset <= 0;
+  const scrollRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
+  const scrollViewportRef = useRef(0);
+  const insets = useSafeAreaInsets();
+  const { progress: keyboardProgress } = useReanimatedKeyboardAnimation();
+  // Closed: clear the home indicator / nav bar (never less than 32). Open: a normal 16 gap.
+  const closedPaddingBottom = SPACING.md + Math.max(insets.bottom, SPACING.md);
+  const sheetPaddingStyle = useAnimatedStyle(() => ({
+    paddingBottom: keyboardLift
+      ? interpolate(keyboardProgress.value, [0, 1], [closedPaddingBottom, SPACING.md])
+      : closedPaddingBottom,
+  }), [keyboardLift, closedPaddingBottom]);
 
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
-
-  useEffect(() => {
-    Animated.timing(sheetLift, {
-      toValue: sheetKeyboardInset,
-      duration: KEYBOARD_LIFT_MS,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-  }, [sheetKeyboardInset, sheetLift]);
 
   useEffect(() => {
     if (visible) {
@@ -85,10 +79,46 @@ export function Modal({
       }).start();
     } else {
       backdropOpacity.setValue(0);
-      sheetLift.setValue(0);
       Keyboard.dismiss();
     }
-  }, [visible, backdropOpacity, sheetLift]);
+  }, [visible, backdropOpacity]);
+
+  /**
+   * Keep the focused input visible inside the sheet once the keyboard is open.
+   * Android's native ScrollView already does this when it is resized; iOS does not,
+   * so we measure the focused TextInput against the scroll content and scroll if needed.
+   */
+  const scrollFocusedInputIntoView = useCallback(() => {
+    const input = TextInput.State.currentlyFocusedInput();
+    const scrollNode = scrollRef.current;
+    if (!input || !scrollNode) return;
+    const content = scrollNode.getInnerViewRef?.() ?? scrollNode.getInnerViewNode?.();
+    if (!content) return;
+    try {
+      input.measureLayout(
+        content,
+        (_x, y, _w, h) => {
+          const viewport = scrollViewportRef.current;
+          const offset = scrollOffsetRef.current;
+          if (!viewport) return;
+          const top = y - SPACING.md;
+          const bottom = y + h + SPACING.md;
+          if (bottom > offset + viewport) {
+            scrollNode.scrollTo({ y: bottom - viewport, animated: true });
+          } else if (top < offset) {
+            scrollNode.scrollTo({ y: Math.max(0, top), animated: true });
+          }
+        },
+        () => {},
+      );
+    } catch (_) { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    if (!visible || !scrollable || !keyboardLift) return undefined;
+    const sub = KeyboardEvents.addListener('keyboardDidShow', scrollFocusedInputIntoView);
+    return () => sub.remove();
+  }, [visible, scrollable, keyboardLift, scrollFocusedInputIntoView]);
 
   const handleClose = () => {
     Keyboard.dismiss();
@@ -118,7 +148,12 @@ export function Modal({
       statusBarTranslucent
     >
       {overlay ?? (
-      <View style={styles.container}>
+      <KeyboardAvoidingView
+        behavior="padding"
+        enabled={keyboardLift}
+        automaticOffset
+        style={styles.container}
+      >
         <Pressable
           style={styles.backdropPressable}
           onPress={onBack ?? handleClose}
@@ -131,7 +166,7 @@ export function Modal({
           />
         </Pressable>
 
-        <Animated.View style={[styles.sheet, { marginBottom: sheetLift }, style]}>
+        <Reanimated.View style={[styles.sheet, sheetPaddingStyle, style]}>
           {title ? (
             <View style={styles.header}>
               {onBack ? (
@@ -163,12 +198,15 @@ export function Modal({
 
           {scrollable ? (
             <ScrollView
+              ref={scrollRef}
               keyboardShouldPersistTaps="always"
-              keyboardDismissMode="on-drag"
-              automaticallyAdjustKeyboardInsets={adjustScrollInsets}
+              keyboardDismissMode="none"
               showsVerticalScrollIndicator={false}
               bounces
               nestedScrollEnabled
+              scrollEventThrottle={16}
+              onScroll={(e) => { scrollOffsetRef.current = e.nativeEvent.contentOffset.y; }}
+              onLayout={(e) => { scrollViewportRef.current = e.nativeEvent.layout.height; }}
             >
               {children}
             </ScrollView>
@@ -177,8 +215,8 @@ export function Modal({
           )}
 
           {footer ? <View style={styles.footer}>{footer}</View> : null}
-        </Animated.View>
-      </View>
+        </Reanimated.View>
+      </KeyboardAvoidingView>
       )}
     </RNModal>
   );
@@ -203,8 +241,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: RADIUS.xl,
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.md,
-    paddingBottom: SPACING.xxl,
     maxHeight: '90%',
+    flexShrink: 1,
     zIndex: 2,
     elevation: 24,
   },
@@ -232,6 +270,7 @@ const styles = StyleSheet.create({
   },
   body: {
     flexGrow: 0,
+    flexShrink: 1,
   },
   footer: {
     paddingTop: SPACING.md,

@@ -20,6 +20,8 @@ export function Input({
   rightElement,
   style,
   inputStyle,
+  ref,
+  ...textInputProps
 }) {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const hidePassword = secureTextEntry && !passwordVisible;
@@ -46,6 +48,8 @@ export function Input({
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <View style={[styles.inputWrapper, error && styles.inputError, !editable && styles.inputDisabled]}>
         <TextInput
+          ref={ref}
+          {...textInputProps}
           style={[styles.input, multiline && styles.multiline, inputStyle]}
           value={value}
           onChangeText={onChangeText}

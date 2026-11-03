@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import {
   MARGIN_LABELS,
   UNIT_OPTIONS,
+  cakePrice,
   dishSummary,
   formatMoney,
   formatPercent,
@@ -166,7 +167,58 @@ function QuickCalculator({ currency }) {
   );
 }
 
-function RecipeCalculator({ currency, preset, recipe, defaultTarget }) {
+function CakePricingPanel({ currency, totalCost, makes, word }) {
+  const [packaging, setPackaging] = useState('2.50');
+  const [hours, setHours] = useState('3');
+  const [hourlyRate, setHourlyRate] = useState('15');
+  const [overheadPercent, setOverheadPercent] = useState('15');
+  const [profitPercent, setProfitPercent] = useState('20');
+
+  const result = useMemo(
+    () => cakePrice({ ingredientCost: totalCost, packaging, hours, hourlyRate, overheadPercent, profitPercent, portions: makes }),
+    [totalCost, packaging, hours, hourlyRate, overheadPercent, profitPercent, makes],
+  );
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3 py-3">
+        <label>
+          <span className={labelClass}>Packaging ({currency})</span>
+          <input inputMode="decimal" className={inputClass} value={packaging} onChange={(e) => setPackaging(e.target.value)} placeholder="0" />
+        </label>
+        <label>
+          <span className={labelClass}>Hours of work</span>
+          <input inputMode="decimal" className={inputClass} value={hours} onChange={(e) => setHours(e.target.value)} placeholder="0" />
+        </label>
+        <label>
+          <span className={labelClass}>Your hourly rate ({currency})</span>
+          <input inputMode="decimal" className={inputClass} value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} placeholder="0" />
+        </label>
+        <label>
+          <span className={labelClass}>Overheads %</span>
+          <input inputMode="decimal" className={inputClass} value={overheadPercent} onChange={(e) => setOverheadPercent(e.target.value)} placeholder="0" />
+        </label>
+        <label className="col-span-2">
+          <span className={labelClass}>Profit %</span>
+          <input inputMode="decimal" className={inputClass} value={profitPercent} onChange={(e) => setProfitPercent(e.target.value)} placeholder="0" />
+        </label>
+      </div>
+      <ResultRow label="Your time" value={formatMoney(result.labour, currency)} />
+      <ResultRow label="Overheads" value={formatMoney(result.overhead, currency)} />
+      <ResultRow label="Total cost" value={formatMoney(result.totalCost, currency)} />
+      <ResultRow label="Profit" value={formatMoney(result.price != null ? result.profit : null, currency)} tone="good" />
+      <ResultRow label="Price to charge" value={formatMoney(result.price, currency)} strong tone="good" />
+      <ResultRow label={`Price per ${word}`} value={formatMoney(result.pricePerPortion, currency)} />
+      {result.ingredientShare != null ? (
+        <p className="mt-2 text-xs text-text-secondary">
+          Ingredients are {formatPercent(result.ingredientShare)} of this price.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function RecipeCalculator({ currency, preset, recipe, defaultTarget, pricing }) {
   const start = recipe ?? PRESETS[preset] ?? PRESETS.cookies;
   const [dishName, setDishName] = useState(start.dishName);
   const [makes, setMakes] = useState(String(start.makes));
@@ -292,10 +344,17 @@ function RecipeCalculator({ currency, preset, recipe, defaultTarget }) {
             <span className="block text-[11px] text-white/75">Cost per {word}</span>
             <span className="block text-lg font-extrabold">{formatMoney(totalCost > 0 ? summary.costPerUnit : null, currency)}</span>
           </span>
-          <span className="text-right">
-            <span className="block text-[11px] text-white/75">Suggested per {word}</span>
-            <span className="block text-lg font-extrabold">{formatMoney(summary.suggestedPrice, currency)}</span>
-          </span>
+          {pricing === 'cake' ? (
+            <span className="text-right">
+              <span className="block text-[11px] text-white/75">Ingredients total</span>
+              <span className="block text-lg font-extrabold">{formatMoney(totalCost, currency)}</span>
+            </span>
+          ) : (
+            <span className="text-right">
+              <span className="block text-[11px] text-white/75">Suggested per {word}</span>
+              <span className="block text-lg font-extrabold">{formatMoney(summary.suggestedPrice, currency)}</span>
+            </span>
+          )}
         </a>
       </div>
 
@@ -304,29 +363,35 @@ function RecipeCalculator({ currency, preset, recipe, defaultTarget }) {
           <p className="text-xs font-bold uppercase tracking-wider text-primary">{dishName || 'Your dish'}</p>
           <ResultRow label="Total ingredient cost" value={formatMoney(totalCost, currency)} />
           <ResultRow label={`Cost per ${word}`} value={formatMoney(totalCost > 0 ? summary.costPerUnit : null, currency)} strong />
-          <div className="grid grid-cols-2 gap-3 py-3">
-            <label>
-              <span className={labelClass}>Target food cost %</span>
-              <input inputMode="decimal" className={inputClass} value={target} onChange={(e) => setTarget(e.target.value)} />
-            </label>
-            <label>
-              <span className={labelClass}>Your price per {word}</span>
-              <input inputMode="decimal" className={inputClass} value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value)} placeholder="Optional" />
-            </label>
-          </div>
-          <ResultRow label={`Suggested price per ${word}`} value={formatMoney(summary.suggestedPrice, currency)} strong tone="good" />
-          {summary.foodCostPercent != null ? (
-            <>
-              <ResultRow label="Your food cost %" value={formatPercent(summary.foodCostPercent)} />
-              <ResultRow
-                label={`Profit per ${word}`}
-                value={formatMoney(summary.profit, currency)}
-                tone={summary.profit < 0 ? 'bad' : 'good'}
-              />
-              <div className="mt-3"><StatusPill status={summary.status} /></div>
-            </>
+          {pricing === 'cake' ? (
+            <CakePricingPanel currency={currency} totalCost={totalCost} makes={makes} word={word} />
           ) : (
-            <p className="mt-2 text-xs text-text-secondary">Enter your price to see food cost % and profit.</p>
+            <>
+              <div className="grid grid-cols-2 gap-3 py-3">
+                <label>
+                  <span className={labelClass}>Target food cost %</span>
+                  <input inputMode="decimal" className={inputClass} value={target} onChange={(e) => setTarget(e.target.value)} />
+                </label>
+                <label>
+                  <span className={labelClass}>Your price per {word}</span>
+                  <input inputMode="decimal" className={inputClass} value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value)} placeholder="Optional" />
+                </label>
+              </div>
+              <ResultRow label={`Suggested price per ${word}`} value={formatMoney(summary.suggestedPrice, currency)} strong tone="good" />
+              {summary.foodCostPercent != null ? (
+                <>
+                  <ResultRow label="Your food cost %" value={formatPercent(summary.foodCostPercent)} />
+                  <ResultRow
+                    label={`Profit per ${word}`}
+                    value={formatMoney(summary.profit, currency)}
+                    tone={summary.profit < 0 ? 'bad' : 'good'}
+                  />
+                  <div className="mt-3"><StatusPill status={summary.status} /></div>
+                </>
+              ) : (
+                <p className="mt-2 text-xs text-text-secondary">Enter your price to see food cost % and profit.</p>
+              )}
+            </>
           )}
           <SaveInAppCta />
         </div>
@@ -343,8 +408,9 @@ function RecipeCalculator({ currency, preset, recipe, defaultTarget }) {
  * @param {number} [props.defaultTarget]
  * @param {string} [props.defaultCurrency]
  * @param {string} [props.title]
+ * @param {'food-cost'|'cake'} [props.pricing] 'cake' prices with packaging, time, overheads and profit
  */
-export function FoodCostCalculator({ mode = 'recipe', preset = 'cookies', recipe, defaultTarget, defaultCurrency = '$', title }) {
+export function FoodCostCalculator({ mode = 'recipe', preset = 'cookies', recipe, defaultTarget, defaultCurrency = '$', title, pricing = 'food-cost' }) {
   const [currency, setCurrency] = useState(defaultCurrency);
 
   return (
@@ -361,7 +427,7 @@ export function FoodCostCalculator({ mode = 'recipe', preset = 'cookies', recipe
       {mode === 'quick' ? (
         <QuickCalculator currency={currency} />
       ) : (
-        <RecipeCalculator currency={currency} preset={preset} recipe={recipe} defaultTarget={defaultTarget} />
+        <RecipeCalculator currency={currency} preset={preset} recipe={recipe} defaultTarget={defaultTarget} pricing={pricing} />
       )}
     </section>
   );

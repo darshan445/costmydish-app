@@ -87,13 +87,37 @@ export const SEO_LANDING_PAGES = [
     slug: 'bakery-pricing-calculator',
     eyebrow: 'Bakery pricing calculator',
     navLabel: 'Bakery pricing calculator',
-    h1: 'Bakery pricing calculator for cakes, cookies & pastries',
+    h1: 'How to price baked goods — free bakery pricing calculator',
     subtitle:
-      'Find what each slice, cookie or whole cake really costs you, and the price that hits your target margin. Try the example cake or enter your own recipe.',
-    metaTitle: 'Bakery Pricing Calculator (Free) — Price Cakes, Cookies & Bread',
+      'A baking cost calculator for home bakers and bakeries: find what each slice, cookie or loaf really costs you, then the price that covers your time and hits your margin.',
+    metaTitle: 'How to Price Baked Goods: Free Bakery Pricing Calculator',
     metaDescription:
-      'Free bakery pricing calculator for home bakers and bakeries. Cost your recipe, get cost per slice or per cookie, and a suggested price. Sell by the slice and whole cake in the free app.',
+      'How to price baked goods: cost your recipe with this free baking cost calculator, get cost per slice or cookie, add packaging and your time, and set a price that makes a profit.',
     calculator: { mode: 'recipe', preset: 'cake' },
+    sections: [
+      {
+        h2: 'How to price baked goods in 4 steps',
+        list: [
+          'Cost the recipe: every ingredient from what you paid, including frosting, fillings and toppings',
+          'Divide by what the batch makes to get the cost per slice, cookie, cupcake or loaf',
+          'Add packaging (boxes, liners, bags, labels) per item',
+          'Set the price: either cost per item ÷ 25–35% target, or ingredients + packaging + your time + 10–20% overheads, plus profit',
+        ],
+        body: [
+          'Home bakers selling custom orders should use the second method — time is usually the biggest cost. Shops selling at volume often start from the food cost % method. Our cake pricing calculator does the time-based version for you.',
+        ],
+      },
+      {
+        h2: 'What a baking cost calculator should include',
+        list: [
+          'Ingredients at today’s prices — butter, eggs and chocolate move the most',
+          'Small items: vanilla, baking powder, salt, sprinkles',
+          'Waste: trimmed cake tops, broken cookies, test bakes',
+          'Packaging per item, not per pack',
+          'Your hours and an hourly rate, plus energy and fees',
+        ],
+      },
+    ],
     bulletsTitle: 'Bakers use the free CostMyDish app to:',
     bullets: [
       'Price the same cake by the slice and as a whole cake, with profit for each',
@@ -119,16 +143,40 @@ export const SEO_LANDING_PAGES = [
   },
   {
     kind: 'tool',
-    slug: 'restaurant-menu-costing',
-    eyebrow: 'Restaurant menu costing',
-    navLabel: 'Restaurant menu costing',
-    h1: 'Restaurant menu costing — know the margin on every dish',
+    slug: 'menu-pricing-calculator',
+    eyebrow: 'Menu pricing calculator',
+    navLabel: 'Menu pricing calculator',
+    h1: 'Menu pricing calculator: how to price menu items for profit',
     subtitle:
-      'Cost a menu item from your supplier prices, including trim and waste, and see the plate cost, food cost % and the price that hits your target.',
-    metaTitle: 'Restaurant Menu Costing Calculator — Plate Cost & Food Cost % (Free)',
+      'Cost a menu item from your supplier prices, including trim and waste, and get the menu price that hits your target food cost %. Built for restaurants, cafés and food trucks.',
+    metaTitle: 'Menu Pricing Calculator (Free): How to Price Menu Items',
     metaDescription:
-      'Free menu costing calculator for restaurants, cafés and food trucks. Get plate cost with waste, food cost % and suggested menu price. Keep every dish on target with the free app.',
+      'Free menu price calculator for restaurants, cafés and food trucks. Get plate cost with waste, food cost % and the right menu price for every item — plus simple restaurant menu pricing strategies.',
     calculator: { mode: 'recipe', preset: 'pasta' },
+    sections: [
+      {
+        h2: 'How to price menu items in 4 steps',
+        list: [
+          'Cost the plate: add up every ingredient from your current supplier prices, including trim and waste',
+          'Pick a target food cost % — most restaurants use 28–35%',
+          'Divide the plate cost by the target: $3.20 ÷ 0.30 = $10.67 minimum menu price',
+          'Round to a menu-friendly price ($10.95 or $11.50) and check it against what nearby places charge',
+        ],
+      },
+      {
+        h2: 'Restaurant menu pricing strategies',
+        list: [
+          'Food cost % pricing — price = plate cost ÷ target %. Simple and the most common starting point',
+          'Gross profit pricing — make sure each plate earns enough cash (price − plate cost), not just a good percentage',
+          'Competitor pricing — check what similar places charge, then confirm your margin still works',
+          'Menu engineering — promote dishes with high profit and high sales; fix or remove low-profit, low-sales ones',
+          'Charm pricing — prices like $12.95 or $13 read as cheaper than $13.50',
+        ],
+        body: [
+          'Whatever strategy you use, re-cost your menu whenever supplier prices change. Most lost margin comes from menu prices set on last year’s ingredient costs.',
+        ],
+      },
+    ],
     bulletsTitle: 'Keep your whole menu on target with the free app:',
     bullets: [
       'Home screen highlights dishes that are over your target food cost %',
@@ -138,6 +186,10 @@ export const SEO_LANDING_PAGES = [
       'A fraction of the price of meez or xtraCHEF',
     ],
     faqs: [
+      {
+        q: 'How do you calculate a menu price?',
+        a: 'Divide the cost of one plate by your target food cost % as a decimal. A plate costing $3.20 at a 30% target should be on the menu for at least $10.67.',
+      },
       {
         q: 'How does CostMyDish compare to meez or xtraCHEF?',
         a: 'Tools like meez and xtraCHEF are built for multi-location groups with invoice scanning and integrations, often $75+ a month. CostMyDish is a focused phone app for recipe costing and margins: free to start and fast to learn.',
@@ -156,14 +208,14 @@ export const SEO_LANDING_PAGES = [
   {
     kind: 'guide',
     slug: 'food-cost-percentage',
-    eyebrow: 'Guide · Food cost %',
-    navLabel: 'Food cost percentage',
-    h1: 'Food cost percentage: formula, calculator and good targets',
+    eyebrow: 'Guide · Food cost formula',
+    navLabel: 'Food cost formula & percentage',
+    h1: 'Food cost formula and food cost percentage (with calculator)',
     subtitle:
-      'What food cost % means, how to calculate it, what a healthy number looks like, and how to set a menu price from it — with a free calculator.',
-    metaTitle: 'Food Cost Percentage: Formula, Calculator & Ideal Targets (2026)',
+      'The food cost formula, how to calculate food cost percentage step by step, the ideal food cost percentage for your type of business, and how to set a menu price from it — with a free calculator.',
+    metaTitle: 'Food Cost Formula & Food Cost Percentage: Calculator + Ideal %',
     metaDescription:
-      'Food cost percentage = ingredient cost ÷ selling price × 100. Learn the formula, see examples, check good targets for restaurants, cafés and bakeries, and use the free calculator.',
+      'Food cost formula: food cost % = ingredient cost ÷ selling price × 100. See worked examples, how to calculate food cost percentage, the ideal food cost % for restaurants, cafés and bakeries, and a free calculator.',
     calculator: { mode: 'quick', title: 'Food cost % calculator' },
     secondCalculator: { mode: 'recipe', preset: 'pasta', title: 'Don’t know your plate cost? Work it out here' },
     sections: [
@@ -175,15 +227,29 @@ export const SEO_LANDING_PAGES = [
         ],
       },
       {
-        h2: 'The food cost percentage formula',
+        h2: 'The food cost formula',
         formula: 'Food cost % = ingredient cost per serving ÷ selling price × 100',
         body: [
-          'Example: a pasta dish costs $3.20 in ingredients and sells for $12.00. $3.20 ÷ $12.00 × 100 = 26.7% food cost, leaving $8.80 gross profit per plate.',
+          'This is the food cost percentage formula used for a single dish. Example: a pasta dish costs $3.20 in ingredients and sells for $12.00. $3.20 ÷ $12.00 × 100 = 26.7% food cost, leaving $8.80 gross profit per plate.',
           'To find a price from a target, flip the formula: selling price = ingredient cost ÷ target %. For a 30% target: $3.20 ÷ 0.30 = $10.67.',
+          'For a whole restaurant over a week or month, the food cost formula uses stock and purchases instead: (opening stock + purchases − closing stock) ÷ food sales × 100. Both are explained below.',
         ],
       },
       {
-        h2: 'What is a good food cost percentage?',
+        h2: 'How to calculate food cost percentage, step by step',
+        list: [
+          'Cost one batch of the recipe: for each ingredient, (price paid ÷ amount bought) × amount used',
+          'Divide the batch cost by the number of portions to get the cost per serving',
+          'Divide the cost per serving by the selling price',
+          'Multiply by 100 — that is your food cost percentage',
+          'Compare it with your target (for example 30%) and adjust the price or recipe if it is over',
+        ],
+        body: [
+          'Example: a batch of 24 cookies costs $4.51, so each cookie costs about $0.19. Sold at $1.00, the food cost percentage is 0.19 ÷ 1.00 × 100 = 19%.',
+        ],
+      },
+      {
+        h2: 'What is the ideal food cost percentage?',
         list: [
           'Full-service restaurants: usually 28–35%',
           'Quick service and food trucks: around 25–32%',
@@ -220,6 +286,10 @@ export const SEO_LANDING_PAGES = [
       'Update an ingredient price once — every dish recalculates',
     ],
     faqs: [
+      {
+        q: 'What is the food cost formula?',
+        a: 'Food cost % = ingredient cost per serving ÷ selling price × 100. For a whole business over a period: (opening stock + purchases − closing stock) ÷ food sales × 100.',
+      },
       {
         q: 'How do I calculate food cost percentage?',
         a: 'Divide the ingredient cost of one serving by its selling price and multiply by 100. $3.20 ÷ $12.00 × 100 = 26.7%.',
@@ -331,7 +401,7 @@ export const SEO_LANDING_PAGES = [
     h1: 'Recipe costing: how to cost a recipe step by step',
     subtitle:
       'A practical recipe costing method for bakers, cafés and restaurants — what to record, how to handle units and yield, and how to keep costs up to date.',
-    metaTitle: 'Recipe Costing: How to Cost a Recipe Step by Step (+ Free Template)',
+    metaTitle: 'Recipe Costing: How to Cost a Recipe Step by Step (Worked Example)',
     metaDescription:
       'How to cost a recipe: list ingredients, record purchase prices, convert units, set the yield and calculate cost per portion. Free recipe costing calculator and worked example.',
     calculator: { mode: 'recipe', preset: 'cookies', title: 'Worked example: 24 chocolate chip cookies' },
@@ -378,6 +448,7 @@ export const SEO_LANDING_PAGES = [
         body: [
           'A spreadsheet template works for a handful of recipes, but formulas break when units mix and you have to update prices in many places. A recipe costing app stores your prices once, converts units for you and recalculates every recipe when a price changes.',
         ],
+        link: { href: '/recipe-costing-template', label: 'Download our free recipe costing template (Excel & Google Sheets) →' },
       },
     ],
     bulletsTitle: 'Cost recipes on your phone with the free app:',
@@ -397,7 +468,158 @@ export const SEO_LANDING_PAGES = [
       },
       {
         q: 'Is there a free recipe costing template?',
-        a: 'The calculator on this page works like a template with the maths done for you. To save recipes and update prices in one place, use the free CostMyDish app.',
+        a: 'Yes — download our free recipe costing template for Excel or Google Sheets from the recipe costing template page. It converts units, adds waste and works out cost per portion and a suggested price. To save recipes and update prices in one place, use the free CostMyDish app.',
+      },
+    ],
+  },
+  {
+    kind: 'tool',
+    slug: 'cake-pricing-calculator',
+    eyebrow: 'Free tool · Cake pricing',
+    navLabel: 'Cake pricing calculator',
+    h1: 'Cake pricing calculator — what to charge for a cake',
+    subtitle:
+      'Add your ingredients, packaging and hours. The calculator adds overheads and profit and gives you a price for the whole cake and per slice — free, no sign-up.',
+    metaTitle: 'Cake Pricing Calculator (Free): How Much to Charge for a Cake',
+    metaDescription:
+      'Free cake pricing calculator for home bakers and bakeries. Cost your ingredients, add packaging, your time, overheads and profit, and get a price for the whole cake and per slice.',
+    calculator: { mode: 'recipe', preset: 'cake', pricing: 'cake', title: 'Cake pricing calculator' },
+    sections: [
+      {
+        h2: 'How the cake pricing calculator works',
+        formula: 'Cake price = (ingredients + packaging + hours × hourly rate) × (1 + overheads %) × (1 + profit %)',
+        body: [
+          'The example is a 12-slice vanilla layer cake with cream cheese frosting: $7.54 ingredients + $2.50 box and board + 3 hours at $15 = $55.04. Add 15% overheads → $63.30. Add 20% profit → $75.96, or $6.33 a slice.',
+          'Ingredients end up around 10% of a fair custom-cake price. If your price is close to your ingredient cost, you are working for free.',
+        ],
+      },
+      {
+        h2: 'What to put in each box',
+        list: [
+          'Ingredients: everything in the cake, filling, frosting and decorations, costed from what you paid',
+          'Packaging: cake box, board, dowels, toppers, ribbon',
+          'Hours: baking, cooling, filling, decorating, clean-up and messaging the customer — not just oven time',
+          'Hourly rate: what you would accept for any other job; $15–25 is common for home bakers',
+          'Overheads: electricity, gas, equipment wear, card and marketplace fees, delivery — usually 10–20%',
+          'Profit: on top of paying yourself, so the business can grow — usually 15–30%',
+        ],
+      },
+      {
+        h2: 'Cake pricing by the slice',
+        body: [
+          'Divide the whole-cake price by the number of slices for a per-slice price. Cafés selling single slices usually charge more per slice than the whole-cake price works out to, because each slice needs its own handling and packaging.',
+        ],
+        link: { href: '/how-to-price-cakes', label: 'Read the full guide: how to price cakes →' },
+      },
+    ],
+    bulletsTitle: 'Bakers use the free CostMyDish app to:',
+    bullets: [
+      'Save ingredient prices once and re-cost every cake in seconds',
+      'Price the same cake by the slice and whole',
+      'Add boxes and boards as ingredients so packaging is never forgotten',
+      'See every cake update when butter or eggs go up',
+    ],
+    faqs: [
+      {
+        q: 'How much should I charge for a cake?',
+        a: 'Add ingredients, packaging and your hours at a fair rate, then add 10–20% for overheads and 15–30% profit. A 12-slice layer cake that costs $7.54 in ingredients and takes 3 hours comes to about $76 at $15 an hour.',
+      },
+      {
+        q: 'How do I calculate the cost of making a cake?',
+        a: 'For each ingredient: (price paid ÷ pack size) × amount used. Add them all together for the ingredient cost, then add packaging. The calculator converts units (kg to g, litres to ml, dozen to each) for you.',
+      },
+      {
+        q: 'Should I charge for my time?',
+        a: 'Yes. Your time is usually the biggest cost in a custom cake. Leaving it out means you are paying customers to take your cakes.',
+      },
+      {
+        q: 'How much should a slice of cake cost?',
+        a: 'Divide the whole-cake price by the number of slices. For single slices sold in a café, many bakers aim for ingredients to be 25–35% of the slice price.',
+      },
+    ],
+  },
+  {
+    kind: 'guide',
+    slug: 'recipe-costing-template',
+    eyebrow: 'Free download · Excel & Google Sheets',
+    navLabel: 'Recipe costing template',
+    h1: 'Free recipe costing template (food cost spreadsheet)',
+    subtitle:
+      'A ready-made recipe cost card for Excel, Google Sheets and Numbers. Enter what you paid and how much you use — it converts units, adds waste, and works out cost per portion, a suggested price and your food cost %.',
+    metaTitle: 'Free Recipe Costing Template & Food Cost Spreadsheet (Excel, Sheets)',
+    metaDescription:
+      'Download a free recipe costing template: a food cost spreadsheet and recipe cost card for Excel and Google Sheets with unit conversion, waste %, cost per portion, suggested price and food cost %.',
+    downloads: {
+      files: [{ href: '/templates/recipe-costing-template.xlsx', label: 'Download the template (.xlsx)' }],
+      note: 'Works in Excel, Google Sheets (upload to Drive, then open with Sheets) and Apple Numbers. No sign-up. Includes a filled-in example (24 chocolate chip cookies) and a blank recipe sheet.',
+    },
+    calculator: { mode: 'recipe', preset: 'cookies', title: 'Prefer not to download? Use the online version' },
+    calculatorAfterSection: 1,
+    sections: [
+      {
+        h2: 'What’s in the recipe costing template',
+        list: [
+          'Recipe cost card: recipe name, how many portions it makes, your target food cost % and selling price',
+          'Up to 30 ingredient lines: price paid, pack size and unit, amount used and unit, waste %',
+          'Automatic unit conversion: kg ↔ g ↔ oz ↔ lb, litres ↔ ml ↔ cups ↔ spoons, each ↔ dozen',
+          'Results: total batch cost, cost per portion, suggested price, food cost % and profit per portion',
+          'Clear warnings when units can’t be converted (weight to volume) or a unit is misspelled',
+        ],
+      },
+      {
+        h2: 'How to use the food cost spreadsheet',
+        list: [
+          'Open the “Your recipe” sheet and type the recipe name and how many portions it makes',
+          'For each ingredient, enter what you paid and the pack size from your receipt (for example $8.00 for 1 kg butter)',
+          'Enter how much the recipe uses, picking the unit from the dropdown (for example 150 g)',
+          'Add a waste % for anything you trim — meat, fish, fruit and vegetables',
+          'Read the cost per portion and suggested price at the top; add your selling price to see food cost % and profit',
+        ],
+        body: [
+          'Make one copy of the sheet per recipe. When an ingredient price changes, update it in every recipe that uses it — or use the free CostMyDish app, which updates every recipe at once.',
+        ],
+      },
+      {
+        h2: 'What goes on a recipe cost card',
+        body: [
+          'A recipe cost card (or recipe costing sheet) records everything needed to cost one recipe: each ingredient, its purchase price and pack size, the amount used, waste, the yield and the resulting cost per portion. Kitchens keep one for every menu item so prices can be checked whenever supplier costs move.',
+          'The template follows the same method professional kitchens use: line cost = (price paid ÷ pack size) × amount used ÷ (1 − waste %). Cost per portion = total ÷ portions. Suggested price = cost per portion ÷ target food cost %.',
+        ],
+        link: { href: '/recipe-costing', label: 'Read the step-by-step recipe costing guide →' },
+      },
+      {
+        h2: 'When to switch from a spreadsheet to an app',
+        list: [
+          'You have more than a handful of recipes and the same ingredient appears in many of them',
+          'Prices change often and you keep forgetting to update every sheet',
+          'You want to cost on your phone while shopping or in the kitchen',
+          'You sell one recipe several ways (by the slice and whole, single and box)',
+        ],
+      },
+    ],
+    bulletsTitle: 'Outgrown the spreadsheet? The free CostMyDish app:',
+    bullets: [
+      'Saves each ingredient price once and reuses it in every recipe',
+      'Updates every recipe automatically when a price changes',
+      'Converts units for you and flags dishes over your target food cost %',
+      'Free plan: 5 dishes and 20 ingredients',
+    ],
+    faqs: [
+      {
+        q: 'Is this recipe costing template free?',
+        a: 'Yes. Download it, change it and use it in your business — no sign-up or email needed.',
+      },
+      {
+        q: 'Does it work in Google Sheets?',
+        a: 'Yes. Upload the .xlsx file to Google Drive and open it with Google Sheets — the formulas and unit dropdowns carry over. It also opens in Excel and Apple Numbers.',
+      },
+      {
+        q: 'Can the template convert cups to grams?',
+        a: 'No — cups are volume and grams are weight, and converting between them needs each ingredient’s density. Buy and use in the same kind of unit (weigh flour in grams, measure milk in ml). The sheet warns you if units don’t match.',
+      },
+      {
+        q: 'What is a good food cost percentage to put in the template?',
+        a: 'Most restaurants use 28–35%, cafés 15–25% for drinks, and bakeries 25–35%. The template starts at 30% — change it to your own target.',
       },
     ],
   },
@@ -446,6 +668,7 @@ export const SEO_LANDING_PAGES = [
           'Overheads are electricity, gas, equipment wear, card fees, delivery fuel and marketplace fees. Many home bakers add 10–20% for these. Then add profit on top so the business can grow — 15–30% is common.',
           'Example: $7.54 ingredients + $2.50 packaging + $45 time = $55.04. Add 15% overheads → $63.30. Add 20% profit → about $76. Ingredients are then roughly 10% of the price.',
         ],
+        link: { href: '/cake-pricing-calculator', label: 'Work out your full cake price with the cake pricing calculator →' },
       },
       {
         h2: 'Pricing by the slice vs. whole cake',

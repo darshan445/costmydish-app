@@ -22,6 +22,10 @@ export function pricingItemTitle(item) {
   return `How to price ${item.name}`;
 }
 
+function pricingItemHeading(item) {
+  return item.h1 ?? `${pricingItemTitle(item)}: cost per ${item.recipe.unitWord} and what to charge`;
+}
+
 export function PricingItemPage({ item }) {
   const category = PRICING_CATEGORIES[item.category];
   const example = computePricingExample(item);
@@ -61,7 +65,7 @@ export function PricingItemPage({ item }) {
             Pricing guide · {category.label}
           </p>
           <h1 className="mt-4 text-3xl font-extrabold leading-tight text-text sm:text-4xl lg:text-5xl">
-            {pricingItemTitle(item)}: cost per {unit} and what to charge
+            {pricingItemHeading(item)}
           </h1>
           <p className="mt-5 text-lg leading-relaxed text-text-secondary">{item.intro}</p>
 
@@ -238,7 +242,7 @@ export function PricingItemPage({ item }) {
         data={{
           '@context': 'https://schema.org',
           '@type': 'Article',
-          headline: `${pricingItemTitle(item)}: cost per ${unit} and what to charge`,
+          headline: pricingItemHeading(item),
           description: item.intro,
           url: `${siteConfig.url}${path}`,
           mainEntityOfPage: `${siteConfig.url}${path}`,

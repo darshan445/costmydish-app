@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import {
   Alert, StyleSheet, Text, TouchableOpacity, View,
@@ -14,6 +14,8 @@ import { COLORS, FONT_SIZE, SPACING } from '../constants/theme';
 
 export default function ChangePasswordScreen() {
   const router = useRouter();
+  const newPasswordRef = useRef(null);
+  const confirmPasswordRef = useRef(null);
   const { changePassword } = useAuthStore();
   const [submitError, setSubmitError] = useState('');
 
@@ -61,6 +63,9 @@ export default function ChangePasswordScreen() {
                 placeholder="Your current password"
                 secureTextEntry
                 autoCapitalize="none"
+                returnKeyType="next"
+                submitBehavior="submit"
+                onSubmitEditing={() => newPasswordRef.current?.focus()}
                 error={errors.currentPassword?.message}
               />
             )}
@@ -75,12 +80,16 @@ export default function ChangePasswordScreen() {
             }}
             render={({ field: { onChange, value } }) => (
               <Input
+                ref={newPasswordRef}
                 label="New password"
                 value={value}
                 onChangeText={(v) => { onChange(v); setSubmitError(''); }}
                 placeholder="Min. 6 characters"
                 secureTextEntry
                 autoCapitalize="none"
+                returnKeyType="next"
+                submitBehavior="submit"
+                onSubmitEditing={() => confirmPasswordRef.current?.focus()}
                 error={errors.password?.message}
               />
             )}
@@ -95,12 +104,15 @@ export default function ChangePasswordScreen() {
             }}
             render={({ field: { onChange, value } }) => (
               <Input
+                ref={confirmPasswordRef}
                 label="Confirm new password"
                 value={value}
                 onChangeText={(v) => { onChange(v); setSubmitError(''); }}
                 placeholder="Repeat new password"
                 secureTextEntry
                 autoCapitalize="none"
+                returnKeyType="done"
+                onSubmitEditing={handleSubmit(onSubmit)}
                 error={errors.confirmPassword?.message}
               />
             )}

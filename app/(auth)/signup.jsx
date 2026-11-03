@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,6 +13,8 @@ import { COLORS, FONT_SIZE, SPACING } from '../../constants/theme';
 
 export default function SignupScreen() {
   const router = useRouter();
+  const emailRef = useRef(null);
+  const passwordRef = useRef(null);
   const { signUp } = useAuthStore();
   const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm({
     defaultValues: { fullName: '', email: '', password: '' },
@@ -42,7 +45,7 @@ export default function SignupScreen() {
             name="fullName"
             rules={{ required: 'Name is required' }}
             render={({ field: { onChange, value } }) => (
-              <Input label="Your name" value={value} onChangeText={onChange} placeholder="Chef John" error={errors.fullName?.message} />
+              <Input label="Your name" value={value} onChangeText={onChange} placeholder="Chef John" autoCapitalize="words" returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => emailRef.current?.focus()} error={errors.fullName?.message} />
             )}
           />
 
@@ -54,7 +57,7 @@ export default function SignupScreen() {
               pattern: { value: /\S+@\S+\.\S+/, message: 'Enter a valid email' },
             }}
             render={({ field: { onChange, value } }) => (
-              <Input label="Email" value={value} onChangeText={onChange} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" error={errors.email?.message} />
+              <Input ref={emailRef} label="Email" value={value} onChangeText={onChange} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => passwordRef.current?.focus()} error={errors.email?.message} />
             )}
           />
 
@@ -63,7 +66,7 @@ export default function SignupScreen() {
             name="password"
             rules={{ required: 'Password is required', minLength: { value: 6, message: 'At least 6 characters' } }}
             render={({ field: { onChange, value } }) => (
-              <Input label="Password" value={value} onChangeText={onChange} placeholder="Min. 6 characters" secureTextEntry showPasswordToggle autoCapitalize="none" error={errors.password?.message} />
+              <Input ref={passwordRef} label="Password" value={value} onChangeText={onChange} placeholder="Min. 6 characters" secureTextEntry showPasswordToggle autoCapitalize="none" returnKeyType="done" onSubmitEditing={handleSubmit(onSubmit)} error={errors.password?.message} />
             )}
           />
 

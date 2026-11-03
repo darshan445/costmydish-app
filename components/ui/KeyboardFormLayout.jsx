@@ -1,10 +1,12 @@
-import { Platform, ScrollView, View } from 'react-native';
-import { useKeyboardInset } from '../../hooks/useKeyboardInset';
+import { View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { SPACING } from '../../constants/theme';
 
 /**
- * Scrollable form layout that keeps inputs visible when the keyboard opens.
- * Scroll content gets extra bottom padding; footer stays pinned (not lifted above keyboard).
- * Pair with softwareKeyboardLayoutMode: "pan" in app.json so Android does not resize the window.
+ * Scrollable form layout that keeps the focused input visible when the keyboard opens.
+ * Uses react-native-keyboard-controller's KeyboardAwareScrollView (same behaviour on
+ * iOS and Android, including Android edge-to-edge). Footer stays pinned below the scroll
+ * area (not lifted above the keyboard).
  */
 export function KeyboardFormLayout({
   children,
@@ -14,25 +16,20 @@ export function KeyboardFormLayout({
   style,
   scrollProps = {},
 }) {
-  const keyboardInset = useKeyboardInset();
-
   return (
     <View style={[{ flex: 1 }, style]}>
-      <ScrollView
+      <KeyboardAwareScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
-        contentContainerStyle={[
-          contentContainerStyle,
-          keyboardInset > 0 && { paddingBottom: keyboardInset },
-        ]}
+        contentContainerStyle={contentContainerStyle}
+        bottomOffset={SPACING.lg}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
         showsVerticalScrollIndicator={false}
         {...scrollProps}
       >
         {children}
-      </ScrollView>
+      </KeyboardAwareScrollView>
       {footer}
     </View>
   );

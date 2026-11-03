@@ -36,6 +36,8 @@ export const PRICING_ITEMS = [
     slug: 'cupcakes',
     name: 'cupcakes',
     category: 'bakery',
+    metaTitle: 'How Much to Charge for Cupcakes (Per Dozen) + Free Calculator',
+    h1: 'How much to charge for cupcakes: price per cupcake and per dozen',
     recipe: {
       dishName: 'Vanilla cupcakes with buttercream',
       makes: 12,
@@ -67,6 +69,7 @@ export const PRICING_ITEMS = [
     ],
     sellWays: 'Sell singles, boxes of 6 and boxes of 12. Add each as a way to sell in the app to see profit on each box.',
     faqs: [
+      { q: 'What is the average price of a cupcake?', a: 'In the US, bakery cupcakes commonly sell for about $3–$5 each, with custom or decorated cupcakes higher. Check your own cost per cupcake first so your price covers ingredients, packaging and your time.' },
       { q: 'How much should I charge for a dozen cupcakes?', a: 'Multiply your price per cupcake by 12, then add the box and any decoration time. Many bakers give a small discount on a dozen but never go below cost plus their hourly rate.' },
       { q: 'Should frosting be included in the cupcake cost?', a: 'Yes. Cost the frosting as ingredients in the same recipe — it is often half the ingredient cost.' },
     ],
@@ -75,6 +78,8 @@ export const PRICING_ITEMS = [
     slug: 'cookies',
     name: 'cookies',
     category: 'bakery',
+    metaTitle: 'How Much to Sell Cookies For (Per Dozen) + Free Calculator',
+    h1: 'How much to sell cookies for: price per cookie and per dozen',
     recipe: {
       dishName: 'Chocolate chip cookies',
       makes: 24,
@@ -105,6 +110,7 @@ export const PRICING_ITEMS = [
     sellWays: 'Sell singles, half-dozens and dozens, or gift boxes. Each pack size gets its own price and profit in the app.',
     faqs: [
       { q: 'How much should I sell homemade cookies for?', a: 'Start from the cost per cookie, divide by your target food cost (e.g. 0.30), then add packaging and your time per dozen.' },
+      { q: 'How much should I charge for a dozen cookies?', a: 'Multiply your price per cookie by 12, then add the box and the time it takes to bake and pack a dozen. A small discount on a dozen is fine, as long as it still covers cost plus your hourly rate.' },
       { q: 'How do I price big bakery-style cookies?', a: 'Use the same recipe but change “It makes” to the smaller count — each cookie’s cost rises in proportion to its size.' },
     ],
   },
@@ -278,6 +284,8 @@ export const PRICING_ITEMS = [
     slug: 'macarons',
     name: 'macarons',
     category: 'bakery',
+    metaTitle: 'Macaron Cost: How to Price Macarons + Free Calculator',
+    h1: 'Macaron cost: how to price macarons per piece and per box',
     recipe: {
       dishName: 'French macarons with buttercream',
       makes: 24,
@@ -301,6 +309,7 @@ export const PRICING_ITEMS = [
     ],
     sellWays: 'Sell boxes of 6, 12 and 24, and towers for weddings.',
     faqs: [
+      { q: 'How much does it cost to make a macaron?', a: 'In ingredients, usually well under a dollar each — almond flour is the biggest cost. Use the calculator with your own prices for your exact cost per macaron, then add your time, failed shells and boxes.' },
       { q: 'Why are macarons so expensive?', a: 'They need precise technique, have a high failure rate and are packed by hand. Ingredients are a small part of the price.' },
       { q: 'How do I account for failed macaron shells?', a: 'Either add a waste % to the shell ingredients or set “It makes” to the number of good macarons you usually get.' },
     ],
@@ -374,6 +383,8 @@ export const PRICING_ITEMS = [
     slug: 'cake-pops',
     name: 'cake pops',
     category: 'bakery',
+    metaTitle: 'How Much to Charge for Cake Pops + Free Cost Calculator',
+    h1: 'How much to charge for cake pops: cost per pop and what to charge',
     recipe: {
       dishName: 'Cake pops',
       makes: 24,
@@ -626,6 +637,8 @@ export const PRICING_ITEMS = [
     slug: 'pizza',
     name: 'pizza',
     category: 'dishes',
+    metaTitle: 'How Much Does It Cost to Make a Pizza? + Pizza Cost Calculator',
+    h1: 'How much does it cost to make a pizza? Cost per pizza and what to charge',
     recipe: {
       dishName: 'Margherita pizza (12-inch)',
       makes: 1,
@@ -658,6 +671,8 @@ export const PRICING_ITEMS = [
     slug: 'burgers',
     name: 'burgers',
     category: 'dishes',
+    metaTitle: 'How Much Does It Cost to Make a Burger? + Cost Calculator',
+    h1: 'How much does it cost to make a burger? Cost per burger and what to charge',
     recipe: {
       dishName: 'Cheeseburger (150 g patty)',
       makes: 4,

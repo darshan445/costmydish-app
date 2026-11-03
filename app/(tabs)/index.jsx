@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Ionicons } from '@expo/vector-icons';
 import { RecipeCard } from '../../components/recipe/RecipeCard';
 import { Skeleton, RecipeCardSkeleton } from '../../components/ui/Skeleton';
@@ -106,8 +107,10 @@ export default function HomeScreen() {
   if (recipes.length === 0) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <ScrollView
+        <KeyboardAwareScrollView
           contentContainerStyle={styles.startScroll}
+          // Keep the "Next" button (below the yield field) visible above the keyboard
+          bottomOffset={110}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -132,7 +135,7 @@ export default function HomeScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
           </TouchableOpacity>
-        </ScrollView>
+        </KeyboardAwareScrollView>
         <PaywallModal visible={showPaywall} onClose={closePaywall} reason="recipe" />
       </SafeAreaView>
     );

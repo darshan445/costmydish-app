@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,6 +12,7 @@ import { COLORS, FONT_SIZE, SPACING } from '../../constants/theme';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const passwordRef = useRef(null);
   const { signIn } = useAuthStore();
   const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm({
     defaultValues: { email: '', password: '' },
@@ -43,7 +45,7 @@ export default function LoginScreen() {
               pattern: { value: /\S+@\S+\.\S+/, message: 'Enter a valid email' },
             }}
             render={({ field: { onChange, value } }) => (
-              <Input label="Email" value={value} onChangeText={onChange} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" error={errors.email?.message} />
+              <Input label="Email" value={value} onChangeText={onChange} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => passwordRef.current?.focus()} error={errors.email?.message} />
             )}
           />
 
@@ -52,7 +54,7 @@ export default function LoginScreen() {
             name="password"
             rules={{ required: 'Password is required' }}
             render={({ field: { onChange, value } }) => (
-              <Input label="Password" value={value} onChangeText={onChange} placeholder="Your password" secureTextEntry showPasswordToggle autoCapitalize="none" error={errors.password?.message} />
+              <Input ref={passwordRef} label="Password" value={value} onChangeText={onChange} placeholder="Your password" secureTextEntry showPasswordToggle autoCapitalize="none" returnKeyType="done" onSubmitEditing={handleSubmit(onSubmit)} error={errors.password?.message} />
             )}
           />
 

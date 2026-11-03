@@ -22,7 +22,7 @@ export async function generateMetadata({ params }) {
   const currency = item.currency ?? '$';
   const unit = item.recipe.unitWord;
   return buildPageMetadata({
-    title: `How to Price ${titleCase(item.name.replace(/^an? /, ''))}: Cost Per ${titleCase(unit)} + Free Calculator`,
+    title: item.metaTitle ?? `How to Price ${titleCase(item.name.replace(/^an? /, ''))}: Cost Per ${titleCase(unit)} + Free Calculator`,
     description: `How much to charge for ${item.name}: our example costs ${formatMoney(example.costPerUnit, currency)} per ${unit} in ingredients, so price at least ${formatMoney(example.suggestedPrice, currency)} at ${example.target}% food cost. Cost your own recipe free.`,
     pathname: `/pricing/${slug}`,
   });

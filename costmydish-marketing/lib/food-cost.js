@@ -121,6 +121,32 @@ export function dishSummary({ totalCost, quantityMade, targetPercent, sellingPri
   return { qty, target, costPerUnit, suggestedPrice, foodCostPercent, profit, status };
 }
 
+function parseNonNegative(value) {
+  if (value == null || value === '') return 0;
+  const n = Number(String(value).replace(',', '.'));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/**
+ * Full cake price including time:
+ * price = (ingredients + packaging + hours × rate) × (1 + overhead %) × (1 + profit %).
+ */
+export function cakePrice({ ingredientCost, packaging, hours, hourlyRate, overheadPercent, profitPercent, portions }) {
+  const ingredients = Math.max(0, Number(ingredientCost) || 0);
+  const packagingCost = parseNonNegative(packaging);
+  const labour = parseNonNegative(hours) * parseNonNegative(hourlyRate);
+  const directCost = ingredients + packagingCost + labour;
+  const overhead = directCost * (parseNonNegative(overheadPercent) / 100);
+  const totalCost = directCost + overhead;
+  const profit = totalCost * (parseNonNegative(profitPercent) / 100);
+  const price = totalCost > 0 ? roundPriceUp(totalCost + profit) : null;
+  const slices = parsePositive(portions) ?? 1;
+  const pricePerPortion = price != null ? roundPriceUp(price / slices) : null;
+  const ingredientShare = price ? (ingredients / price) * 100 : null;
+
+  return { ingredients, packagingCost, labour, overhead, totalCost, profit, price, pricePerPortion, ingredientShare };
+}
+
 export function formatMoney(amount, symbol) {
   if (amount == null || !Number.isFinite(amount)) return '—';
   const fixed = Number(amount).toFixed(2);

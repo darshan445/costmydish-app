@@ -19,6 +19,7 @@ export function DishStartInput({ starters, unitOptions, onStart }) {
   const [pickedChip, setPickedChip] = useState(null);
   const [showUnitPicker, setShowUnitPicker] = useState(false);
   const tracked = useRef({ name: false, yield: false });
+  const yieldRef = useRef(null);
 
   const trimmed = name.replace(/\s+/g, ' ').trim();
   const yieldInvalid = yieldQty.trim() !== '' && parsePositiveNumber(yieldQty) == null;
@@ -69,6 +70,8 @@ export function DishStartInput({ starters, unitOptions, onStart }) {
         placeholderTextColor={COLORS.textTertiary}
         autoCapitalize="words"
         returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => yieldRef.current?.focus()}
         accessibilityLabel={C.home.startLabel}
       />
 
@@ -100,12 +103,14 @@ export function DishStartInput({ starters, unitOptions, onStart }) {
         <View style={styles.yieldCol}>
           <Text style={styles.fieldLabel}>{C.wizard.yieldLabel}</Text>
           <TextInput
+            ref={yieldRef}
             style={[styles.input, yieldInvalid && styles.inputError]}
             value={yieldQty}
             onChangeText={changeYield}
             placeholder={C.wizard.yieldPlaceholder}
             placeholderTextColor={COLORS.textTertiary}
             keyboardType="decimal-pad"
+            onSubmitEditing={submit}
             accessibilityLabel={`${C.wizard.yieldLabel}. ${C.wizard.yieldHelper}`}
           />
         </View>

@@ -2,6 +2,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { bootLog } from '../lib/debugBoot';
 import { supabase } from '../lib/supabase';
 import {
@@ -159,6 +160,7 @@ export default function RootLayout() {
   return (
     <PostHogRoot>
       <SafeAreaProvider>
+        <KeyboardProvider>
         <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="(auth)" />
@@ -173,9 +175,10 @@ export default function RootLayout() {
           <Stack.Screen name="change-password" />
           <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
         </Stack>
-      <AuthBootstrap />
-      <AnalyticsBridge />
-      <AppAlertHost />
+        <AuthBootstrap />
+        <AnalyticsBridge />
+        <AppAlertHost />
+        </KeyboardProvider>
       </SafeAreaProvider>
     </PostHogRoot>
   );

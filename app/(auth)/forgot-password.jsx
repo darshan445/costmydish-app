@@ -71,6 +71,8 @@ export default function ForgotPasswordScreen() {
                     placeholder="you@example.com"
                     keyboardType="email-address"
                     autoCapitalize="none"
+                    returnKeyType="done"
+                    onSubmitEditing={handleSubmit(onSubmit)}
                     error={errors.email?.message}
                   />
                 )}
