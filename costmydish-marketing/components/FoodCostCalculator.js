@@ -134,8 +134,8 @@ function QuickCalculator({ currency }) {
   const summary = dishSummary({ totalCost: cost, quantityMade: 1, targetPercent: target, sellingPrice });
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-      <div className="grid gap-4 sm:grid-cols-3">
+    <div className="grid gap-6 @4xl/calc:grid-cols-[1fr_320px]">
+      <div className="grid gap-4 @xl:grid-cols-3">
         <label>
           <span className={labelClass}>Ingredient cost per plate ({currency})</span>
           <input inputMode="decimal" className={inputClass} value={plateCost} onChange={(e) => setPlateCost(e.target.value)} />
@@ -148,7 +148,7 @@ function QuickCalculator({ currency }) {
           <span className={labelClass}>Target food cost %</span>
           <input inputMode="decimal" className={inputClass} value={target} onChange={(e) => setTarget(e.target.value)} />
         </label>
-        <p className="text-xs leading-relaxed text-text-secondary sm:col-span-3">
+        <p className="text-xs leading-relaxed text-text-secondary @xl:col-span-3">
           Food cost % = ingredient cost ÷ selling price × 100. Don’t know your plate cost yet? Use the recipe calculator below
           to add up each ingredient.
         </p>
@@ -247,9 +247,9 @@ function RecipeCalculator({ currency, preset, recipe, defaultTarget, pricing }) 
   const word = unitWord.trim() || 'serving';
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-      <div>
-        <div className="grid gap-4 sm:grid-cols-[1fr_120px_140px]">
+    <div className="grid gap-6 @4xl/calc:grid-cols-[1fr_340px]">
+      <div className="@container">
+        <div className="grid gap-4 @md:grid-cols-[1fr_120px_140px]">
           <label>
             <span className={labelClass}>What are you making?</span>
             <input className={inputClass} value={dishName} onChange={(e) => setDishName(e.target.value)} placeholder="e.g. Brownies" />
@@ -296,7 +296,7 @@ function RecipeCalculator({ currency, preset, recipe, defaultTarget, pricing }) 
                     ×
                   </button>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-[1fr_1fr_1fr_1fr_1fr_80px]">
+                <div className="mt-3 grid grid-cols-2 gap-3 @xl:grid-cols-3 @2xl:grid-cols-[1fr_1fr_1fr_1fr_1fr_80px]">
                   <label>
                     <span className={labelClass}>You paid ({currency})</span>
                     <input inputMode="decimal" className={inputClass} value={row.buyPrice} onChange={(e) => updateRow(row.id, 'buyPrice', e.target.value)} />
@@ -338,7 +338,7 @@ function RecipeCalculator({ currency, preset, recipe, defaultTarget, pricing }) 
 
         <a
           href="#calculator-result"
-          className="sticky bottom-3 z-10 mt-4 flex items-center justify-between gap-3 rounded-2xl bg-primary-dark px-5 py-3 text-white shadow-lg lg:hidden"
+          className="sticky bottom-3 z-10 mt-4 flex items-center justify-between gap-3 rounded-2xl bg-primary-dark px-5 py-3 text-white shadow-lg @4xl/calc:hidden"
         >
           <span>
             <span className="block text-[11px] text-white/75">Cost per {word}</span>
@@ -358,7 +358,7 @@ function RecipeCalculator({ currency, preset, recipe, defaultTarget, pricing }) 
         </a>
       </div>
 
-      <div id="calculator-result" className="scroll-mt-20 lg:sticky lg:top-24 lg:self-start">
+      <div id="calculator-result" className="scroll-mt-20 @4xl/calc:sticky @4xl/calc:top-24 @4xl/calc:self-start">
         <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
           <p className="text-xs font-bold uppercase tracking-wider text-primary">{dishName || 'Your dish'}</p>
           <ResultRow label="Total ingredient cost" value={formatMoney(totalCost, currency)} />
@@ -414,7 +414,7 @@ export function FoodCostCalculator({ mode = 'recipe', preset = 'cookies', recipe
   const [currency, setCurrency] = useState(defaultCurrency);
 
   return (
-    <section id="calculator" className="scroll-mt-20 rounded-3xl border border-border bg-surface-alt p-4 sm:p-6">
+    <section id="calculator" className="@container/calc scroll-mt-20 rounded-3xl border border-border bg-surface-alt p-4 sm:p-6">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-extrabold text-text">{title ?? (mode === 'quick' ? 'Food cost % calculator' : 'Free recipe cost calculator')}</h2>
         <label className="flex items-center gap-2 text-sm text-text-secondary">
