@@ -6,7 +6,7 @@
 
 import { parseDecimal, parsePositive, SELLING_UNITS } from '@/lib/food-cost';
 import { nameKey, normalizeName } from '@/lib/library-match';
-import { FREE_DISH_LIMIT, FREE_INGREDIENT_LIMIT } from '@/lib/plans';
+import { FREE_DISH_LIMIT, FREE_INGREDIENT_LIMIT, UPGRADE_HINT } from '@/lib/plans';
 import { getSupabase } from '@/lib/supabase';
 
 export { FREE_DISH_LIMIT, FREE_INGREDIENT_LIMIT };
@@ -183,7 +183,7 @@ export async function saveDish(dish, { updateLibrary = [], recipeId = null, extr
   const { isFree, dishCount, library } = await loadAccountState(supabase, userId);
 
   if (!recipeId && isFree && dishCount >= FREE_DISH_LIMIT) {
-    throw new DishSaveError('dish_limit', `The free plan includes ${FREE_DISH_LIMIT} dishes. Upgrade in the app for unlimited dishes.`);
+    throw new DishSaveError('dish_limit', `The free plan includes ${FREE_DISH_LIMIT} dishes. ${UPGRADE_HINT}`);
   }
 
   const byName = new Map(library.map((item) => [nameKey(item.name), item]));
@@ -213,7 +213,7 @@ export async function saveDish(dish, { updateLibrary = [], recipeId = null, extr
   if (isFree && library.length + toCreate.length > FREE_INGREDIENT_LIMIT) {
     throw new DishSaveError(
       'ingredient_limit',
-      `The free plan includes ${FREE_INGREDIENT_LIMIT} ingredients. Upgrade in the app for unlimited ingredients.`,
+      `The free plan includes ${FREE_INGREDIENT_LIMIT} ingredients. ${UPGRADE_HINT}`,
     );
   }
 

@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@revenuecat/purchases-js": "^1.74.0",
     "@supabase/supabase-js": "^2.49.8",
     "next": "^16.2.7",
     "next-sitemap": "^4.2.3",

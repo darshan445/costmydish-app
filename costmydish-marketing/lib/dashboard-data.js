@@ -5,6 +5,7 @@
 
 import { getCurrency, isCurrencyCode } from '@/lib/currency';
 import { ingredientLineCost, roundPriceUp } from '@/lib/food-cost';
+import { UPGRADE_HINT } from '@/lib/plans';
 import { FREE_INGREDIENT_LIMIT } from '@/lib/save-dish';
 import { getSupabase } from '@/lib/supabase';
 
@@ -273,7 +274,7 @@ export async function addIngredient(userId, values) {
   ]);
   if (count.error) throw new DashboardError('failed', 'Couldn’t save this ingredient. Please try again.');
   if (tier === 'free' && (count.count ?? 0) >= FREE_INGREDIENT_LIMIT) {
-    throw new DashboardError('limit', `The free plan includes ${FREE_INGREDIENT_LIMIT} ingredients. Upgrade in the app for unlimited ingredients.`);
+    throw new DashboardError('limit', `The free plan includes ${FREE_INGREDIENT_LIMIT} ingredients. ${UPGRADE_HINT}`);
   }
   const { error } = await supabase.from('ingredients').insert({ ...values, user_id: userId, category_id: null });
   if (error) throw writeError(error, values.name, 'Couldn’t save this ingredient. Please try again.');

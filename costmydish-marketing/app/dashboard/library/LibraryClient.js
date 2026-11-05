@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DashboardError,
@@ -10,6 +11,7 @@ import {
   updateIngredient,
 } from '@/lib/dashboard-data';
 import { formatMoney } from '@/lib/food-cost';
+import { UPGRADE_HINT, UPGRADE_PATH, WEB_BILLING_ENABLED } from '@/lib/plans';
 import { FREE_INGREDIENT_LIMIT } from '@/lib/save-dish';
 import { useDashboardUser } from '../DashboardGate';
 import {
@@ -119,9 +121,12 @@ export function LibraryClient({ appStoreHref, playStoreHref }) {
         <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4" role="alert">
           <p className="text-sm font-bold text-amber-800">You have reached the {FREE_INGREDIENT_LIMIT} ingredients included in the free plan.</p>
           <p className="mt-1 text-xs text-amber-800/90">
-            Upgrade to Hobbyist in the CostMyDish app for unlimited dishes and ingredients. Your account is the same on web and app.
+            {UPGRADE_HINT} Your account is the same on web and app.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
+            {WEB_BILLING_ENABLED ? (
+              <Link href={UPGRADE_PATH} className="rounded-full bg-primary px-4 py-2 text-xs font-bold text-white shadow-sm">Upgrade to Hobbyist</Link>
+            ) : null}
             <a href={appStoreHref} target="_blank" rel="noopener noreferrer" className="rounded-full bg-white px-4 py-2 text-xs font-bold text-text shadow-sm">App Store</a>
             <a href={playStoreHref} target="_blank" rel="noopener noreferrer" className="rounded-full bg-white px-4 py-2 text-xs font-bold text-text shadow-sm">Google Play</a>
             <button type="button" onClick={() => setShowLimit(false)} className="px-2 text-xs font-semibold text-amber-800 underline">Dismiss</button>

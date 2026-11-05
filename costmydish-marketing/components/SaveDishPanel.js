@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { FREE_DISH_LIMIT, FREE_INGREDIENT_LIMIT } from '@/lib/plans';
+import { FREE_DISH_LIMIT, FREE_INGREDIENT_LIMIT, UPGRADE_HINT, UPGRADE_PATH, WEB_BILLING_ENABLED } from '@/lib/plans';
 import { DishSaveError, previewDishSave, saveDish } from '@/lib/save-dish';
 
 const buttonClass =
@@ -151,9 +151,14 @@ export function SaveDishPanel({
       <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4" role="alert">
         <p className="text-sm font-bold text-amber-800">{limitMessage(limitCode)}</p>
         <p className="mt-1 text-xs leading-relaxed text-amber-800/90">
-          Upgrade to Hobbyist in the CostMyDish app for unlimited dishes and ingredients. Your account is the same on web and app.
+          {UPGRADE_HINT} Your account is the same on web and app.
         </p>
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
+          {WEB_BILLING_ENABLED ? (
+            <a href={UPGRADE_PATH} target="_blank" rel="noopener" className="rounded-full bg-primary px-4 py-2 text-xs font-bold text-white shadow-sm">
+              Upgrade to Hobbyist
+            </a>
+          ) : null}
           <a href={appStoreHref} target="_blank" rel="noopener noreferrer" className="rounded-full bg-white px-4 py-2 text-xs font-bold text-text shadow-sm">
             App Store
           </a>

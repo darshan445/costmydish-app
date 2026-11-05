@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { WEB_BILLING_ENABLED, loadManagementUrl, loadWebPlans, startCheckout, waitForHobbyist } from '@/lib/billing';
 import { CURRENCIES, getCurrency } from '@/lib/currency';
 import {
   changePassword,
@@ -116,7 +117,15 @@ function UsageBar({ label, used, limit }) {
   );
 }
 
-function SubscriptionCard({ settings, onUpgrade }) {
+function CheckIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0 text-primary" aria-hidden>
+      <path d="m5 12 5 5 9-10" />
+    </svg>
+  );
+}
+
+function SubscriptionCard({ settings, managementUrl, onUpgrade }) {
   if (settings.isFree) {
     return (
       <div className="rounded-2xl border border-border bg-surface p-5">
@@ -135,8 +144,9 @@ function SubscriptionCard({ settings, onUpgrade }) {
           Upgrade to Hobbyist
         </button>
         <p className="mt-2 text-center text-xs text-text-secondary">
-          From {HOBBYIST_MONTHLY_PRICE}/mo (USD). Upgrades are made in the CostMyDish app through the App Store or
-          Google Play, where you’ll see the price in your currency. They apply here straight away.
+          {WEB_BILLING_ENABLED
+            ? 'Upgrade here or in the CostMyDish app — Hobbyist works on both with the same account.'
+            : `From ${HOBBYIST_MONTHLY_PRICE}/mo (USD). Upgrades are made in the CostMyDish app through the App Store or Google Play. They apply here straight away.`}
         </p>
       </div>
     );
@@ -154,22 +164,163 @@ function SubscriptionCard({ settings, onUpgrade }) {
       <ul className="mt-4 space-y-1.5">
         {HOBBYIST_FEATURES.map((feature) => (
           <li key={feature} className="flex items-center gap-2 text-sm text-text">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-primary" aria-hidden>
-              <path d="m5 12 5 5 9-10" />
-            </svg>
+            <CheckIcon />
             {feature}
           </li>
         ))}
       </ul>
       <div className="mt-5 border-t border-border pt-4">
         <p className="text-sm font-semibold text-text">Manage or cancel your subscription</p>
-        <p className="mt-0.5 text-xs text-text-secondary">Use the store you subscribed with.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <a href={APPLE_SUBSCRIPTIONS} target="_blank" rel="noopener noreferrer" className={secondaryButtonClass}>App Store</a>
-          <a href={GOOGLE_SUBSCRIPTIONS} target="_blank" rel="noopener noreferrer" className={secondaryButtonClass}>Google Play</a>
-        </div>
+        {managementUrl ? (
+          <>
+            <p className="mt-0.5 text-xs text-text-secondary">Change plan, update your payment method or cancel.</p>
+            <a href={managementUrl} target="_blank" rel="noopener noreferrer" className={`${secondaryButtonClass} mt-3`}>Manage subscription</a>
+          </>
+        ) : (
+          <>
+            <p className="mt-0.5 text-xs text-text-secondary">
+              Use the store you subscribed with. Subscribed on the web? Use the link in your Paddle receipt email.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a href={APPLE_SUBSCRIPTIONS} target="_blank" rel="noopener noreferrer" className={secondaryButtonClass}>App Store</a>
+              <a href={GOOGLE_SUBSCRIPTIONS} target="_blank" rel="noopener noreferrer" className={secondaryButtonClass}>Google Play</a>
+            </div>
+          </>
+        )}
       </div>
     </div>
+  );
+}
+
+function PlanOption({ selected, title, price, detail, badge, onSelect }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={`flex min-h-16 w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition ${selected ? 'border-primary bg-emerald-50 ring-2 ring-primary/15' : 'border-border hover:bg-surface-alt'}`}
+    >
+      <span>
+        <span className="flex items-center gap-2">
+          <span className="text-sm font-bold text-text">{title}</span>
+          {badge ? <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-amber-800">{badge}</span> : null}
+        </span>
+        {detail ? <span className="mt-0.5 block text-xs text-text-secondary">{detail}</span> : null}
+      </span>
+      <span className="shrink-0 text-sm font-bold text-text">{price}</span>
+    </button>
+  );
+}
+
+function UpgradeDialog({ user, onPaid, onClose }) {
+  const [plans, setPlans] = useState(null);
+  const [choice, setChoice] = useState('annual');
+  const [step, setStep] = useState('choose');
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setError('');
+    try {
+      setPlans(await loadWebPlans(user.id));
+    } catch (err) {
+      setError(err.message);
+    }
+  }, [user.id]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loads prices when the dialog opens
+    load();
+  }, [load]);
+
+  async function checkout() {
+    setStep('checkout');
+    setError('');
+    try {
+      const paid = await startCheckout(user.id, user.email, plans[choice].rcPackage);
+      if (!paid) return setStep('choose');
+      setStep('activating');
+      onPaid(await waitForHobbyist(user.id));
+    } catch (err) {
+      setError(err.message);
+      setStep('choose');
+    }
+  }
+
+  // The Paddle checkout opens in its own window on top of the page
+  if (step === 'checkout') return null;
+
+  if (step === 'activating') {
+    return (
+      <Dialog title="Activating Hobbyist…" onClose={onClose} busy>
+        <div className="flex items-center gap-3">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden />
+          <p className="text-sm text-text-secondary">Payment received. Unlocking your account — this takes a few seconds.</p>
+        </div>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog
+      title="Upgrade to Hobbyist"
+      onClose={onClose}
+      footer={(
+        <>
+          <button type="button" onClick={onClose} className={secondaryButtonClass}>Not now</button>
+          <button type="button" onClick={checkout} disabled={!plans} className={primaryButtonClass}>Continue to payment</button>
+        </>
+      )}
+    >
+      <ul className="space-y-1.5">
+        {HOBBYIST_FEATURES.map((feature) => (
+          <li key={feature} className="flex items-center gap-2 text-sm text-text">
+            <CheckIcon />
+            {feature}
+          </li>
+        ))}
+        <li className="flex items-center gap-2 text-sm text-text">
+          <CheckIcon />
+          Works in the iPhone and Android app too
+        </li>
+      </ul>
+
+      <div className="mt-5 space-y-2">
+        {plans ? (
+          <>
+            <PlanOption
+              selected={choice === 'annual'}
+              onSelect={() => setChoice('annual')}
+              title="Yearly"
+              price={`${plans.annual.price}/yr`}
+              detail={`${plans.annualPerMonth}/month, billed yearly`}
+              badge={plans.savingsPercent ? `Save ${plans.savingsPercent}%` : null}
+            />
+            <PlanOption
+              selected={choice === 'monthly'}
+              onSelect={() => setChoice('monthly')}
+              title="Monthly"
+              price={`${plans.monthly.price}/mo`}
+              detail="Billed monthly"
+            />
+          </>
+        ) : error ? null : (
+          [0, 1].map((n) => <div key={n} className="h-16 animate-pulse rounded-xl border border-border bg-surface-alt" />)
+        )}
+      </div>
+
+      {error ? (
+        <p className="mt-3 text-sm font-semibold text-red-600" role="alert">
+          {error}{' '}
+          {!plans ? <button type="button" onClick={load} className="underline">Try again</button> : null}
+        </p>
+      ) : null}
+
+      <p className="mt-4 text-xs leading-relaxed text-text-secondary">
+        Renews automatically until you cancel — cancel anytime. Payments are handled by Paddle, our reseller; tax may
+        be added at checkout. See our <Link href="/terms" className="underline">Terms</Link> and{' '}
+        <Link href="/refund-policy" className="underline">Refund Policy</Link>.
+      </p>
+    </Dialog>
   );
 }
 
@@ -498,6 +649,7 @@ export function SettingsClient() {
   const [loadError, setLoadError] = useState(false);
   const [dialog, setDialog] = useState(null);
   const [toast, setToast] = useState('');
+  const [managementUrl, setManagementUrl] = useState(null);
 
   const refresh = useCallback(async () => {
     setLoadError(false);
@@ -512,6 +664,40 @@ export function SettingsClient() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- loads remote data once the user is known
     refresh();
   }, [refresh]);
+
+  const isFree = settings?.isFree;
+
+  useEffect(() => {
+    if (isFree !== false) return undefined;
+    let active = true;
+    loadManagementUrl(user.id).then((url) => {
+      if (active) setManagementUrl(url);
+    });
+    return () => {
+      active = false;
+    };
+  }, [isFree, user.id]);
+
+  const openUpgrade = useCallback(() => {
+    if (WEB_BILLING_ENABLED) setDialog('upgrade');
+    else openGetApp();
+  }, [openGetApp]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (isFree === undefined || !params.has('upgrade')) return;
+    params.delete('upgrade');
+    const query = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- opens the upgrade dialog from an "Upgrade" link
+    if (isFree) openUpgrade();
+  }, [isFree, openUpgrade]);
+
+  function handlePaid(active) {
+    setDialog(null);
+    setToast(active ? 'Welcome to Hobbyist — everything is unlocked' : 'Payment received — Hobbyist switches on within a minute');
+    refresh();
+  }
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -568,7 +754,7 @@ export function SettingsClient() {
             </Section>
 
             <Section title="Subscription">
-              <SubscriptionCard settings={settings} onUpgrade={openGetApp} />
+              <SubscriptionCard settings={settings} managementUrl={managementUrl} onUpgrade={openUpgrade} />
             </Section>
 
             <Section title="Preferences">
@@ -602,12 +788,14 @@ export function SettingsClient() {
               <Card>
                 <Row label="Privacy Policy" href="/privacy" />
                 <Row label="Terms of Service" href="/terms" />
+                <Row label="Refund Policy" href="/refund-policy" />
               </Card>
             </Section>
           </>
         )}
       </div>
 
+      {dialog === 'upgrade' ? <UpgradeDialog user={user} onPaid={handlePaid} onClose={closeDialog} /> : null}
       {dialog === 'password' ? (
         <PasswordDialog email={user.email} onDone={() => done('Password updated')} onClose={closeDialog} />
       ) : null}
@@ -650,7 +838,7 @@ export function SettingsClient() {
       {dialog === 'delete' ? (
         <ConfirmAction
           title="Delete account"
-          message={'This will permanently delete all your dishes, library items and account data — on the web and in the app.\n\nThis cannot be undone. If you have a subscription, cancel it in the App Store or Google Play too.'}
+          message={'This will permanently delete all your dishes, library items and account data — on the web and in the app.\n\nThis cannot be undone. Deleting your account doesn’t cancel a subscription — if you have one, cancel it first under Manage subscription.'}
           confirmLabel="Yes, delete everything"
           busyLabel="Deleting…"
           cancelLabel="Keep my account"
