@@ -53,11 +53,14 @@ export function ResetPasswordClient() {
   return (
     <AuthShell
       title="Link expired"
-      description="This password reset link is invalid or has expired. Request a new one from the app."
+      description="This password reset link is invalid or has expired. Request a new one."
     >
       {errorMessage ? <AuthMessage>{errorMessage}</AuthMessage> : null}
-      <div className={errorMessage ? 'mt-4' : ''}>
-        <AuthButton href={APP_DEEP_LINK}>Back to app</AuthButton>
+      <div className={`space-y-3 ${errorMessage ? 'mt-4' : ''}`}>
+        <AuthButton href="/forgot-password">Request a new link</AuthButton>
+        <AuthButton href={APP_DEEP_LINK} variant="secondary">
+          Back to app
+        </AuthButton>
       </div>
     </AuthShell>
   );

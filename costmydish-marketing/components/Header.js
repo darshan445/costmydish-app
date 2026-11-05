@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { HeaderAccountLink } from '@/components/HeaderAccountLink';
 
 const NAV = [
   { href: '/food-cost-calculator', label: 'Free calculator' },
@@ -30,12 +31,15 @@ export function Header() {
           ))}
         </nav>
 
-        <a
-          href="#download"
-          className="whitespace-nowrap rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-dark"
-        >
-          Get the app
-        </a>
+        <div className="flex items-center gap-4">
+          <HeaderAccountLink />
+          <a
+            href="#download"
+            className="whitespace-nowrap rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-dark"
+          >
+            Get the app
+          </a>
+        </div>
       </div>
     </header>
   );

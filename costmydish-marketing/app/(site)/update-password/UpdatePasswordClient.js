@@ -101,9 +101,14 @@ export function UpdatePasswordClient() {
     return (
       <AuthShell
         title="Link expired"
-        description="Your reset session has expired. Request a new password reset link from the app."
+        description="Your reset session has expired. Request a new password reset link."
       >
-        <AuthButton href={APP_DEEP_LINK}>Back to app</AuthButton>
+        <div className="space-y-3">
+          <AuthButton href="/forgot-password">Request a new link</AuthButton>
+          <AuthButton href={APP_DEEP_LINK} variant="secondary">
+            Back to app
+          </AuthButton>
+        </div>
       </AuthShell>
     );
   }
@@ -112,9 +117,14 @@ export function UpdatePasswordClient() {
     return (
       <AuthShell
         title="Password updated!"
-        description="Your new password is set. Open the app to sign in."
+        description="Your new password is set. Use it in the app and on the web."
       >
-        <AuthButton href={APP_DEEP_LINK}>Open the app</AuthButton>
+        <div className="space-y-3">
+          <AuthButton href={APP_DEEP_LINK}>Open the app</AuthButton>
+          <AuthButton href="/dashboard" variant="secondary">
+            Continue on the web
+          </AuthButton>
+        </div>
       </AuthShell>
     );
   }

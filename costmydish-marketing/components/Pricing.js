@@ -1,3 +1,11 @@
+import {
+  FREE_DISH_LIMIT,
+  FREE_INGREDIENT_LIMIT,
+  HOBBYIST_ANNUAL_PER_MONTH_PRICE,
+  HOBBYIST_ANNUAL_PRICE,
+  HOBBYIST_MONTHLY_PRICE,
+} from '@/lib/plans';
+
 const PLANS = [
   {
     name: 'Free',
@@ -5,8 +13,8 @@ const PLANS = [
     period: 'forever',
     description: 'Try CostMyDish and cost your first recipes.',
     features: [
-      'Up to 5 dishes',
-      'Up to 20 ingredients',
+      `Up to ${FREE_DISH_LIMIT} dishes`,
+      `Up to ${FREE_INGREDIENT_LIMIT} ingredients`,
       'Full cost calculations',
       'Profit for each way you sell',
       'Margin status badges',
@@ -16,9 +24,9 @@ const PLANS = [
   },
   {
     name: 'Hobbyist',
-    price: '$4.99',
+    price: HOBBYIST_MONTHLY_PRICE,
     period: '/ month',
-    annualNote: 'or $39.99/year (~$3.33/mo)',
+    annualNote: `or ${HOBBYIST_ANNUAL_PRICE}/year (~${HOBBYIST_ANNUAL_PER_MONTH_PRICE}/mo)`,
     description: 'For growing menus and serious home cooks.',
     features: [
       'Unlimited dishes',
@@ -42,7 +50,8 @@ export function Pricing() {
             Start free. Upgrade when you need more.
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-text-secondary">
-            Subscriptions are managed through the App Store or Google Play via RevenueCat. Prices shown in USD.
+            Subscriptions are managed through the App Store or Google Play via RevenueCat. Prices shown in USD — the
+            store shows the price in your local currency, which can differ by country.
           </p>
         </div>
 

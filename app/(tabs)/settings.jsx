@@ -23,6 +23,7 @@ import { searchCurrencies } from '../../constants/currencies';
 import { UNIT_SYSTEMS } from '../../constants/units';
 import { PRIVACY_POLICY_URL, TERMS_URL } from '../../constants/legal';
 import { FOOD_COST_COPY as C } from '../../constants/copy';
+import { FREE_INGREDIENT_LIMIT, FREE_RECIPE_LIMIT } from '../../constants/subscription';
 import { track, AnalyticsEvents } from '../../lib/analytics';
 import { openStoreListing } from '../../lib/storeReview';
 import { submitAppFeedback } from '../../lib/feedback';
@@ -402,14 +403,14 @@ export default function SettingsScreen() {
                 <View style={styles.usageLabelRow}>
                   <Text style={styles.usageLabel}>{C.settings.usageDishes}</Text>
                   <Text style={styles.usageCount}>
-                    {usageReady ? `${recipeCount} / 5` : '…'}
+                    {usageReady ? `${recipeCount} / ${FREE_RECIPE_LIMIT}` : '…'}
                   </Text>
                 </View>
                 <View style={styles.usageBar}>
                   <View style={[
                     styles.usageBarFill,
-                    { width: usageReady ? `${Math.min((recipeCount / 5) * 100, 100)}%` : '0%' },
-                    usageReady && recipeCount >= 5 && { backgroundColor: COLORS.error },
+                    { width: usageReady ? `${Math.min((recipeCount / FREE_RECIPE_LIMIT) * 100, 100)}%` : '0%' },
+                    usageReady && recipeCount >= FREE_RECIPE_LIMIT && { backgroundColor: COLORS.error },
                   ]} />
                 </View>
               </View>
@@ -419,21 +420,21 @@ export default function SettingsScreen() {
                 <View style={styles.usageLabelRow}>
                   <Text style={styles.usageLabel}>{C.settings.usageLibrary}</Text>
                   <Text style={styles.usageCount}>
-                    {usageReady ? `${ingredientCount} / 20` : '…'}
+                    {usageReady ? `${ingredientCount} / ${FREE_INGREDIENT_LIMIT}` : '…'}
                   </Text>
                 </View>
                 <View style={styles.usageBar}>
                   <View style={[
                     styles.usageBarFill,
-                    { width: usageReady ? `${Math.min((ingredientCount / 20) * 100, 100)}%` : '0%' },
-                    usageReady && ingredientCount >= 20 && { backgroundColor: COLORS.error },
+                    { width: usageReady ? `${Math.min((ingredientCount / FREE_INGREDIENT_LIMIT) * 100, 100)}%` : '0%' },
+                    usageReady && ingredientCount >= FREE_INGREDIENT_LIMIT && { backgroundColor: COLORS.error },
                   ]} />
                 </View>
               </View>
 
               <TouchableOpacity style={styles.upgradeBtn} onPress={openUpgradePaywall} activeOpacity={0.85}>
                 <Ionicons name="rocket-outline" size={18} color={COLORS.surface} style={{ marginRight: SPACING.sm }} />
-                <Text style={styles.upgradeBtnText}>Upgrade to Hobbyist — $4.99/mo</Text>
+                <Text style={styles.upgradeBtnText}>Upgrade to Hobbyist</Text>
               </TouchableOpacity>
 
               <TouchableOpacity

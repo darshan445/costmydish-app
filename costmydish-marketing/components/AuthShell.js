@@ -47,20 +47,100 @@ export function AuthButton({ href, children, variant = 'primary', type = 'button
   );
 }
 
-export function AuthField({ id, label, type = 'text', value, onChange, autoComplete }) {
+export function AuthField({
+  id,
+  label,
+  type = 'text',
+  value,
+  onChange,
+  autoComplete,
+  placeholder,
+  error,
+  autoFocus,
+  trailing,
+}) {
+  const errorId = error ? `${id}-error` : undefined;
   return (
     <div>
       <label htmlFor={id} className="block text-sm font-semibold text-text">
         {label}
       </label>
-      <input
-        id={id}
-        type={type}
-        value={value}
-        onChange={onChange}
-        autoComplete={autoComplete}
-        className="mt-2 w-full rounded-xl border border-border bg-surface px-4 py-3 text-sm text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-      />
+      <div
+        className={`mt-2 flex items-center rounded-xl border bg-surface transition focus-within:ring-2 ${
+          error
+            ? 'border-red-400 focus-within:ring-red-100'
+            : 'border-border focus-within:border-primary focus-within:ring-primary/20'
+        }`}
+      >
+        <input
+          id={id}
+          type={type}
+          value={value}
+          onChange={onChange}
+          autoComplete={autoComplete}
+          placeholder={placeholder}
+          autoFocus={autoFocus}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={errorId}
+          className="min-h-11 w-full rounded-xl bg-transparent px-4 py-3 text-sm text-text outline-none placeholder:text-text-secondary/60"
+        />
+        {trailing}
+      </div>
+      {error ? (
+        <p id={errorId} className="mt-1.5 text-xs text-red-600">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Password field with a show / hide toggle. */
+export function AuthPasswordField({ visible, onToggle, ...props }) {
+  return (
+    <AuthField
+      {...props}
+      type={visible ? 'text' : 'password'}
+      trailing={
+        <button
+          type="button"
+          onClick={onToggle}
+          className="min-h-11 shrink-0 px-4 text-xs font-semibold text-text-secondary transition hover:text-primary"
+          aria-label={visible ? 'Hide password' : 'Show password'}
+        >
+          {visible ? 'Hide' : 'Show'}
+        </button>
+      }
+    />
+  );
+}
+
+/** Tells people the web account and the phone app account are the same. */
+export function SameAccountNote({ appStoreHref, playStoreHref }) {
+  return (
+    <div className="mt-6 rounded-2xl border border-primary/15 bg-primary/5 p-5 text-center">
+      <p className="text-sm font-bold text-primary-dark">One account for web, iPhone and Android</p>
+      <p className="mt-1.5 text-xs leading-relaxed text-text-secondary">
+        Use the same email and password in the CostMyDish app. Your dishes and ingredients stay in sync.
+      </p>
+      <div className="mt-4 flex flex-col justify-center gap-2 sm:flex-row">
+        <a
+          href={appStoreHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-full border border-border bg-surface px-4 py-2 text-xs font-bold text-text transition hover:border-primary/30"
+        >
+          App Store
+        </a>
+        <a
+          href={playStoreHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-full border border-border bg-surface px-4 py-2 text-xs font-bold text-text transition hover:border-primary/30"
+        >
+          Google Play
+        </a>
+      </div>
     </div>
   );
 }
@@ -78,11 +158,11 @@ export function AuthMessage({ variant = 'error', children }) {
   );
 }
 
-export function AuthLoading() {
+export function AuthLoading({ label = 'Verifying link…' }) {
   return (
-    <div className="flex items-center justify-center gap-3 py-8 text-sm text-text-secondary">
+    <div className="flex items-center justify-center gap-3 py-8 text-sm text-text-secondary" role="status">
       <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      Verifying link…
+      {label}
     </div>
   );
 }

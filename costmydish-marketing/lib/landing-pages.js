@@ -1,5 +1,6 @@
 import { BASE_CURRENCY, moneyFor } from '@/lib/currency';
 import { cakePrice, dishSummary, formatPercent, roundPriceUp } from '@/lib/food-cost';
+import { FREE_PLAN_LIMITS } from '@/lib/plans';
 import { CAKE_EXTRAS, presetExample } from '@/lib/presets';
 
 /** "30.0%" → "30%" for prose. */
@@ -100,7 +101,7 @@ export const SEO_LANDING_PAGES = [
       'Updates every dish automatically when a buy price changes',
       'Lets you sell one recipe several ways (by the slice and whole) with profit for each',
       'Flags dishes that drift over your target food cost %',
-      'Free plan: 5 dishes and 20 ingredients — no credit card',
+      `Free plan: ${FREE_PLAN_LIMITS} — no credit card`,
     ],
     faqs: [
       {
@@ -454,7 +455,7 @@ export const SEO_LANDING_PAGES = [
           const pasta = pastaExample(c);
           return [
             `Convert the pack size into the same unit as the recipe. Cream: ${c.m(pasta.cream.price)} per 1,000 ml, and you use 300 ml → 300 ÷ 1,000 × ${c.m(pasta.cream.price)} = ${c.m(pasta.cream.cost)}. Pasta: 400 ÷ 500 × ${c.m(pasta.fettuccine.price)} = ${c.m(pasta.fettuccine.cost)}.`,
-            'Weight converts to weight and volume to volume. You can’t convert grams to cups without knowing the ingredient’s density, so buy and use in the same kind of unit.',
+          'Weight converts to weight and volume to volume. You can’t convert grams to cups without knowing the ingredient’s density, so buy and use in the same kind of unit.',
           ];
         },
       },
@@ -492,7 +493,7 @@ export const SEO_LANDING_PAGES = [
     bullets: [
       'CostMyDish saves each ingredient price once and reuses it in every dish',
       'Change a price and every dish recalculates',
-      'Free plan: 5 dishes and 20 ingredients',
+      `Free plan: ${FREE_PLAN_LIMITS}`,
     ],
     faqs: [
       {
@@ -732,7 +733,7 @@ export const SEO_LANDING_PAGES = [
       'Saves each ingredient price once and reuses it in every recipe',
       'Updates every recipe automatically when a price changes',
       'Converts units for you and flags dishes over your target food cost %',
-      'Free plan: 5 dishes and 20 ingredients',
+      `Free plan: ${FREE_PLAN_LIMITS}`,
     ],
     faqs: [
       {
@@ -803,7 +804,7 @@ export const SEO_LANDING_PAGES = [
         body: (c) => {
           const cake = cakeExample(c);
           return [
-            'Overheads are electricity, gas, equipment wear, card fees, delivery fuel and marketplace fees. Many home bakers add 10–20% for these. Then add profit on top so the business can grow — 15–30% is common.',
+          'Overheads are electricity, gas, equipment wear, card fees, delivery fuel and marketplace fees. Many home bakers add 10–20% for these. Then add profit on top so the business can grow — 15–30% is common.',
             `Example: ${c.m(cake.ingredients)} ingredients + ${c.m(cake.packaging)} packaging + ${c.w(cake.labour)} time = ${c.m(cake.direct)}. Add ${CAKE_EXTRAS.overheadPercent}% overheads → ${c.m(cake.totalCost)}. Add ${CAKE_EXTRAS.profitPercent}% profit → about ${c.w(Math.round(cake.price))}. Ingredients are then roughly ${Math.round(cake.ingredientShare)}% of the price.`,
           ];
         },
@@ -815,7 +816,7 @@ export const SEO_LANDING_PAGES = [
           const cake = cakeExample(c);
           return [
             `Slices take more handling and packaging, so they usually carry a higher price per portion. For a café, cost per slice is often priced at 25–35% food cost; a 12-slice cake costing ${c.m(cake.perSlice)} a slice suggests at least ${c.m(cake.sliceAt30)} a slice for ingredients alone at 30%, before labour.`,
-            'In the app you can add both ways to sell the same cake — by the slice and whole — and see the profit on each.',
+          'In the app you can add both ways to sell the same cake — by the slice and whole — and see the profit on each.',
           ];
         },
       },

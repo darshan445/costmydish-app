@@ -17,19 +17,51 @@ import { track, AnalyticsEvents } from '../../lib/analytics';
 import useAuthStore from '../../stores/authStore';
 import {
   HOBBYIST_ANNUAL_PER_MONTH_USD,
+  HOBBYIST_ANNUAL_SAVINGS_PERCENT,
+  HOBBYIST_ANNUAL_SAVINGS_USD,
   HOBBYIST_ANNUAL_USD,
   HOBBYIST_MONTHLY_USD,
 } from '../../constants/subscription';
 import { FOOD_COST_COPY as C } from '../../constants/copy';
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from '../../constants/theme';
 
-function formatUsd(amount) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+function formatMoney(amount, currency = 'USD') {
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`;
+  }
+}
+
+const USD_PRICES = {
+  monthly: formatMoney(HOBBYIST_MONTHLY_USD),
+  annual: formatMoney(HOBBYIST_ANNUAL_USD),
+  annualPerMonth: formatMoney(HOBBYIST_ANNUAL_PER_MONTH_USD),
+  savingsPercent: HOBBYIST_ANNUAL_SAVINGS_PERCENT,
+  savings: formatMoney(Math.round(HOBBYIST_ANNUAL_SAVINGS_USD)),
+};
+
+const LOADING_PRICES = { monthly: '…', annual: '…', annualPerMonth: '…', savingsPercent: null, savings: null };
+
+/**
+ * Prices as the store will charge them (local currency and regional price tiers).
+ * USD constants are only a fallback when the store products couldn't be loaded.
+ */
+function planPrices(packages, loaded) {
+  const monthly = packages.monthly?.product;
+  const annual = packages.annual?.product;
+  if (monthly && annual) {
+    const yearAtMonthly = monthly.price * 12;
+    const savings = yearAtMonthly - annual.price;
+    return {
+      monthly: monthly.priceString,
+      annual: annual.priceString,
+      annualPerMonth: annual.pricePerMonthString ?? formatMoney(annual.price / 12, annual.currencyCode),
+      savingsPercent: savings > 0 ? Math.floor((savings / yearAtMonthly) * 100) : null,
+      savings: savings > 0 ? formatMoney(Math.round(savings), annual.currencyCode) : null,
+    };
+  }
+  return loaded ? USD_PRICES : LOADING_PRICES;
 }
 
 const FEATURES = [
@@ -53,6 +85,7 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upg
   const [billing, setBilling] = useState('annual');
   const [currentBilling, setCurrentBilling] = useState(null);
   const [packages, setPackages] = useState({ monthly: null, annual: null });
+  const [packagesLoaded, setPackagesLoaded] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
@@ -65,7 +98,10 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upg
 
     track(AnalyticsEvents.PAYWALL_VIEWED, { reason, mode });
 
-    getHobbyistPackages().then(setPackages);
+    getHobbyistPackages().then((result) => {
+      setPackages(result);
+      setPackagesLoaded(true);
+    });
 
     if (isChangePlan) {
       fetchHobbyistEntitlementStatus().then((status) => {
@@ -86,9 +122,10 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upg
 
   const selectedPkg = isAnnual ? packages.annual : packages.monthly;
 
-  const monthlyPriceStr = formatUsd(HOBBYIST_MONTHLY_USD);
-  const annualPriceStr = formatUsd(HOBBYIST_ANNUAL_USD);
-  const annualPerMonthStr = `${formatUsd(HOBBYIST_ANNUAL_PER_MONTH_USD)}/mo`;
+  const prices = planPrices(packages, packagesLoaded);
+  const monthlyPriceStr = prices.monthly;
+  const annualPriceStr = prices.annual;
+  const annualPerMonthStr = `${prices.annualPerMonth}/mo`;
 
   const modalTitle = isChangePlan ? 'Change Your Plan' : 'Upgrade to Hobbyist';
   const reasonText = REASON_TEXT[reason] ?? REASON_TEXT.upgrade;
@@ -300,9 +337,9 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upg
           activeOpacity={0.8}
         >
           <Text style={[styles.toggleText, isAnnual && styles.toggleTextActive]}>Annual</Text>
-          {!isAnnual ? (
+          {!isAnnual && prices.savingsPercent ? (
             <View style={styles.savingsBadge}>
-              <Text style={styles.savingsText}>Save 33%</Text>
+              <Text style={styles.savingsText}>Save {prices.savingsPercent}%</Text>
             </View>
           ) : null}
         </TouchableOpacity>
@@ -336,10 +373,10 @@ export function PaywallModal({ visible, onClose, reason = 'upgrade', mode = 'upg
         ))}
       </View>
 
-      {isAnnual ? (
+      {isAnnual && prices.savings ? (
         <View style={styles.savingsBanner}>
           <Ionicons name="pricetag-outline" size={14} color={COLORS.primary} />
-          <Text style={styles.savingsBannerText}>You save ~$20 per year vs monthly</Text>
+          <Text style={styles.savingsBannerText}>You save ~{prices.savings} per year vs monthly</Text>
         </View>
       ) : null}
 

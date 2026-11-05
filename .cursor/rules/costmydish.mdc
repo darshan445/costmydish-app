@@ -383,13 +383,13 @@ Margin color coding:
 ## 8. SUBSCRIPTION AND PAYWALL
 
 ### Free limits:
-- Maximum 5 recipes
+- Maximum 3 recipes
 - Maximum 20 ingredients
 - No PDF export
 - No CSV import
 - No cloud sync — local only
 
-### Hobbyist $4.99/month:
+### Hobbyist $6.99/month or $59.99/year:
 - Unlimited recipes
 - Unlimited ingredients
 - Cloud sync across devices
@@ -402,7 +402,7 @@ Margin color coding:
 - Wholesale quote generation
 
 ### Paywall trigger points:
-- User tries to create 6th recipe — show paywall
+- User tries to create 4th recipe — show paywall
 - User tries to add 21st ingredient — show paywall
 - User taps PDF export button — show paywall
 - User taps CSV import button — show paywall

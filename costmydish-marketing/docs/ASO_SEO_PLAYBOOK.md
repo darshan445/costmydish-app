@@ -163,7 +163,7 @@ CostMyDish is the free food cost calculator built for chefs, bakers, and food bu
 • Ingredient library — update a buy price once, every dish recalculates
 • Green / yellow / red margin vs your target
 • Multiple selling formats (slice, portion, whole item)
-• Free plan: 5 dishes & 20 ingredients
+• Free plan: 3 dishes & 20 ingredients
 
 WHY CHEFS SWITCH FROM SPREADSHEETS
 ...

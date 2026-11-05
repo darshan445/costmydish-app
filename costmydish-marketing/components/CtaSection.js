@@ -1,4 +1,5 @@
 import QRCode from 'qrcode';
+import { FREE_PLAN_LIMITS } from '@/lib/plans';
 import { appStoreLink, playStoreLink, smartAppLink } from '@/lib/site';
 
 export async function CtaSection({
@@ -37,7 +38,7 @@ export async function CtaSection({
               Get it on Google Play
             </a>
           </div>
-          <p className="mt-4 text-xs text-white/75">Free plan: 5 dishes and 20 ingredients. No credit card.</p>
+          <p className="mt-4 text-xs text-white/75">Free plan: {FREE_PLAN_LIMITS}. No credit card.</p>
         </div>
 
         <div className="hidden shrink-0 flex-col items-center md:flex">

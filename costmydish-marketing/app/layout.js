@@ -1,6 +1,4 @@
 import { Inter } from 'next/font/google';
-import { Footer } from '@/components/Footer';
-import { Header } from '@/components/Header';
 import {
   JsonLd,
   buildLanguageAlternates,
@@ -71,9 +69,7 @@ export default function RootLayout({ children }) {
         <JsonLd data={organizationJsonLd()} />
         <JsonLd data={websiteJsonLd()} />
         <JsonLd data={mobileAppJsonLd()} />
-        <Header />
-        <main>{children}</main>
-        <Footer />
+        {children}
       </body>
     </html>
   );

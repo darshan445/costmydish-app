@@ -10,6 +10,8 @@ export default function robots() {
         allow: '/',
         disallow: [
           '/confirm',
+          '/dashboard',
+          '/forgot-password',
           '/reset-password',
           '/update-password',
           '/delete-account',

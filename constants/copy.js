@@ -3,6 +3,8 @@
  * Keep routes/DB named recipes — only UI language lives here.
  */
 
+import { FREE_INGREDIENT_LIMIT, FREE_RECIPE_LIMIT } from './subscription';
+
 export const FOOD_COST_COPY = {
   action: {
     calculate: 'Calculate food cost',
@@ -151,8 +153,8 @@ export const FOOD_COST_COPY = {
   },
 
   paywall: {
-    recipe: "You've reached the 5 dish limit on the free plan.",
-    ingredient: "You've reached the 20 library item limit on the free plan.",
+    recipe: `You've reached the ${FREE_RECIPE_LIMIT} dish limit on the free plan.`,
+    ingredient: `You've reached the ${FREE_INGREDIENT_LIMIT} library item limit on the free plan.`,
     priceHistory: 'Price history is a Hobbyist feature.',
     upgrade: 'Unlock unlimited food cost calculations, price history, and more.',
     changePlan:

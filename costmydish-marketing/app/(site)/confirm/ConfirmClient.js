@@ -93,9 +93,14 @@ export function ConfirmClient() {
     return (
       <AuthShell
         title="Email confirmed!"
-        description="Your account is ready. Open CostMyDish to get started."
+        description="Your account is ready. Use it in the CostMyDish app or here on the web."
       >
-        <AuthButton href={APP_DEEP_LINK}>Open CostMyDish</AuthButton>
+        <div className="space-y-3">
+          <AuthButton href={APP_DEEP_LINK}>Open the app</AuthButton>
+          <AuthButton href="/dashboard?welcome=1" variant="secondary">
+            Continue on the web
+          </AuthButton>
+        </div>
       </AuthShell>
     );
   }

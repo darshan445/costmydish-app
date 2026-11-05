@@ -8,7 +8,7 @@ import { setDishEntrySource } from '../lib/foodCostAnalytics';
 /**
  * Shared entry point for "Calculate food cost" (Home, Dishes, FAB).
  * Always gates free plan before opening the editor.
- * Waits for hydrated recipe count so an empty in-memory [] cannot bypass the 5-dish limit.
+ * Waits for hydrated recipe count so an empty in-memory [] cannot bypass the free dish limit.
  * `source` names the exact button (home_start, home_footer, dishes_header, dishes_empty, dishes_footer, fab).
  */
 export function useCalculateFoodCost() {

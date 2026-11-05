@@ -12,6 +12,7 @@ export default function sitemap() {
     { path: '/contact', priority: 0.6, changeFrequency: 'monthly' },
     { path: '/privacy', priority: 0.3, changeFrequency: 'yearly' },
     { path: '/terms', priority: 0.3, changeFrequency: 'yearly' },
+    { path: '/refund-policy', priority: 0.3, changeFrequency: 'yearly' },
   ];
 
   const landingPages = SEO_LANDING_PAGES.map((page) => ({

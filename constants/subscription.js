@@ -31,6 +31,12 @@ export const HOBBYIST_MONTHLY_PACKAGE_ID = '$rc_monthly';
 export const HOBBYIST_ANNUAL_PACKAGE_ID = '$rc_annual';
 
 // Plan prices are always shown in USD (App Store may charge in local currency).
-export const HOBBYIST_MONTHLY_USD = 4.99;
-export const HOBBYIST_ANNUAL_USD = 39.99;
+export const HOBBYIST_MONTHLY_USD = 6.99;
+export const HOBBYIST_ANNUAL_USD = 59.99;
 export const HOBBYIST_ANNUAL_PER_MONTH_USD = HOBBYIST_ANNUAL_USD / 12;
+export const HOBBYIST_ANNUAL_SAVINGS_USD = HOBBYIST_MONTHLY_USD * 12 - HOBBYIST_ANNUAL_USD;
+export const HOBBYIST_ANNUAL_SAVINGS_PERCENT = Math.floor((HOBBYIST_ANNUAL_SAVINGS_USD / (HOBBYIST_MONTHLY_USD * 12)) * 100);
+
+// Free plan limits
+export const FREE_RECIPE_LIMIT = 3;
+export const FREE_INGREDIENT_LIMIT = 20;

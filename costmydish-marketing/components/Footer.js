@@ -54,6 +54,7 @@ export function Footer() {
                 <li><Link href="/contact" className="text-text-secondary hover:text-primary">Contact & Support</Link></li>
                 <li><Link href="/terms" className="text-text-secondary hover:text-primary">Terms & Conditions</Link></li>
                 <li><Link href="/privacy" className="text-text-secondary hover:text-primary">Privacy Policy</Link></li>
+                <li><Link href="/refund-policy" className="text-text-secondary hover:text-primary">Refund Policy</Link></li>
               </ul>
             </div>
           </div>

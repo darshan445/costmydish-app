@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { siteConfig } from '@/lib/site';
 import { buildPageMetadata } from '@/lib/seo';
 
@@ -13,7 +14,7 @@ export default function TermsPage() {
   return (
     <article className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
       <h1 className="text-3xl font-extrabold text-text">Terms & Conditions</h1>
-      <p className="mt-2 text-sm text-text-secondary">Last updated: June 9, 2026</p>
+      <p className="mt-2 text-sm text-text-secondary">Last updated: November 5, 2026</p>
 
       <div className="prose-legal mt-8 space-y-4 text-sm">
         <p>
@@ -41,21 +42,34 @@ export default function TermsPage() {
 
         <h2>3. Subscriptions & billing</h2>
         <p>
-          CostMyDish offers a free tier and paid &quot;Hobbyist&quot; subscriptions. Paid plans are processed by
-          Apple App Store or Google Play via RevenueCat. Payment, renewal, cancellation, and refunds are
-          subject to the store&apos;s terms — not CostMyDish directly.
+          CostMyDish offers a free tier and paid &quot;Hobbyist&quot; subscriptions. Hobbyist can be bought in the
+          mobile app or on our website, and works on both.
         </p>
         <ul>
           <li>Free plan: limited recipes and ingredients as described in the app</li>
           <li>Hobbyist plan: unlimited recipes and ingredients, price history, and cloud sync</li>
-          <li>Subscriptions auto-renew unless cancelled through your store account settings</li>
+          <li>Subscriptions auto-renew each month or year until cancelled</li>
         </ul>
+        <p>
+          <strong>App purchases</strong> are processed by Apple App Store or Google Play. Payment, renewal,
+          cancellation, and refunds are subject to the store&apos;s terms.
+        </p>
+        <p>
+          <strong>Website purchases:</strong> our order process is conducted by our online reseller Paddle.com.
+          Paddle.com is the Merchant of Record for all our website orders. Paddle provides all customer service
+          inquiries and handles returns. Paddle&apos;s{' '}
+          <a href="https://www.paddle.com/legal/checkout-buyer-terms" className="text-primary underline" target="_blank" rel="noopener noreferrer">Buyer Terms</a>{' '}
+          also apply to these purchases.
+        </p>
+        <p>
+          See our <Link href="/refund-policy" className="text-primary underline">Refund Policy</Link> for how refunds work.
+        </p>
 
         <h2>4. Your data</h2>
         <p>
           You retain ownership of recipes, ingredients, and other content you enter. You grant us a licence
           to store, process, and display that data solely to provide the Service. See our{' '}
-          <a href="/privacy" className="text-primary underline">Privacy Policy</a> for how we handle personal information.
+          <Link href="/privacy" className="text-primary underline">Privacy Policy</Link> for how we handle personal information.
         </p>
 
         <h2>5. Acceptable use</h2>

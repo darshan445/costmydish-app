@@ -1353,7 +1353,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
       if (isEdit) {
         if (router.canGoBack()) router.back();
         else router.replace(`/recipe/${id}`);
-      } else {
+    } else {
         router.replace({ pathname: '/recipe/[id]', params: { id, justSaved: '1' } });
       }
     } finally {
@@ -1675,22 +1675,22 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
             control={control}
             name="target_food_cost_percent"
             rules={{ validate: validateTarget }}
-            render={({ field: { onChange, value } }) => (
+              render={({ field: { onChange, value } }) => (
               <View style={[styles.fieldGroup, { flex: 0.75 }]}>
                 <Text style={styles.fieldLabel}>{C.wizard.targetLabel}</Text>
                 <View style={[styles.inputBox, targetError && styles.inputBoxError]}>
-                  <TextInput
-                    style={styles.textInput}
-                    value={value}
-                    onChangeText={onChange}
+                    <TextInput
+                      style={styles.textInput}
+                      value={value}
+                      onChangeText={onChange}
                     keyboardType={DECIMAL_KEYBOARD}
-                    placeholder="30"
-                    placeholderTextColor={COLORS.textTertiary}
-                  />
-                  <Text style={styles.suffix}>%</Text>
-                </View>
+                      placeholder="30"
+                      placeholderTextColor={COLORS.textTertiary}
+                    />
+                    <Text style={styles.suffix}>%</Text>
+                  </View>
                 {targetError ? <Text style={styles.errorText}>{targetError}</Text> : null}
-              </View>
+                </View>
             )}
           />
           <View style={{ width: SPACING.sm }} />
@@ -2427,7 +2427,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                   <>
                     <View style={styles.inlineDivider} />
                     <Text style={styles.inlineSectionLabel}>Used in this dish</Text>
-                    <View style={styles.twoCol}>
+        <View style={styles.twoCol}>
           <View style={{ flex: 1 }}>
                         <Text style={styles.sheetLabel}>Used quantity</Text>
                         <View
@@ -2437,7 +2437,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                         >
               <TextInput
                             ref={usedQtyInputRef}
-                            style={styles.textInput}
+                style={styles.textInput}
                             value={newIngUsedQty}
                             onChangeText={(v) => {
                               setNewIngUsedQty(v);
@@ -2452,8 +2452,8 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
                           <Text style={styles.errorText}>{newIngErrors.used_quantity}</Text>
                         ) : null}
           </View>
-                      <View style={{ width: SPACING.sm }} />
-                      <View style={{ flex: 1 }}>
+          <View style={{ width: SPACING.sm }} />
+          <View style={{ flex: 1 }}>
                         <Text style={styles.sheetLabel}>Used unit</Text>
                         <TouchableOpacity
                           style={[styles.inputBox, styles.unitBox, usedUnitError && styles.inputBoxError]}
@@ -2501,9 +2501,9 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
       >
         <Text style={styles.fmtSheetHint}>{C.wizard.priceSheetHint(parsePositiveNumber(yieldQty), yieldUnitWord)}</Text>
         <View style={[styles.inputBox, styles.priceBox, priceSheetError ? styles.inputBoxError : null]}>
-          <Text style={styles.currencyPrefix}>{symbol}</Text>
-          <TextInput
-            style={[styles.textInput, { flex: 1 }]}
+              <Text style={styles.currencyPrefix}>{symbol}</Text>
+              <TextInput
+                style={[styles.textInput, { flex: 1 }]}
             value={priceSheetValue}
             onChangeText={(v) => {
               setPriceSheetValue(v);
@@ -2511,12 +2511,12 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
             }}
             keyboardType={DECIMAL_KEYBOARD}
             placeholder={dish.hasAnyCost && dish.suggestedPrice ? dish.suggestedPrice.toFixed(2) : '0.00'}
-            placeholderTextColor={COLORS.textTertiary}
+                placeholderTextColor={COLORS.textTertiary}
             autoFocus
             onSubmitEditing={confirmPriceSheet}
             accessibilityLabel={C.wizard.priceSheetTitle(yieldUnitWord)}
-          />
-        </View>
+              />
+            </View>
         {priceSheetError ? <Text style={styles.errorText}>{priceSheetError}</Text> : null}
 
         {dish.hasAnyCost && dish.suggestedPrice > 0 ? (
@@ -2532,7 +2532,7 @@ export default function CreateRecipeScreen({ recipeId: recipeIdProp } = {}) {
             <Ionicons name="sparkles-outline" size={14} color={COLORS.primary} />
             <Text style={styles.suggestChipText}>
               {C.wizard.useSuggested(formatCurrency(dish.suggestedPrice, symbol))}
-            </Text>
+                </Text>
           </TouchableOpacity>
         ) : null}
 

@@ -1,5 +1,6 @@
 import { BASE_CURRENCY, getCurrency } from '@/lib/currency';
 import { formatMoney, formatPercent } from '@/lib/food-cost';
+import { FREE_DISH_LIMIT, FREE_PLAN_LIMITS, HOBBYIST_ANNUAL_PRICE, HOBBYIST_MONTHLY_PRICE } from '@/lib/plans';
 import { pizzaExample } from '@/lib/presets';
 
 export function pizzaFoodCostAnswer(code = BASE_CURRENCY) {
@@ -23,7 +24,7 @@ export const MARKETING_FAQ = [
   },
   {
     q: 'What is the best free food cost calculator app?',
-    a: 'CostMyDish offers a free plan with full food cost %, profit, and margin calculations for up to 5 dishes. Unlike spreadsheets, it handles unit conversion and recalculates every dish when ingredient prices change.',
+    a: `CostMyDish offers a free plan with full food cost %, profit, and margin calculations for up to ${FREE_DISH_LIMIT} dishes. Unlike spreadsheets, it handles unit conversion and recalculates every dish when ingredient prices change.`,
   },
   {
     q: 'Can I use CostMyDish as a bakery pricing calculator?',
@@ -43,7 +44,7 @@ export const MARKETING_FAQ = [
   },
   {
     q: 'Is CostMyDish free?',
-    a: 'Yes. The free plan gives you 5 dishes and 20 ingredients with full cost calculations, profit for each way you sell, and margin status badges. Upgrade to Hobbyist ($4.99/mo) for unlimited dishes and ingredients, price history, and cloud sync.',
+    a: `Yes. The free plan gives you ${FREE_PLAN_LIMITS} with full cost calculations, profit for each way you sell, and margin status badges. Upgrade to Hobbyist (${HOBBYIST_MONTHLY_PRICE}/mo or ${HOBBYIST_ANNUAL_PRICE}/year in the US; local prices vary by country) for unlimited dishes and ingredients, price history, and cloud sync.`,
   },
 ];
 

@@ -25,6 +25,9 @@ import {
   wholeNumberError,
 } from '@/lib/food-cost';
 import { CurrencySelect } from '@/components/CurrencySelect';
+import { IngredientNameInput } from '@/components/IngredientNameInput';
+import { PublicSaveDish } from '@/components/PublicSaveDish';
+import { libraryRowFields, nameKey, sameAsLibrary } from '@/lib/library-match';
 import { BASE_CURRENCY, getCurrency, localPriceText, localizeRows } from '@/lib/currency';
 import { CAKE_EXTRAS, PRESETS } from '@/lib/presets';
 import { useCurrencyCode } from '@/lib/use-currency';
@@ -125,22 +128,6 @@ function ResultRow({ label, value, strong = false, tone }) {
   );
 }
 
-function SaveInAppCta() {
-  return (
-    <div className="mt-5 rounded-xl bg-primary/5 p-4">
-      <a
-        href="#download"
-        className="block rounded-full bg-primary px-5 py-3 text-center text-sm font-bold text-white shadow-md transition hover:bg-primary-dark"
-      >
-        Save this dish in the free app
-      </a>
-      <p className="mt-3 text-xs leading-relaxed text-text-secondary">
-        The app keeps your ingredient prices. When butter goes up, every dish that uses it updates — no re-typing.
-      </p>
-    </div>
-  );
-}
-
 function QuickCalculator({ currency, code }) {
   const [plateCost, setPlateCost] = useExampleValue('3.20', code);
   const [sellingPrice, setSellingPrice] = useExampleValue('12.00', code);
@@ -211,14 +198,64 @@ function CakePricingPanel({ currency, code, totalCost, makes, word }) {
   );
 }
 
-function RecipeCalculator({ currency, code, preset, recipe, recipeCurrency = BASE_CURRENCY, defaultTarget, pricing }) {
-  const start = recipe ?? PRESETS[preset] ?? PRESETS.cookies;
+const BLANK_START = { dishName: '', makes: '', unitWord: 'piece', rows: [[]] };
+
+/** True when every visible field is valid and at least one ingredient is complete. */
+function dishIsSaveable({ rows, lines, makes, target, sellingPrice }) {
+  if (wholeNumberError(makes) || foodCostPercentError(target) || (sellingPrice.trim() && priceError(sellingPrice))) return false;
+  const filled = rows.filter((row) => row.name.trim() || row.buyPrice.trim() || row.useQty.trim());
+  if (filled.length === 0) return false;
+  return filled.every((row) => (
+    row.name.trim()
+    && !priceError(row.buyPrice)
+    && !positiveNumberError(row.buyQty, 'quantity')
+    && !positiveNumberError(row.useQty, 'quantity')
+    && !wastePercentError(row.wastePercent)
+    && lines[row.id]?.cost != null
+  ));
+}
+
+/** A dish in the save shape (see renderSave) as calculator start values. */
+function startFromDish(dish) {
+  return {
+    dishName: dish.name ?? '',
+    makes: dish.yieldQty ?? '',
+    unitWord: dish.yieldUnit,
+    rows: dish.ingredients.map((row) => [row.name, row.buyPrice, row.buyQty, row.buyUnit, row.useQty, row.useUnit, row.wastePercent]),
+  };
+}
+
+/** Under a dashboard row: whether it uses a Library item as saved, differs from it, or is new. */
+function LibraryNote({ row, item, currency, onUseLibrary }) {
+  if (!row.name.trim()) return null;
+  if (!item) {
+    return <p className="mt-2 text-xs text-text-secondary">New ingredient — it will be added to your Library when you save.</p>;
+  }
+  if (sameAsLibrary(item, row)) {
+    return <p className="mt-2 text-xs font-semibold text-primary">✓ From your Library</p>;
+  }
+  const unit = UNIT_OPTIONS.flatMap((group) => group.units).find(([value]) => value === item.purchase_unit)?.[1] ?? item.purchase_unit;
+  return (
+    <p className="mt-2 text-xs text-amber-700">
+      Your Library has {formatMoney(Number(item.purchase_price), currency)} per {Number(item.purchase_quantity)} {unit}
+      {Number(item.waste_percent) > 0 ? `, ${Number(item.waste_percent)}% waste` : ''}. You’ll be asked whether to update it when you save.{' '}
+      <button type="button" onClick={() => onUseLibrary(row.id, item)} className="font-semibold underline">
+        Use Library price
+      </button>
+    </p>
+  );
+}
+
+function RecipeCalculator({ currency, code, preset, recipe, recipeCurrency = BASE_CURRENCY, defaultTarget, pricing, blank = false, initial, library, renderSave }) {
+  const [initialStart] = useState(() => (initial ? startFromDish(initial) : null));
+  const start = initialStart ?? (blank ? BLANK_START : recipe ?? PRESETS[preset] ?? PRESETS.cookies);
+  const fixedPrices = blank || Boolean(initialStart);
   const from = recipe ? recipeCurrency : BASE_CURRENCY;
   const [dishName, setDishName] = useState(start.dishName);
   const [makes, setMakesText] = useState(String(start.makes));
   const [yieldUnit, setYieldUnit] = useState(() => toSellingUnit(start.unitWord));
-  const [target, setTargetText] = useState(String(defaultTarget ?? 30));
-  const [sellingPrice, setSellingPrice] = useState('');
+  const [target, setTargetText] = useState(String(initial?.targetPercent || defaultTarget || 30));
+  const [sellingPrice, setSellingPrice] = useState(initial?.sellingPrice ?? '');
   // As in the app: while a field shows an error, results keep its last valid value
   const [validMakes, setValidMakes] = useState(makes);
   const [validTarget, setValidTarget] = useState(target);
@@ -232,8 +269,8 @@ function RecipeCalculator({ currency, code, preset, recipe, recipeCurrency = BAS
   };
   // Example rows show local prices until the visitor edits them; after that only the symbol changes, as in the app
   const exampleRows = useMemo(
-    () => localizeRows(start.rows, code, from).map((row, index) => makeRow(row, `example-${index}`)),
-    [start, code, from],
+    () => (fixedPrices ? start.rows : localizeRows(start.rows, code, from)).map((row, index) => makeRow(row, `example-${index}`)),
+    [fixedPrices, start, code, from],
   );
   const [editedRows, setEditedRows] = useState(null);
   const rows = editedRows ?? exampleRows;
@@ -248,6 +285,16 @@ function RecipeCalculator({ currency, code, preset, recipe, recipeCurrency = BAS
       return next;
     }));
   const removeRow = (id) => setRows((current) => current.filter((row) => row.id !== id));
+  const libraryByKey = useMemo(() => new Map((library ?? []).map((item) => [nameKey(item.name), item])), [library]);
+  const usedKeysExcept = (id) => new Set(rows.filter((row) => row.id !== id && row.name.trim()).map((row) => nameKey(row.name)));
+  // Same as picking from the app's Library list: purchase details come from the Library item
+  const pickLibraryItem = (id, item) =>
+    setRows((current) => current.map((row) => {
+      if (row.id !== id) return row;
+      const next = { ...row, ...libraryRowFields(item) };
+      if (unitFamily(next.buyUnit) !== unitFamily(row.useUnit)) next.useUnit = defaultUsedUnit(next.buyUnit);
+      return next;
+    }));
   const addRow = () => setRows((current) => [...current, makeRow()]);
   const clearAll = () => {
     setDishName('');
@@ -304,7 +351,7 @@ function RecipeCalculator({ currency, code, preset, recipe, recipeCurrency = BAS
         <div className="mt-6 flex items-center justify-between">
           <h3 className="text-base font-bold text-text">Ingredients</h3>
           <button type="button" onClick={clearAll} className="text-xs font-semibold text-text-secondary underline hover:text-primary">
-            Clear and start my own
+            {blank ? 'Clear all' : 'Clear and start my own'}
           </button>
         </div>
 
@@ -314,14 +361,27 @@ function RecipeCalculator({ currency, code, preset, recipe, recipeCurrency = BAS
             return (
               <div key={row.id} className="rounded-xl border border-border bg-surface p-4">
                 <div className="flex items-center gap-3">
-                  <input
-                    aria-label="Name"
-                    className={`${inputClass} font-semibold`}
-                    value={row.name}
-                    onChange={(e) => updateRow(row.id, 'name', e.target.value)}
-                    placeholder="e.g. Butter"
-                    maxLength={NAME_MAX_LENGTH}
-                  />
+                  {library ? (
+                    <IngredientNameInput
+                      value={row.name}
+                      onChange={(value) => updateRow(row.id, 'name', value)}
+                      onPick={(item) => pickLibraryItem(row.id, item)}
+                      library={library}
+                      usedKeys={usedKeysExcept(row.id)}
+                      currency={currency}
+                      className={`${inputClass} font-semibold`}
+                      maxLength={NAME_MAX_LENGTH}
+                    />
+                  ) : (
+                    <input
+                      aria-label="Name"
+                      className={`${inputClass} font-semibold`}
+                      value={row.name}
+                      onChange={(e) => updateRow(row.id, 'name', e.target.value)}
+                      placeholder="e.g. Butter"
+                      maxLength={NAME_MAX_LENGTH}
+                    />
+                  )}
                   <span className="w-20 shrink-0 text-right text-sm font-bold text-text">
                     {line?.cost != null ? formatMoney(line.cost, currency) : '—'}
                   </span>
@@ -334,6 +394,7 @@ function RecipeCalculator({ currency, code, preset, recipe, recipeCurrency = BAS
                     ×
                   </button>
                 </div>
+                {library ? <LibraryNote row={row} item={libraryByKey.get(nameKey(row.name))} currency={currency} onUseLibrary={pickLibraryItem} /> : null}
                 <div className="mt-4 grid gap-4 @2xl:grid-cols-[3fr_2fr]">
                   <div>
                     <span className={sectionLabelClass}>What you bought</span>
@@ -469,7 +530,20 @@ function RecipeCalculator({ currency, code, preset, recipe, recipeCurrency = BAS
               )}
             </>
           )}
-          <SaveInAppCta />
+          {(renderSave ?? ((state) => <PublicSaveDish {...state} currencyCode={code} />))({
+            canSave: dishIsSaveable({ rows, lines, makes, target, sellingPrice }),
+            dish: {
+              name: dishName,
+              yieldQty: makes,
+              yieldUnit,
+              targetPercent: validTarget,
+              sellingPrice: sellingPriceError ? '' : sellingPrice,
+              suggestedPrice: summary.suggestedPrice,
+              ingredients: rows
+                .filter((row) => row.name.trim() || row.buyPrice.trim() || row.useQty.trim())
+                .map(({ name, buyPrice, buyQty, buyUnit, useQty, useUnit, wastePercent }) => ({ name, buyPrice, buyQty, buyUnit, useQty, useUnit, wastePercent })),
+            },
+          })}
         </div>
       </div>
     </div>
@@ -485,16 +559,36 @@ function RecipeCalculator({ currency, code, preset, recipe, recipeCurrency = BAS
  * @param {number} [props.defaultTarget]
  * @param {string} [props.title]
  * @param {'food-cost'|'cake'} [props.pricing] 'cake' prices with packaging, time, overheads and profit
+ * @param {boolean} [props.blank] start with an empty dish instead of an example (dashboard)
+ * @param {string} [props.currencyCode] fixed currency (the signed-in user's), hides the currency picker
+ * @param {(state: { canSave: boolean, dish: object }) => import('react').ReactNode} [props.renderSave]
+ *   replaces the public save button (sign-up prompt when signed out)
+ * @param {object} [props.initial] a dish in the renderSave `dish` shape to start from, prices as typed
+ * @param {Array} [props.library] the signed-in user's Library items: name suggestions and price checks
  */
-export function FoodCostCalculator({ mode = 'recipe', preset = 'cookies', recipe, recipeCurrency, defaultTarget, title, pricing = 'food-cost' }) {
-  const code = useCurrencyCode();
+export function FoodCostCalculator({
+  mode = 'recipe',
+  preset = 'cookies',
+  recipe,
+  recipeCurrency,
+  defaultTarget,
+  title,
+  pricing = 'food-cost',
+  blank = false,
+  currencyCode,
+  initial,
+  library,
+  renderSave,
+}) {
+  const visitorCode = useCurrencyCode();
+  const code = currencyCode ?? visitorCode;
   const currency = getCurrency(code).symbol;
 
   return (
     <section id="calculator" className="@container/calc scroll-mt-20 rounded-3xl border border-border bg-surface-alt p-4 sm:p-6">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-extrabold text-text">{title ?? (mode === 'quick' ? 'Food cost % calculator' : 'Free recipe cost calculator')}</h2>
-        <CurrencySelect />
+        {currencyCode ? null : <CurrencySelect />}
       </div>
       {mode === 'quick' ? (
         <QuickCalculator currency={currency} code={code} />
@@ -507,6 +601,10 @@ export function FoodCostCalculator({ mode = 'recipe', preset = 'cookies', recipe
           recipeCurrency={recipeCurrency}
           defaultTarget={defaultTarget}
           pricing={pricing}
+          blank={blank}
+          initial={initial}
+          library={library}
+          renderSave={renderSave}
         />
       )}
     </section>

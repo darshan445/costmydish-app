@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { CtaSection } from '@/components/CtaSection';
+import { HOBBYIST_MONTHLY_PRICE } from '@/lib/plans';
 import { JsonLd, breadcrumbJsonLd, buildPageMetadata } from '@/lib/seo';
 import { siteConfig } from '@/lib/site';
 
@@ -37,7 +38,7 @@ const COMPARISONS = [
     price: '~$39/mo',
     bestFor: 'Web-first menu engineering',
     downsides: ['Monthly fee from day one', 'Desktop workflow', 'Less mobile-native'],
-    costmydish: 'Free plan + Hobbyist at $4.99/mo, built for phone',
+    costmydish: `Free plan + Hobbyist at ${HOBBYIST_MONTHLY_PRICE}/mo, built for phone`,
   },
   {
     name: 'Fillet / niche apps',

@@ -13,7 +13,7 @@ export default function PrivacyPage() {
   return (
     <article className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
       <h1 className="text-3xl font-extrabold text-text">Privacy Policy</h1>
-      <p className="mt-2 text-sm text-text-secondary">Last updated: June 9, 2026</p>
+      <p className="mt-2 text-sm text-text-secondary">Last updated: November 5, 2026</p>
 
       <div className="prose-legal mt-8 space-y-4 text-sm">
         <p>
@@ -35,8 +35,9 @@ export default function PrivacyPage() {
         </ul>
         <p><strong>Payment information</strong></p>
         <p>
-          We do not collect or store payment card details. Purchases are handled entirely by Apple App Store
-          or Google Play through RevenueCat. We receive subscription status only.
+          We do not collect or store payment card details. App purchases are handled by Apple App Store or
+          Google Play, and website purchases by Paddle.com, our Merchant of Record, with RevenueCat managing
+          subscriptions. We receive subscription status only.
         </p>
         <p><strong>Technical data</strong></p>
         <ul>
@@ -58,8 +59,9 @@ export default function PrivacyPage() {
         <p>We use trusted providers to operate CostMyDish:</p>
         <ul>
           <li><strong>Supabase</strong> — authentication, database, and file storage (data encrypted in transit)</li>
-          <li><strong>RevenueCat</strong> — subscription management linked to your App Store / Play account</li>
-          <li><strong>Apple / Google</strong> — payment processing for subscriptions</li>
+          <li><strong>RevenueCat</strong> — subscription management for app and website purchases</li>
+          <li><strong>Apple / Google</strong> — payment processing for subscriptions bought in the app</li>
+          <li><strong>Paddle</strong> — payment processing, tax, and invoicing for subscriptions bought on our website</li>
         </ul>
         <p>Each provider has its own privacy policy governing their handling of data.</p>
 

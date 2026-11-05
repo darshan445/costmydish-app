@@ -1,5 +1,6 @@
 import useAuthStore from '../stores/authStore';
 import useSubscriptionStore from '../stores/subscriptionStore';
+import { FREE_INGREDIENT_LIMIT, FREE_RECIPE_LIMIT } from '../constants/subscription';
 
 export function useSubscription() {
   const profile = useAuthStore((s) => s.profile);
@@ -21,12 +22,12 @@ export function useSubscription() {
 
   const canCreateRecipe = (currentCount) => {
     if (!isFree) return true;
-    return currentCount < 5;
+    return currentCount < FREE_RECIPE_LIMIT;
   };
 
   const canAddIngredient = (currentCount) => {
     if (!isFree) return true;
-    return currentCount < 20;
+    return currentCount < FREE_INGREDIENT_LIMIT;
   };
 
   const canViewPriceHistory = isHobbyist;
